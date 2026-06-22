@@ -1,0 +1,14 @@
+<resources>
+    <!-- Force the dark, indigo look to mirror the desktop shell regardless of
+         the system day/night setting. -->
+    <style name="Theme.HeySureAgent" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/heysure_primary</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSecondary">@color/heysure_accent2</item>
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">@color/bg2</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="android:textColorPrimary">@color/text</item>
+        <item name="android:textColorHint">@color/muted</item>
+    </style>
+</resources>

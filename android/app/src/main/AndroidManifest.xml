@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Long-lived socket connection to the HeySure server. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Foreground service keeps the agent connected + holds the MediaProjection
+         consent so screenshots/recording don't re-prompt every task. The
+         mediaProjection FGS type is required from Android 14 (API 34). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- "保持常亮 / 放着也能被控制"：仅用 WakeLock 让 CPU + 屏幕保持唤醒。
+         不声明 RECORD_AUDIO（录屏改为无音频）与受限的 REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+         （电池豁免改为引导用户到系统设置页手动开启），以收敛"间谍/木马"权限画像。 -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <application
+        android:allowBackup="true"
+        android:usesCleartextTraffic="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.HeySureAgent">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Owns the Socket.IO client + task dispatch loop; survives the UI being
+             backgrounded. Declared with mediaProjection type so capture is allowed
+             while the app is not in the foreground. -->
+        <service
+            android:name=".agent.AgentService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+
+        <!-- Performs tap/swipe/back/home via dispatchGesture + global actions.
+             The user must enable it once in Settings > Accessibility. -->
+        <service
+            android:name=".accessibility.GestureAccessibilityService"
+            android:exported="false"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+    </application>
+</manifest>

@@ -1,0 +1,11 @@
+frame 0: opaque=40 black=0
+frame 1: opaque=40 black=0
+frame 2: opaque=40 black=0
+frame 3: opaque=40 black=0
+frame 4: opaque=40 black=0
+frame 5: opaque=40 black=0
+frame 6: opaque=40 black=0
+frame 7: opaque=40 black=0
+frame 8: opaque=40 black=0
+frame 9: opaque=40 black=0
+best in first10: frame 0 opaque=40

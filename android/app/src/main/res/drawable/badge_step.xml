@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 待办步骤的序号徽标：靛紫渐变圆形 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <gradient
+        android:angle="45"
+        android:startColor="@color/heysure_primary"
+        android:endColor="@color/heysure_accent2" />
+</shape>

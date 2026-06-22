@@ -1,0 +1,53 @@
+{
+  "manifest_version": 3,
+  "name": "HeySure Agent",
+  "version": "1.5.0",
+  "description": "HeySure 浏览器端：可登录软件端账号，管理 AI 成员、对话与安排任务，同时作为浏览器自动化 Agent 执行 MCP 工具",
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "storage",
+    "scripting",
+    "notifications",
+    "contextMenus",
+    "alarms",
+    "clipboardWrite",
+    "debugger",
+    "cookies",
+    "downloads",
+    "webNavigation"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "dist/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["dist/content.js"],
+      "run_at": "document_idle",
+      "all_frames": true,
+      "match_about_blank": true
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "HeySure Agent",
+    "default_icon": {
+      "16":  "icons/icon16.png",
+      "48":  "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16":  "icons/icon16.png",
+    "48":  "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["cursors/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

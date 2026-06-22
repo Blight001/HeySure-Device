@@ -1,0 +1,40 @@
+{
+  "name": "heysure-device-mac",
+  "version": "1.0.0",
+  "description": "HeySure Agent - Mac Desktop Edition",
+  "license": "Apache-2.0",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "node ../shared/scripts/sync-shared.js && tsc && node ../shared/scripts/copy-renderer.js && electron dist/main.js",
+    "build": "node ../shared/scripts/sync-shared.js && tsc && node ../shared/scripts/copy-renderer.js",
+    "start": "electron dist/main.js",
+    "setup:python": "node ../shared/scripts/setup-python.js",
+    "rebuild": "electron-rebuild -f -w robotjs",
+    "package": "npm run build && electron-builder --mac"
+  },
+  "dependencies": {
+    "socket.io-client": "^4.7.5",
+    "dotenv": "^16.4.5",
+    "robotjs": "npm:@jitsi/robotjs@^0.6.22",
+    "electron-store": "^8.1.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "electron": "^28.3.3",
+    "electron-builder": "^24.9.1",
+    "electron-rebuild": "^3.2.9",
+    "typescript": "^5.4.5",
+    "@types/node": "^20.12.0"
+  },
+  "build": {
+    "appId": "com.heysure.device.mac",
+    "productName": "HeySure Device",
+    "directories": { "output": "release" },
+    "files": ["dist/**/*", "src/**/*", "assets/**/*"],
+    "mac": {
+      "target": ["dmg", "zip"],
+      "category": "public.app-category.utilities",
+      "icon": "assets/desktop.png"
+    }
+  }
+}

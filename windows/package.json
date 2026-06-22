@@ -1,0 +1,61 @@
+{
+  "name": "heysure-device-win",
+  "version": "1.0.0",
+  "description": "HeySure Agent - Windows Desktop Edition",
+  "license": "Apache-2.0",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "node ../shared/scripts/sync-shared.js && tsc && node ../shared/scripts/copy-renderer.js && electron dist/main.js",
+    "build": "node ../shared/scripts/sync-shared.js && tsc && node ../shared/scripts/copy-renderer.js",
+    "start": "electron dist/main.js",
+    "setup:python": "node ../shared/scripts/setup-python.js",
+    "postinstall": "electron-builder install-app-deps",
+    "rebuild": "electron-builder install-app-deps",
+    "package": "electron-builder --win"
+  },
+  "dependencies": {
+    "socket.io-client": "^4.7.5",
+    "dotenv": "^16.4.5",
+    "pngjs": "^7.0.0",
+    "robotjs": "npm:@jitsi/robotjs@^0.6.22",
+    "electron-store": "^8.1.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/pngjs": "^6.0.5",
+    "electron": "^28.3.3",
+    "electron-builder": "^24.9.1",
+    "typescript": "^5.4.5",
+    "@types/node": "^20.12.0"
+  },
+  "build": {
+    "appId": "com.heysure.device.win",
+    "productName": "HeySure Device",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "src/**/*",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  },
+  "__npminstall_done": false
+}

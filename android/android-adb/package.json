@@ -1,0 +1,25 @@
+{
+  "name": "heysure-android-adb",
+  "version": "2.0.0",
+  "private": true,
+  "description": "HeySure 安卓端 Agent（方案 B）：宿主电脑经 ADB 控制手机，作为 endpoint 接入后端。",
+  "type": "commonjs",
+  "bin": {
+    "heysure-android-adb": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "socket.io-client": "^4.7.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  }
+}

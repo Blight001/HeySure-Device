@@ -1,0 +1,372 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg"
+    android:fillViewport="true"
+    android:scrollbars="none">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="18dp"
+        android:paddingTop="22dp"
+        android:paddingBottom="28dp">
+
+        <LinearLayout
+            android:id="@+id/headerBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingBottom="18dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/app_name"
+                android:textColor="@color/text"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.01" />
+
+            <TextView
+                android:id="@+id/headerSubtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/pill_bg"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="3dp"
+                android:text="@string/app_subtitle"
+                android:textColor="@color/muted"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.06"
+                android:textAllCaps="true" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <LinearLayout
+                android:id="@+id/userChip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="@drawable/pill_bg"
+                android:paddingStart="5dp"
+                android:paddingEnd="12dp"
+                android:paddingVertical="5dp"
+                android:visibility="gone">
+
+                <FrameLayout
+                    android:layout_width="26dp"
+                    android:layout_height="26dp"
+                    android:layout_marginEnd="7dp"
+                    android:background="@drawable/pill_bg">
+
+                    <ImageView
+                        android:id="@+id/userAvatarImage"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:scaleType="centerCrop"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/userAvatarText"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:gravity="center"
+                        android:text="·"
+                        android:textColor="@color/text"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/headerUserName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:maxWidth="100dp"
+                    android:ellipsize="end"
+                    android:singleLine="true"
+                    android:textColor="@color/text"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/settingsButton"
+                style="@style/BtnIcon"
+                android:text="⚙"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/loginPanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_bg"
+            android:padding="18dp">
+
+            <TextView style="@style/CardTitle" android:text="@string/card_account" />
+
+            <EditText
+                android:id="@+id/serverUrlInput"
+                style="@style/Field"
+                android:hint="@string/server_url_hint"
+                android:inputType="textUri" />
+
+            <EditText
+                android:id="@+id/accountInput"
+                style="@style/Field"
+                android:hint="@string/account_hint"
+                android:inputType="text" />
+
+            <EditText
+                android:id="@+id/passwordInput"
+                style="@style/Field"
+                android:hint="@string/password_hint"
+                android:inputType="textPassword" />
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/rememberLoginSwitch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:layout_marginBottom="6dp"
+                android:minHeight="0dp"
+                android:text="@string/remember_login"
+                android:textColor="@color/text"
+                android:textSize="13sp" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/loginButton"
+                style="@style/BtnPrimary"
+                android:text="@string/login" />
+
+            <TextView
+                android:id="@+id/loginErrorText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:textColor="@color/status_red"
+                android:textSize="12sp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/mainPanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:padding="16dp"
+                android:layout_marginBottom="12dp">
+
+                <TextView style="@style/CardTitle" android:text="@string/card_connection" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:background="@drawable/pill_bg"
+                    android:paddingHorizontal="14dp"
+                    android:paddingVertical="11dp">
+
+                    <View
+                        android:id="@+id/statusDot"
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
+                        android:layout_marginEnd="10dp"
+                        android:background="@drawable/status_dot" />
+
+                    <TextView
+                        android:id="@+id/statusText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/status_disconnected"
+                        android:textColor="@color/text"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/connectionInfoText"
+                    style="@style/Hint"
+                    android:text="@string/hint_connection_card" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:padding="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingBottom="12dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/card_mcp"
+                        android:textColor="@color/muted"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:textAllCaps="true"
+                        android:letterSpacing="0.08" />
+
+                    <TextView
+                        android:id="@+id/mcpCountText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/pill_bg"
+                        android:paddingHorizontal="9dp"
+                        android:paddingVertical="3dp"
+                        android:textColor="@color/muted"
+                        android:textSize="11sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/mcpListContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/accountPanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/card_bg"
+            android:padding="16dp"
+            android:visibility="gone">
+
+            <TextView style="@style/CardTitle" android:text="@string/card_account_info" />
+
+            <TextView
+                android:id="@+id/accountInfoText"
+                style="@style/Hint"
+                android:textColor="@color/text" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/backFromAccountButton"
+                style="@style/BtnSecondary"
+                android:text="@string/back" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/logoutButton"
+                style="@style/BtnDanger"
+                android:text="@string/logout" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/settingsPanel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:padding="16dp"
+                android:layout_marginBottom="12dp">
+
+                <TextView style="@style/CardTitle" android:text="@string/card_permissions" />
+
+                <androidx.appcompat.widget.AppCompatButton
+                    android:id="@+id/accessibilityButton"
+                    style="@style/BtnSecondary"
+                    android:text="@string/enable_accessibility" />
+
+                <androidx.appcompat.widget.AppCompatButton
+                    android:id="@+id/captureButton"
+                    style="@style/BtnSecondary"
+                    android:text="@string/grant_capture" />
+
+                <TextView style="@style/Hint" android:text="@string/hint_permissions" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:padding="16dp"
+                android:layout_marginBottom="12dp">
+
+                <TextView style="@style/CardTitle" android:text="@string/card_power" />
+
+                <com.google.android.material.switchmaterial.SwitchMaterial
+                    android:id="@+id/keepAwakeSwitch"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:text="@string/keep_awake"
+                    android:textColor="@color/text"
+                    android:textSize="13sp" />
+
+                <androidx.appcompat.widget.AppCompatButton
+                    android:id="@+id/batteryButton"
+                    style="@style/BtnSecondary"
+                    android:text="@string/battery_exempt" />
+
+                <androidx.appcompat.widget.AppCompatButton
+                    android:id="@+id/stopButton"
+                    style="@style/BtnSecondary"
+                    android:text="@string/stop" />
+
+                <TextView style="@style/Hint" android:text="@string/hint_power" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:padding="16dp">
+
+                <TextView style="@style/CardTitle" android:text="@string/card_log" />
+
+                <TextView
+                    android:id="@+id/logText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="monospace"
+                    android:lineSpacingMultiplier="1.25"
+                    android:textColor="@color/muted"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/backFromSettingsButton"
+                style="@style/BtnSecondary"
+                android:text="@string/back" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

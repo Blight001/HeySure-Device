@@ -1,0 +1,18 @@
+# HeySure 桌面端 Python 运行时依赖（macOS）。
+# 由 scripts/setup-python.js 安装进 device_runtime/python/.venv，
+# 供服务器下发的 runtime=python 工具调用（见 device/shared/src/runtime/python-runner.ts）。
+# 这些是本机原生自动化库，无法在 CI/远程环境验证，请在目标机器上安装。
+# macOS 下键鼠/截图通常需要给终端或应用授予辅助功能和屏幕录制权限。
+
+pyautogui>=0.9.54        # 鼠标 / 键盘 / 截图
+pynput>=1.7.6            # 低层键鼠事件
+pyperclip>=1.8.2         # 剪贴板
+mss>=9.0.1               # 高性能截图
+Pillow>=10.0.0           # 图像处理
+psutil>=5.9.0            # 进程 / 系统信息
+pyttsx3>=2.90            # 文字转语音 (speech.speak，macOS 使用系统语音服务)
+# 注意：display.box 用标准库 tkinter，无法用 pip 安装；macOS 的 Python 安装包
+#       通常自带 tkinter，如缺失请安装带 Tcl/Tk 的 Python 发行版。
+
+# 视觉 / OCR（较重，按需取消注释）：
+# opencv-python>=4.9.0

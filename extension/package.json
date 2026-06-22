@@ -1,0 +1,20 @@
+{
+  "name": "heysure-browser-extension",
+  "version": "1.0.0",
+  "description": "HeySure AI browser automation extension (Chrome MV3)",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "node build.js",
+    "dev": "node build.js --watch"
+  },
+  "dependencies": {
+    "socket.io-client": "^4.7.5"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "esbuild": "^0.20.2",
+    "typescript": "^5.4.5"
+  }
+}

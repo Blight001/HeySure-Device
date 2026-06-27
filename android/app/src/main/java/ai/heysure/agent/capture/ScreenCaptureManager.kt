@@ -39,6 +39,16 @@ class ScreenCaptureManager(private val appContext: Context) {
 
     val isReady: Boolean get() = projection != null
 
+    /** The live projection, shared with the WebRTC screen capturer so remote
+     *  control does not need a second consent dialog. Multiple VirtualDisplays
+     *  on one MediaProjection are allowed, so this coexists with screenshots. */
+    fun activeProjection(): MediaProjection? = projection
+
+    /** Physical display size + density, for sizing the remote-control stream. */
+    fun displayWidthPx(): Int = metrics().widthPixels
+    fun displayHeightPx(): Int = metrics().heightPixels
+    fun displayDensityDpi(): Int = metrics().densityDpi
+
     private val projectionCallback = object : MediaProjection.Callback() {
         override fun onStop() { projection = null }
     }

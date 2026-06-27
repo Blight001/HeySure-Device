@@ -78,4 +78,9 @@ dependencies {
     implementation("io.socket:socket.io-client:2.1.0") {
         exclude(group = "org.json", module = "json")
     }
+
+    // WebRTC for human-driven remote control (live screen mirror + input over a
+    // peer-to-peer connection). Google archived org.webrtc:google-webrtc; this
+    // maintained drop-in keeps the same `org.webrtc` package namespace.
+    implementation("io.github.webrtc-sdk:android:125.6422.07")
 }

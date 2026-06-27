@@ -83,7 +83,7 @@ export async function doClick(msg: any) {
 export async function doDoubleClick(msg: any) {
   const { el } = resolveTarget(msg)
   if (!el) throw new Error(`Element not found: selector=${msg.selector || ''} text=${msg.text || ''} coords=${msg.x},${msg.y}`)
-  el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  el.scrollIntoView({ block: 'center', behavior: 'auto' })
   if (isFxEnabled()) { await fxSleep(220); await fxToElement(el); const c = elCenter(el); await fxClickAt(c.x, c.y, 'double'); await fxSleep(80) }
   const c = elCenter(el)
   const opts = { bubbles: true, cancelable: true, view: window, clientX: c.x, clientY: c.y } as MouseEventInit
@@ -101,7 +101,7 @@ export async function doDoubleClick(msg: any) {
 export async function doRightClick(msg: any) {
   const { el } = resolveTarget(msg)
   if (!el) throw new Error(`Element not found: selector=${msg.selector || ''} text=${msg.text || ''} coords=${msg.x},${msg.y}`)
-  el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  el.scrollIntoView({ block: 'center', behavior: 'auto' })
   if (isFxEnabled()) { await fxSleep(220); await fxToElement(el); const c = elCenter(el); await fxClickAt(c.x, c.y, 'right'); await fxSleep(80) }
   const c = elCenter(el)
   const opts = { bubbles: true, cancelable: true, view: window, button: 2, buttons: 2, clientX: c.x, clientY: c.y } as MouseEventInit
@@ -150,7 +150,7 @@ export async function doDrag(msg: any) {
     const diag = dragDiagnostics(src.el, dst.el, msg)
     throw new Error(`Drag target not found. diagnostics=${JSON.stringify(diag)}`)
   }
-  if (src.el) src.el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  if (src.el) src.el.scrollIntoView({ block: 'center', behavior: 'auto' })
   if (isFxEnabled()) await fxSleep(200)
   const s = src.el ? elCenter(src.el) : { x: src.x, y: src.y }
   const d = dst.el ? elCenter(dst.el) : { x: dst.x, y: dst.y }
@@ -346,13 +346,16 @@ export async function doScroll(msg: any) {
   if (msg.selector) {
     const el = document.querySelector(msg.selector)
     if (!el) throw new Error(`Element not found: ${msg.selector}`)
-    el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    // Instant (not smooth) scrolling: smooth scroll is rAF-driven and never
+    // advances in a hidden/background tab, leaving the page where it was. 'auto'
+    // jumps immediately so the scroll lands regardless of tab visibility.
+    el.scrollIntoView({ block: 'center', behavior: 'auto' })
   } else {
     switch (msg.direction) {
-      case 'up':     window.scrollBy({ top: -amount, behavior: 'smooth' }); break
-      case 'down':   window.scrollBy({ top: amount,  behavior: 'smooth' }); break
-      case 'top':    window.scrollTo({ top: 0,                  behavior: 'smooth' }); break
-      case 'bottom': window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); break
+      case 'up':     window.scrollBy({ top: -amount, behavior: 'auto' }); break
+      case 'down':   window.scrollBy({ top: amount,  behavior: 'auto' }); break
+      case 'top':    window.scrollTo({ top: 0,                  behavior: 'auto' }); break
+      case 'bottom': window.scrollTo({ top: document.body.scrollHeight, behavior: 'auto' }); break
       default: throw new Error(`Unknown scroll direction: ${msg.direction}`)
     }
   }
@@ -399,12 +402,28 @@ export async function doWait(msg: any) {
   if (msg.selector) {
     const start = Date.now()
     await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error(`Element "${msg.selector}" not found after 10s`)), 10000)
-      function check() {
-        if (document.querySelector(msg.selector)) { clearTimeout(timeout); resolve() }
-        else requestAnimationFrame(check)
+      // rAF is paused in background tabs, so the old requestAnimationFrame poll
+      // never fired when the page wasn't the foreground tab and every wait timed
+      // out. MutationObserver keeps firing in hidden tabs, so we react to DOM
+      // changes and keep a slow setTimeout poll as a backstop for matches that
+      // don't surface as observed mutations (e.g. layout-driven :visible checks).
+      let observer: MutationObserver | null = null
+      let pollTimer: ReturnType<typeof setTimeout> | null = null
+      const timeout = setTimeout(() => { cleanup(); reject(new Error(`Element "${msg.selector}" not found after 10s`)) }, 10000)
+      function cleanup() {
+        clearTimeout(timeout)
+        if (pollTimer) clearTimeout(pollTimer)
+        if (observer) observer.disconnect()
       }
-      check()
+      function check(): boolean {
+        if (document.querySelector(msg.selector)) { cleanup(); resolve(); return true }
+        return false
+      }
+      function poll() { if (!check()) pollTimer = setTimeout(poll, 250) }
+      if (check()) return
+      observer = new MutationObserver(() => { check() })
+      observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true })
+      poll()
     })
     return { success: true, selector: msg.selector, waited_ms: Date.now() - start }
   }
@@ -826,7 +845,7 @@ export async function doSelect(msg: any) {
     return { success: true, selector: msg.selector, selected: opt.text, value: opt.value, mode: 'native' }
   }
 
-  el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  el.scrollIntoView({ block: 'center', behavior: 'auto' })
   if (isFxEnabled()) { await fxSleep(160); await fxToElement(el) }
   clickLikeUser(el)
   await fxSleep(250)

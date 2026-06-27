@@ -52,6 +52,22 @@ async function getAnyActiveTab(): Promise<chrome.tabs.Tab> {
   return tab
 }
 
+// A tab is "foreground" only when it's the active tab AND its window is focused.
+// chrome.tabs.captureVisibleTab can only grab a foreground tab — on a background
+// tab or a minimized/unfocused window it fails or returns a blank/stale frame.
+// CDP Page.captureScreenshot (fromSurface) has no such restriction, so callers
+// use this to skip the doomed captureVisibleTab path and go straight to CDP when
+// the browser isn't in the foreground (the whole point of running headless-ish).
+async function isTabForeground(tab: chrome.tabs.Tab): Promise<boolean> {
+  if (!tab.active) return false
+  try {
+    const win = await chrome.windows.get(tab.windowId)
+    return win.focused === true && win.state !== 'minimized'
+  } catch {
+    return false
+  }
+}
+
 // Since manifest `all_frames` injects the content script into every frame, a
 // frame-less sendMessage would be delivered to *all* frames and only one
 // (arbitrary) sendResponse would be kept — so every call must target a specific
@@ -689,26 +705,36 @@ async function toolScreenshot(args: any = {}): Promise<any> {
     }
   }
 
-  try {
-    const dataUrl = await captureVisibleTab(tab.windowId!, args, Number(args.retries ?? 1))
-    const optimized = await ensureScreenshotPayloadSize(dataUrl, args, () => captureVisibleTab(tab.windowId!, {
-      ...args,
-      format: 'jpeg',
-      quality: args.quality ?? 70,
-      retries: 0,
-    }, 0))
-    return finishScreenshot({
-      success: true,
-      dataUrl: optimized.dataUrl,
-      save_to_server: wantsServerSave(args),
-      send_to_user: wantsSendToUser(args),
-      tabId: tab.id,
-      url: tab.url,
-      method: 'captureVisibleTab',
-      warning: [attempts.length ? attempts.join('; ') : '', optimized.warning].filter(Boolean).join('; ') || undefined,
-    })
-  } catch (err: any) {
-    attempts.push(`captureVisibleTab: ${err?.message || String(err)}`)
+  // captureVisibleTab only works on a foreground tab. When the browser is in the
+  // background (unfocused/minimized window, or the target isn't the active tab),
+  // it's guaranteed to fail or return a blank frame — so go straight to the CDP
+  // path instead of burning a failed attempt and emitting a confusing warning.
+  const foreground = await isTabForeground(tab)
+
+  if (foreground) {
+    try {
+      const dataUrl = await captureVisibleTab(tab.windowId!, args, Number(args.retries ?? 1))
+      const optimized = await ensureScreenshotPayloadSize(dataUrl, args, () => captureVisibleTab(tab.windowId!, {
+        ...args,
+        format: 'jpeg',
+        quality: args.quality ?? 70,
+        retries: 0,
+      }, 0))
+      return finishScreenshot({
+        success: true,
+        dataUrl: optimized.dataUrl,
+        save_to_server: wantsServerSave(args),
+        send_to_user: wantsSendToUser(args),
+        tabId: tab.id,
+        url: tab.url,
+        method: 'captureVisibleTab',
+        warning: [attempts.length ? attempts.join('; ') : '', optimized.warning].filter(Boolean).join('; ') || undefined,
+      })
+    } catch (err: any) {
+      attempts.push(`captureVisibleTab: ${err?.message || String(err)}`)
+    }
+  } else {
+    attempts.push('captureVisibleTab: skipped (tab not in foreground — using CDP capture)')
   }
 
   if (!wantsDebuggerCapture) {

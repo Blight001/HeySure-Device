@@ -341,6 +341,31 @@ async function restoreAndConnectOnStartup() {
   if (!s.offlineMode && auth.token) await connect()
 }
 
+// ── Offscreen keepalive ─────────────────────────────────────────────────────
+// An offscreen document isn't reclaimed for inactivity (the service worker is),
+// so it acts as an external pacemaker: it pings us every ~20s, and each ping is
+// an event that resets the worker's idle timer / wakes it. That keeps the socket
+// alive while the browser is minimized. See src/offscreen.ts. The socket stays
+// in the worker because offscreen docs can't touch chrome.tabs/debugger.
+let ensureOffscreenPromise: Promise<void> | null = null
+async function ensureOffscreen(): Promise<void> {
+  if (ensureOffscreenPromise) return ensureOffscreenPromise
+  ensureOffscreenPromise = (async () => {
+    try {
+      if (await chrome.offscreen.hasDocument()) return
+      await chrome.offscreen.createDocument({
+        url: 'offscreen.html',
+        reasons: [chrome.offscreen.Reason.WORKERS],
+        justification: '保持后台连接：在浏览器最小化/失焦时让 Service Worker 与服务器的 Socket.IO 连接不被回收。',
+      })
+    } catch {
+      // createDocument throws if one already exists (lost a race) — that's the
+      // desired end state, so ignore.
+    }
+  })().finally(() => { ensureOffscreenPromise = null })
+  return ensureOffscreenPromise
+}
+
 // ── Task handling ─────────────────────────────────────────────────────────
 async function handleTask(task: DispatchedTask) {
   const taskId = task.taskId
@@ -744,21 +769,37 @@ chrome.runtime.onConnect.addListener((port) => {
   })
 })
 
-// ── Keepalive alarm ───────────────────────────────────────────────────────
+// ── Keepalive ───────────────────────────────────────────────────────────────
+// The socket's health check, shared by the offscreen heartbeat and the alarm.
+function nudgeSocketHealth() {
+  if (authRejected) return
+  // If the socket object is gone (worker was torn down), re-establish from
+  // stored auth. If it exists but is neither connected nor actively reconnecting
+  // (e.g. after an 'io server disconnect', which Socket.IO does not auto-retry),
+  // kick it. When socket.active is true the manager is already retrying — calling
+  // connect() then would spawn a duplicate, flapping attempt.
+  if (!socket) { void restoreAndConnectOnStartup(); return }
+  if (!socket.connected && !socket.active) socket.connect()
+}
+
+// Primary pacemaker: the offscreen document pings every ~20s. Receiving the
+// message both resets this worker's idle timer and lets us repair the socket.
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg?.type === 'offscreen:keepalive') {
+    nudgeSocketHealth()
+    return false
+  }
+})
+
+// Backstop pacemaker: chrome.alarms survives even if the offscreen document is
+// ever lost, and re-creates it. (periodInMinutes is clamped to ~30s in released
+// extensions, so this alone sits right at the idle-teardown edge — the offscreen
+// heartbeat is what keeps the worker reliably alive.)
 chrome.alarms.create('keepalive', { periodInMinutes: 0.4 })
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name !== 'keepalive' || authRejected) return
-  // MV3 tears down the service worker (and its socket) when idle; the alarm
-  // wakes it again. If the socket object is gone, re-establish from stored auth.
-  // If it exists but is neither connected nor actively reconnecting (e.g. after
-  // an 'io server disconnect', which Socket.IO does not auto-retry), kick it.
-  // When socket.active is true the manager is already retrying — calling
-  // connect() then would spawn a duplicate, flapping attempt.
-  if (!socket) {
-    void restoreAndConnectOnStartup()
-    return
-  }
-  if (!socket.connected && !socket.active) socket.connect()
+  if (alarm.name !== 'keepalive') return
+  void ensureOffscreen()
+  nudgeSocketHealth()
 })
 
 // ── Context menus ─────────────────────────────────────────────────────────
@@ -767,6 +808,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // (re)created at module scope above on every service-worker wake, which is
 // what actually matters for an MV3 worker that gets torn down frequently.
 chrome.runtime.onInstalled.addListener(() => {
+  void ensureOffscreen()
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({ id: 'hs-ask', title: 'HeySure AI: 询问选中内容', contexts: ['selection'] })
     chrome.contextMenus.create({ id: 'hs-screenshot', title: 'HeySure AI: 截图分析此页', contexts: ['page'] })
@@ -786,9 +828,11 @@ chrome.contextMenus.onClicked.addListener(async (info) => {
 
 // ── Auto-connect on browser startup ──────────────────────────────────────
 chrome.runtime.onStartup.addListener(async () => {
+  void ensureOffscreen()
   await restoreAndConnectOnStartup()
 })
 
+void ensureOffscreen()
 void restoreAndConnectOnStartup()
 
 // Login happens in the popup, but the actual socket lives in this service

@@ -25,7 +25,13 @@ let overflowLockDepth = 0
 let savedOverflow = { html: '', body: '' }
 
 export const fxSleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
-export const isFxEnabled = () => fxEnabled
+// fx is purely cosmetic, and its animations are driven by requestAnimationFrame,
+// which is *paused* in background (hidden) tabs. If we let fx run there, awaits
+// like `await fxMoveTo()` never resolve and the whole action hangs. Since nobody
+// can see the effects in a hidden tab anyway, treat "hidden" as "fx off" so all
+// `if (isFxEnabled())` call sites skip the animation entirely and actions stay
+// fast and non-blocking when the target tab isn't in the foreground.
+export const isFxEnabled = () => fxEnabled && !document.hidden
 
 try {
   chrome.storage?.local?.get('mouseFx').then((r: any) => {
@@ -130,7 +136,7 @@ function fxEnsureStyles() {
 }
 
 function fxEnsure(): HTMLElement | null {
-  if (!fxEnabled || !document.body) return null
+  if (!isFxEnabled() || !document.body) return null
   fxEnsureStyles()
   if (fxCursor && document.documentElement.contains(fxCursor)) return fxCursor
 
@@ -244,6 +250,20 @@ export async function fxMoveTo(x: number, y: number) {
 
   if (moveAnim) cancelAnimationFrame(moveAnim)
   await new Promise<void>(resolve => {
+    // rAF stops firing if the tab is hidden *during* the glide; without a
+    // backstop this promise would never settle and the caller would hang. A
+    // setTimeout (still fires, just throttled, in background tabs) snaps the
+    // cursor to its destination and resolves so the action can proceed.
+    let done = false
+    const finish = () => {
+      if (done) return
+      done = true
+      if (moveAnim) { cancelAnimationFrame(moveAnim); moveAnim = null }
+      clearTimeout(backstop)
+      fxPlace(x, y, false)
+      resolve()
+    }
+    const backstop = setTimeout(finish, duration + 400)
     const t0 = performance.now()
     const step = (now: number) => {
       const t = Math.min(1, (now - t0) / duration)
@@ -258,13 +278,14 @@ export async function fxMoveTo(x: number, y: number) {
         fxTrail.style.transform = `translate(${tx}px, ${ty}px)`
       }
       if (t < 1) moveAnim = requestAnimationFrame(step)
-      else { moveAnim = null; resolve() }
+      else finish()
     }
     moveAnim = requestAnimationFrame(step)
   })
 }
 
 export async function fxClickAt(x: number, y: number, variant: 'left' | 'right' | 'double' = 'left') {
+  if (!isFxEnabled()) return
   fxEnsure()
   fxShowCursor()
   fxPlace(x, y, false)
@@ -284,6 +305,7 @@ export async function fxClickAt(x: number, y: number, variant: 'left' | 'right' 
 }
 
 export async function fxDragPath(sx: number, sy: number, ex: number, ey: number) {
+  if (!isFxEnabled()) return
   fxEnsure()
   fxShowCursor()
   fxPlace(sx, sy, false)
@@ -307,7 +329,7 @@ export async function fxDragPath(sx: number, sy: number, ex: number, ey: number)
 }
 
 export async function fxToElement(el: Element) {
-  if (!fxEnabled) return
+  if (!isFxEnabled()) return
   const r = (el as HTMLElement).getBoundingClientRect()
   const x = Math.min(Math.max(r.left + r.width / 2, 4), window.innerWidth - 4)
   const y = Math.min(Math.max(r.top + r.height / 2, 4), window.innerHeight - 4)
@@ -315,7 +337,7 @@ export async function fxToElement(el: Element) {
 }
 
 export function fxHoverOn(el: Element) {
-  if (!fxEnabled || !document.body) return
+  if (!isFxEnabled() || !document.body) return
   fxEnsureStyles()
   const r = (el as HTMLElement).getBoundingClientRect()
   const glow = document.createElement('div')
@@ -329,6 +351,7 @@ export function fxHoverOn(el: Element) {
 }
 
 export async function fxScrollDrag(direction: string, amount: number) {
+  if (!isFxEnabled()) return
   fxEnsure()
   const cx = window.innerWidth / 2
   const cy = window.innerHeight / 2
@@ -441,7 +464,7 @@ function drawScreenshotFrame(rect: ShotRect) {
 }
 
 export async function fxScreenshotBefore(rect?: ShotRect | null) {
-  if (!fxEnabled) return
+  if (!isFxEnabled()) return
   const frameRect = rect && rect.width > 0 && rect.height > 0
     ? rect
     : { x: 10, y: 10, width: window.innerWidth - 20, height: window.innerHeight - 20 }
@@ -451,7 +474,7 @@ export async function fxScreenshotBefore(rect?: ShotRect | null) {
 }
 
 export async function fxScreenshotAfter() {
-  if (!fxEnabled) return
+  if (!isFxEnabled()) return
   fxEnsureStyles()
   clearScreenshotFx()
   const root = fxOverlayRoot()

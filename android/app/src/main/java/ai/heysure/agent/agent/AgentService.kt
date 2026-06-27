@@ -5,6 +5,7 @@ import ai.heysure.agent.R
 import ai.heysure.agent.capture.ScreenCaptureManager
 import ai.heysure.agent.executor.TaskExecutor
 import ai.heysure.agent.executor.ToolCatalog
+import ai.heysure.agent.remote.RemoteControlManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -28,6 +29,7 @@ class AgentService : Service() {
     private lateinit var settings: Settings
     private lateinit var capture: ScreenCaptureManager
     private var agent: SocketAgent? = null
+    private var remoteControl: RemoteControlManager? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
     var lastStatus: DeviceStatus = DeviceStatus.DISCONNECTED
@@ -103,11 +105,22 @@ class AgentService : Service() {
         if (!settings.isLoggedIn) return
         val catalog = ToolCatalog(capture)
         val executor = TaskExecutor(catalog)
+        // The manager's signal sender reads `agent` lazily, so it resolves once
+        // the SocketAgent below is assigned (signals only fire after connect).
+        val rc = RemoteControlManager(
+            appContext = applicationContext,
+            capture = capture,
+            sendSignal = { event, payload -> agent?.emitSignal(event, payload) },
+            onLog = { msg -> logListener?.invoke(msg) },
+        )
+        remoteControl = rc
         agent = SocketAgent(
             settings = settings,
             executor = executor,
             toolDefs = { catalog.toolDefs() },
-            capabilities = { catalog.names() },
+            // Advertise remote_control alongside the tool names so the server can
+            // gate live control on it (see RemoteControlManager.CAPABILITY).
+            capabilities = { catalog.names() + RemoteControlManager.CAPABILITY },
             onToolConfig = { payload -> catalog.applyDynamicConfig(payload) },
             onStatus = { status, reason ->
                 lastStatus = status
@@ -115,18 +128,23 @@ class AgentService : Service() {
                 updateNotification(status)
             },
             onLog = { msg -> logListener?.invoke(msg) },
+            onRcSignal = { event, data -> rc.onSignal(event, data) },
         ).also { it.connect() }
     }
 
     fun reconnect() {
         agent?.shutdown()
         agent = null
+        remoteControl?.shutdown()
+        remoteControl = null
         ensureAgent()
     }
 
     private fun stopAgent() {
         agent?.shutdown()
         agent = null
+        remoteControl?.shutdown()
+        remoteControl = null
         capture.release()
     }
 

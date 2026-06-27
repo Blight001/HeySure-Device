@@ -48,12 +48,20 @@ if /I "%VARIANT%"=="release" (
 
 call :select_java
 
-where java.exe >nul 2>nul
-if errorlevel 1 (
-  echo Java was not found in PATH.
-  echo Install JDK 17 and make sure java.exe is available, then run this again.
+set "JAVA_EXE="
+if defined JAVA_HOME if exist "%JAVA_HOME%\bin\java.exe" set "JAVA_EXE=%JAVA_HOME%\bin\java.exe"
+if not defined JAVA_EXE (
+  for /f "delims=" %%J in ('where java.exe 2^>nul') do if not defined JAVA_EXE set "JAVA_EXE=%%J"
+)
+
+if not defined JAVA_EXE (
+  echo Java was not found.
+  echo Install JDK 17 or set JAVA_HOME to a JDK folder, then run this again.
   exit /b 1
 )
+
+echo Using Java:
+echo   %JAVA_EXE%
 
 if not exist "local.properties" (
   if not defined ANDROID_HOME if not defined ANDROID_SDK_ROOT (
@@ -143,6 +151,9 @@ set "SELECTED_JAVA_HOME="
 if exist "%ProgramFiles%\Android\Android Studio\jbr\bin\java.exe" (
   set "SELECTED_JAVA_HOME=%ProgramFiles%\Android\Android Studio\jbr"
 )
+
+if not defined SELECTED_JAVA_HOME if exist "%ProgramFiles%\Java\jdk-17\bin\java.exe" set "SELECTED_JAVA_HOME=%ProgramFiles%\Java\jdk-17"
+if not defined SELECTED_JAVA_HOME if exist "%ProgramFiles%\Java\jdk-21\bin\java.exe" set "SELECTED_JAVA_HOME=%ProgramFiles%\Java\jdk-21"
 
 for /f "delims=" %%J in ('dir /b /ad "%ProgramFiles%\Java\jdk-21*" 2^>nul') do if not defined SELECTED_JAVA_HOME set "SELECTED_JAVA_HOME=%ProgramFiles%\Java\%%J"
 for /f "delims=" %%J in ('dir /b /ad "%ProgramFiles%\Java\jdk-17*" 2^>nul') do if not defined SELECTED_JAVA_HOME set "SELECTED_JAVA_HOME=%ProgramFiles%\Java\%%J"

@@ -20,6 +20,7 @@ const entries = [
   { in: 'src/content/index.ts', out: 'dist/content.js' },
   { in: 'src/popup/index.ts',   out: 'dist/popup.js' },
   { in: 'src/offline-chat.ts',  out: 'dist/offline-chat.js' },
+  { in: 'src/offscreen.ts',     out: 'dist/offscreen.js' },
 ]
 
 // Avatar images are now served by the backend (/avatars/avatarsN.png) and
@@ -63,11 +64,19 @@ function writeDistOfflineChat() {
   fs.writeFileSync('dist/offline-chat.html', html)
 }
 
+function writeDistOffscreen() {
+  const html = fs.readFileSync('offscreen.html', 'utf8')
+    .replace(/<script\s+src=["']dist\/offscreen\.js["']><\/script>/, '<script src="offscreen.js"></script>')
+
+  fs.writeFileSync('dist/offscreen.html', html)
+}
+
 function copyStaticAssets() {
   ensureDist()
   writeDistManifest()
   writeDistPopup()
   writeDistOfflineChat()
+  writeDistOffscreen()
 
   for (const dir of staticDirs) {
     if (!fs.existsSync(dir)) continue

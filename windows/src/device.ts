@@ -5,6 +5,7 @@ import { executeTask, getAvailableTools, getToolDefs, DispatchedTask } from './e
 import { applyServerDynamicMcp, clearServerDynamicMcp } from './executor/dynamic'
 import { resetPermissionPolicy, setPermissionPolicy } from './runtime/permission-guard'
 import { probeRuntimes, cachedRuntimes } from './runtime/runtime-probe'
+import { handleRemoteControlSignal, handleRemoteControlDisconnect } from './remote/remote-control-host'
 import { getPlatformInfo } from './platform'
 import { AgentSettings } from './store'
 import { normalizeServerUrl } from './server-url'
@@ -124,6 +125,7 @@ export class HeySureAgent {
     this.socket.on('disconnect', (reason: string) => {
       this.stopRegistrationHandshake()
       this.clearServerSyncedTools()
+      handleRemoteControlDisconnect()
       this.setStatus('disconnected', reason)
       this.log('warn', `连接断开: ${reason}`)
     })
@@ -163,6 +165,14 @@ export class HeySureAgent {
       void this.handleTask(task)
     })
 
+    // Remote control (WebRTC signaling). The desktop is the offerer; the live
+    // screen + input ride a peer-to-peer link, so only these few SDP/ICE
+    // messages cross the socket. They are bridged to the hidden peer renderer.
+    const rcSend = (event: string, payload: any) => { this.socket?.emit(event, payload) }
+    for (const ev of ['rc:start', 'rc:answer', 'rc:ice', 'rc:stop']) {
+      this.socket.on(ev, (data: any) => { void handleRemoteControlSignal(ev, data, rcSend) })
+    }
+
     // Web-authored dynamic MCP tools for this device type, pushed by the server
     // on register and whenever an operator edits them. Held in memory only;
     // cleared on disconnect so tools never outlive the server session.
@@ -181,6 +191,7 @@ export class HeySureAgent {
 
   disconnect(): void {
     this.stopRegistrationHandshake()
+    handleRemoteControlDisconnect()
     this.socket?.disconnect()
     this.socket = null
     this.clearServerSyncedTools()
@@ -240,7 +251,9 @@ export class HeySureAgent {
         group: this.settings.agentGroup || '',
         platform: `win32-desktop (${os.hostname()})`,
         os: getPlatformInfo(),
-        capabilities: getAvailableTools(),
+        // Advertise remote_control so the server gates live screen control on it
+        // (mirrors remote_control.RC_CAPABILITY server-side).
+        capabilities: [...getAvailableTools(), 'remote_control'],
         // Which device runtimes can actually execute (python/powershell/shell),
         // so the server knows if a runtime tool has a device that can run it.
         runtimes: cachedRuntimes() || undefined,

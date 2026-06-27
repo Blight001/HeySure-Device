@@ -32,6 +32,7 @@ class SocketAgent(
     private val onToolConfig: (JSONObject) -> Boolean,
     private val onStatus: (DeviceStatus, String?) -> Unit,
     private val onLog: (String) -> Unit,
+    private val onRcSignal: (event: String, data: JSONObject) -> Unit = { _, _ -> },
 ) {
     private var socket: Socket? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -104,7 +105,22 @@ class SocketAgent(
             val task = args.firstOrNull() as? JSONObject ?: return@on
             scope.launch { handleTask(task) }
         }
+        // Remote-control WebRTC signaling (controller → device). The handful of
+        // SDP/ICE messages are forwarded to the RemoteControlManager; media and
+        // input then flow peer-to-peer, off the socket.
+        for (event in RC_SIGNAL_EVENTS) {
+            s.on(event) { args ->
+                val payload = args.firstOrNull() as? JSONObject ?: JSONObject()
+                onRcSignal(event, payload)
+            }
+        }
         s.connect()
+    }
+
+    /** Emit one outbound remote-control signaling message (device → controller):
+     *  rc:offer / rc:ice / rc:ready / rc:error / rc:stopped. */
+    fun emitSignal(event: String, payload: JSONObject) {
+        socket?.emit(event, payload)
     }
 
     fun disconnect() {
@@ -185,5 +201,6 @@ class SocketAgent(
 
     private companion object {
         const val MAX_SEEN_TASKS = 500
+        val RC_SIGNAL_EVENTS = listOf("rc:start", "rc:answer", "rc:ice", "rc:stop")
     }
 }

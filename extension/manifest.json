@@ -15,7 +15,8 @@
     "debugger",
     "cookies",
     "downloads",
-    "webNavigation"
+    "webNavigation",
+    "offscreen"
   ],
   "host_permissions": ["<all_urls>"],
   "background": {

@@ -18,6 +18,7 @@ import {
 } from '../windows/remote-control-window'
 import { getPrimaryScreenSource } from './desktop-source'
 import { injectInput, RcInputEvent } from './input-injector'
+import { sendActivityLog } from '../services/activity-log'
 
 type SignalSender = (event: string, payload: any) => void
 
@@ -61,6 +62,12 @@ export function initRemoteControlHost(): void {
   ipcMain.on('rc:input', (_event, payload: RcInputEvent) => {
     injectInput(payload || ({} as RcInputEvent))
   })
+
+  // Lifecycle breadcrumbs from the hidden peer renderer (getUserMedia / ICE /
+  // datachannel), surfaced in the desktop app's activity log for diagnostics.
+  ipcMain.on('rc:debug', (_event, msg: { status?: string; message?: string; data?: any }) => {
+    sendActivityLog('remote-control', String(msg?.status || 'info'), String(msg?.message || ''), msg?.data)
+  })
 }
 
 /** Socket → main: one inbound signaling message from the controller. */
@@ -74,6 +81,7 @@ export async function handleRemoteControlSignal(
 
   if (event === 'rc:start') {
     sessions.set(sessionId, { sessionId, send })
+    sendActivityLog('remote-control', 'running', `远程控制会话开始：${sessionId}`)
     try {
       const win = await ensureRemoteControlWindow()
       const source = await getPrimaryScreenSource()
@@ -83,7 +91,9 @@ export async function handleRemoteControlSignal(
         width: source.width,
         height: source.height,
       })
+      sendActivityLog('remote-control', 'info', `已开始捕获主屏 ${source.width}×${source.height}，等待浏览器应答`)
     } catch (err: any) {
+      sendActivityLog('remote-control', 'error', `远程控制启动失败：${err?.message || err}`)
       send('rc:error', { sessionId, code: 'capture_failed', message: err?.message || String(err) })
       endSession(sessionId)
     }

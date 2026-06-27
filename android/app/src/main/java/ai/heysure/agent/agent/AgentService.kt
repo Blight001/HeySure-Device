@@ -18,6 +18,7 @@ import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.provider.Settings as AndroidSettings
 
 /**
  * Foreground service that keeps the Socket.IO connection + MediaProjection grant
@@ -70,7 +71,9 @@ class AgentService : Service() {
                 return START_NOT_STICKY
             }
         }
-        applyKeepAwake(settings.keepScreenAwake)
+        // Re-apply persisted power modes after a (re)start so they survive process death.
+        updateWakeLock()
+        if (settings.remoteControlMode) enterMinBrightness()
         ensureAgent()
         return START_STICKY
     }
@@ -82,7 +85,31 @@ class AgentService : Service() {
      */
     fun applyKeepAwake(enabled: Boolean) {
         settings.keepScreenAwake = enabled
+        updateWakeLock()
+        if (enabled) logListener?.invoke("已开启保持常亮（WakeLock）")
+    }
+
+    /**
+     * "远程控制模式"：屏幕常亮 + 系统亮度调到最低。投屏抓的是帧缓冲（不受背光影响），
+     * 远端依旧能看到清晰画面，而本机背光降到最低，省电且不显眼。需要「修改系统设置」权限。
+     */
+    fun applyRemoteControlMode(enabled: Boolean) {
+        settings.remoteControlMode = enabled
         if (enabled) {
+            enterMinBrightness()
+            updateWakeLock()
+            logListener?.invoke("已开启远程控制模式（常亮 + 最低亮度）")
+        } else {
+            restoreBrightness()
+            updateWakeLock()
+            logListener?.invoke("已退出远程控制模式")
+        }
+    }
+
+    /** WakeLock 由「保持常亮」与「远程控制模式」共用：任一开启即持有，全部关闭才释放。 */
+    private fun updateWakeLock() {
+        val shouldHold = settings.keepScreenAwake || settings.remoteControlMode
+        if (shouldHold) {
             if (wakeLock?.isHeld == true) return
             val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
             @Suppress("DEPRECATION")
@@ -93,11 +120,57 @@ class AgentService : Service() {
             lock.setReferenceCounted(false)
             lock.acquire()
             wakeLock = lock
-            logListener?.invoke("已开启保持常亮（WakeLock）")
         } else {
             if (wakeLock?.isHeld == true) wakeLock?.release()
             wakeLock = null
         }
+    }
+
+    private fun canWriteSettings(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.M || AndroidSettings.System.canWrite(this)
+
+    /** 把系统亮度切到手动并调到最低，首次进入时记下原值以便退出还原。 */
+    private fun enterMinBrightness() {
+        if (!canWriteSettings()) {
+            logListener?.invoke("无法调整亮度：尚未授予「修改系统设置」权限")
+            return
+        }
+        val resolver = contentResolver
+        // Only snapshot the original state once, so repeated entries don't overwrite it with the min value.
+        if (settings.savedBrightness < 0) {
+            settings.savedBrightness = runCatching {
+                AndroidSettings.System.getInt(resolver, AndroidSettings.System.SCREEN_BRIGHTNESS)
+            }.getOrDefault(-1)
+            settings.savedBrightnessMode = runCatching {
+                AndroidSettings.System.getInt(resolver, AndroidSettings.System.SCREEN_BRIGHTNESS_MODE)
+            }.getOrDefault(AndroidSettings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC)
+        }
+        runCatching {
+            AndroidSettings.System.putInt(
+                resolver,
+                AndroidSettings.System.SCREEN_BRIGHTNESS_MODE,
+                AndroidSettings.System.SCREEN_BRIGHTNESS_MODE_MANUAL,
+            )
+            AndroidSettings.System.putInt(
+                resolver, AndroidSettings.System.SCREEN_BRIGHTNESS, MIN_BRIGHTNESS,
+            )
+        }.onFailure { logListener?.invoke("调整亮度失败：${it.message}") }
+    }
+
+    /** 还原进入远程控制模式前的亮度与亮度模式。 */
+    private fun restoreBrightness() {
+        if (!canWriteSettings()) return
+        val resolver = contentResolver
+        runCatching {
+            settings.savedBrightnessMode.takeIf { it >= 0 }?.let {
+                AndroidSettings.System.putInt(resolver, AndroidSettings.System.SCREEN_BRIGHTNESS_MODE, it)
+            }
+            settings.savedBrightness.takeIf { it >= 0 }?.let {
+                AndroidSettings.System.putInt(resolver, AndroidSettings.System.SCREEN_BRIGHTNESS, it)
+            }
+        }
+        settings.savedBrightness = -1
+        settings.savedBrightnessMode = -1
     }
 
     private fun ensureAgent() {
@@ -150,6 +223,8 @@ class AgentService : Service() {
 
     override fun onDestroy() {
         stopAgent()
+        // Hand the screen back to the system; the persisted flag re-dims on next start.
+        restoreBrightness()
         if (wakeLock?.isHeld == true) wakeLock?.release()
         wakeLock = null
         if (instance === this) instance = null
@@ -216,6 +291,8 @@ class AgentService : Service() {
 
         private const val NOTIF_ID = 1001
         private const val CHANNEL_ID = "heysure_agent"
+        /** 系统亮度最低值（0-255）；系统会自动夹到设备可见下限。 */
+        private const val MIN_BRIGHTNESS = 0
 
         const val ACTION_GRANT_CAPTURE = "ai.heysure.agent.GRANT_CAPTURE"
         const val ACTION_STOP = "ai.heysure.agent.STOP"

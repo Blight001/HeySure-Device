@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Long-lived socket connection to the HeySure server. -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -16,6 +17,11 @@
          不声明 RECORD_AUDIO（录屏改为无音频）与受限的 REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
          （电池豁免改为引导用户到系统设置页手动开启），以收敛"间谍/木马"权限画像。 -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- "远程控制模式"：把系统亮度调到最低（投屏抓帧缓冲不受背光影响，远端仍清晰）。
+         WRITE_SETTINGS 属特殊权限，需用户在系统页面手动授予，不会静默获取。 -->
+    <uses-permission android:name="android.permission.WRITE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
 
     <application
         android:allowBackup="true"

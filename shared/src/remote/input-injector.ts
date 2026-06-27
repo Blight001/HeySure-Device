@@ -7,7 +7,14 @@
 // same coordinate space the screenshot pipeline uses (see capture-bridge.ts),
 // so a click lands where the operator aimed regardless of DPI scaling.
 
+import { clipboard } from 'electron'
 import { getRobot } from '../tools/shared/robot'
+import { sendActivityLog } from '../services/activity-log'
+
+// Log the input path once so a silent failure (robotjs not rebuilt for Electron,
+// or input never arriving) is visible in the desktop app's activity log.
+let robotWarned = false
+let injectedOnce = false
 
 type MouseButton = 'left' | 'right' | 'middle'
 
@@ -65,8 +72,25 @@ function modifiers(event: RcInputEvent): string[] {
 /** Apply one input event. Never throws into the caller — a bad event must not
  *  tear down the control session. */
 export function injectInput(event: RcInputEvent): void {
+  let robot: any
   try {
-    const robot = getRobot()
+    robot = getRobot()
+  } catch (err: any) {
+    if (!robotWarned) {
+      robotWarned = true
+      sendActivityLog(
+        'remote-control', 'error',
+        'robotjs 不可用，远程控制无法注入鼠标/键盘：请在 device/windows 执行 npm run rebuild 后重启',
+        { error: String(err?.message || err) },
+      )
+    }
+    return
+  }
+  if (!injectedOnce) {
+    injectedOnce = true
+    sendActivityLog('remote-control', 'success', '已收到远程控制输入，开始注入鼠标/键盘')
+  }
+  try {
     robot.setMouseDelay?.(0)
     const screen = robot.getScreenSize()
     const px = (n?: number) => Math.round(Math.max(0, Math.min(1, Number(n) || 0)) * screen.width)
@@ -106,7 +130,17 @@ export function injectInput(event: RcInputEvent): void {
         break
       }
       case 'text':
-        if (event.text) robot.typeString(String(event.text))
+        // Only IME-composed text (e.g. 中文) reaches here — plain ASCII is typed
+        // natively via key down/up. robotjs.typeString is unreliable for CJK, so
+        // paste through the clipboard instead and restore the prior contents.
+        if (event.text) {
+          const previous = clipboard.readText()
+          clipboard.writeText(String(event.text))
+          robot.keyTap('v', 'control')
+          setTimeout(() => {
+            try { clipboard.writeText(previous) } catch { /* ignore */ }
+          }, 250)
+        }
         break
     }
   } catch {

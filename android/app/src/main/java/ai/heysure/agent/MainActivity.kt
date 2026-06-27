@@ -239,6 +239,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun canWriteSystemSettings(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.M || AndroidSettings.System.canWrite(this)
+
+    private fun requestWriteSettings() {
+        toast("请在系统页面允许「修改系统设置」后返回，再开启远程控制模式")
+        // Deep-link straight to our app's toggle; fall back to the generic list if unsupported.
+        try {
+            startActivity(Intent(AndroidSettings.ACTION_MANAGE_WRITE_SETTINGS,
+                Uri.parse("package:$packageName")))
+        } catch (e: Exception) {
+            startActivity(Intent(AndroidSettings.ACTION_MANAGE_WRITE_SETTINGS))
+        }
+    }
+
     private fun isAccessibilityReady(): Boolean =
         GestureAccessibilityService.instance != null
 
@@ -535,6 +549,25 @@ class MainActivity : AppCompatActivity() {
                 if (checked) toast("已开启保持常亮（较耗电）")
             }
         })
+        body.addView(SwitchMaterial(this).apply {
+            text = getString(R.string.remote_control_mode)
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text))
+            textSize = 13f
+            isChecked = settings.remoteControlMode
+            setOnCheckedChangeListener { btn, checked ->
+                // Brightness control needs WRITE_SETTINGS; guide the user there first and
+                // revert the switch so they can flip it once the grant is back.
+                if (checked && !canWriteSystemSettings()) {
+                    btn.isChecked = false
+                    requestWriteSettings()
+                    return@setOnCheckedChangeListener
+                }
+                AgentService.start(this@MainActivity)
+                AgentService.instance?.applyRemoteControlMode(checked)
+                if (checked) toast("已开启远程控制模式：屏幕常亮 + 最低亮度")
+            }
+        })
+        body.addView(hintText(getString(R.string.hint_remote_control)))
         body.addView(dialogButton(getString(R.string.battery_exempt)) { requestBatteryExemption() })
         body.addView(dialogButton(getString(R.string.stop)) {
             startService(Intent(this, AgentService::class.java).apply { action = AgentService.ACTION_STOP })

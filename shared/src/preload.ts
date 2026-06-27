@@ -86,4 +86,5 @@ contextBridge.exposeInMainWorld('heysureRC', {
   onStop: (cb: (data: any) => void) => ipcRenderer.on('rc:stop', (_, data) => cb(data)),
   signal: (event: string, payload: any) => ipcRenderer.send('rc:signal', { event, payload }),
   input: (payload: any) => ipcRenderer.send('rc:input', payload),
+  debug: (status: string, message: string, data?: any) => ipcRenderer.send('rc:debug', { status, message, data }),
 })

@@ -21,7 +21,10 @@ const rc = (window as any).heysureRC as {
   onStop(cb: (data: { sessionId: string }) => void): void
   signal(event: string, payload: any): void
   input(payload: any): void
+  debug(status: string, message: string, data?: any): void
 }
+
+let inputSeen = false
 
 const RC_ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
 
@@ -66,10 +69,12 @@ async function rcStart(data: RcStartPayload): Promise<void> {
       } as unknown as MediaTrackConstraints,
     })
   } catch (err: any) {
+    rc.debug('error', `屏幕捕获失败：${err?.message || err}`)
     rc.signal('rc:error', { sessionId: rcSessionId, code: 'capture_failed', message: err?.message || '屏幕捕获失败' })
     rcCleanup(false)
     return
   }
+  rc.debug('info', '已捕获屏幕，建立 WebRTC 连接中…')
 
   const connection = new RTCPeerConnection({ iceServers: RC_ICE_SERVERS })
   rcPc = connection
@@ -78,6 +83,7 @@ async function rcStart(data: RcStartPayload): Promise<void> {
   }
   connection.onconnectionstatechange = () => {
     const state = connection.connectionState
+    rc.debug(state === 'connected' ? 'success' : 'info', `WebRTC 连接状态：${state}`)
     if (state === 'failed' || state === 'disconnected' || state === 'closed') rcCleanup(true)
   }
 
@@ -86,7 +92,12 @@ async function rcStart(data: RcStartPayload): Promise<void> {
 
   // The desktop owns the control channel; the browser sends input on it.
   const channel = connection.createDataChannel('control')
+  channel.onopen = () => rc.debug('success', '控制通道已打开，等待鼠标/键盘输入')
   channel.onmessage = (event) => {
+    if (!inputSeen) {
+      inputSeen = true
+      rc.debug('success', '已收到浏览器输入事件')
+    }
     try {
       rc.input(JSON.parse(String(event.data)))
     } catch {

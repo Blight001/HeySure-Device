@@ -6,6 +6,7 @@ import { getAgentEndpoint } from './lib/client'
 import { executeTask, executeBrowserTool, effectiveToolDefs } from './lib/tools'
 import { clearToolDescOverrides } from './lib/storage'
 import { applyServerDynamicMcp, clearServerDynamicMcp, DYNAMIC_MCP_STORAGE_KEY } from './lib/tools/dynamic'
+import { initRemoteControl, handleRcSocketSignal, handleOffscreenRcMessage, stopAllRemoteControl } from './lib/remote-control'
 import { callAI } from './lib/ai'
 import { screenshotToolContent } from './lib/ai'
 import {
@@ -103,6 +104,12 @@ function broadcast(msg: BgMsg) {
   })
 }
 
+// Emit a remote-control signaling message on the live agent socket. Reads the
+// module socket at call time so it survives reconnects.
+function rcSend(event: string, payload: any) {
+  socket?.emit(event, payload)
+}
+
 // ── Machine ID ────────────────────────────────────────────────────────────
 async function getMachineId(): Promise<string> {
   if (_machineId) return _machineId
@@ -140,7 +147,9 @@ async function emitRegisterOn(s: Socket): Promise<void> {
     group:           settings.agentGroup || '',
     platform:        `browser-extension (${navigator?.userAgent?.split(' ').pop() || 'chrome'})`,
     os:              { platform: 'browser', arch: 'unknown', release: '1.0', hostname: id },
-    capabilities:    toolDefs.map(t => t.name),
+    // Advertise remote_control alongside the tool names so the server gates live
+    // screen control on it (mirrors remote_control.RC_CAPABILITY server-side).
+    capabilities:    [...toolDefs.map(t => t.name), 'remote_control'],
     // Full self-described tool schemas (with the user's local description edits
     // merged in). The server stores these and surfaces them in mcp.list_tools /
     // describe_tool instead of hardcoding browser tool schemas, so a tool added
@@ -286,6 +295,14 @@ function attachOperationalListeners(s: Socket, agentName: string) {
 
   s.on('task:dispatch', (task: DispatchedTask) => { void handleTask(task) })
 
+  // Remote control (WebRTC signaling). Video is CDP-screencast + input is CDP
+  // injection (lib/remote-control.ts); the media/input ride a P2P link hosted in
+  // the offscreen doc, so only these SDP/ICE messages cross the socket.
+  initRemoteControl()
+  for (const ev of ['rc:start', 'rc:answer', 'rc:ice', 'rc:stop']) {
+    s.on(ev, (data: any) => { void handleRcSocketSignal(ev, data, rcSend) })
+  }
+
   // Web-authored dynamic MCP tools for this (browser) device type, pushed by the
   // server on register and on every operator edit. Held in memory only; cleared
   // on disconnect so tools never outlive the server session.
@@ -320,6 +337,7 @@ async function register() {
 }
 
 function disconnect() {
+  stopAllRemoteControl()
   socket?.disconnect()
   socket = null
   void clearServerSyncedTools()
@@ -355,8 +373,10 @@ async function ensureOffscreen(): Promise<void> {
       if (await chrome.offscreen.hasDocument()) return
       await chrome.offscreen.createDocument({
         url: 'offscreen.html',
-        reasons: [chrome.offscreen.Reason.WORKERS],
-        justification: '保持后台连接：在浏览器最小化/失焦时让 Service Worker 与服务器的 Socket.IO 连接不被回收。',
+        // WORKERS: keepalive heartbeat. WEB_RTC: host the remote-control peer
+        // connection (a service worker can't run RTCPeerConnection).
+        reasons: [chrome.offscreen.Reason.WORKERS, chrome.offscreen.Reason.WEB_RTC],
+        justification: '保持后台连接，并承载远程控制的 WebRTC 连接（Service Worker 无法运行 RTCPeerConnection）。',
       })
     } catch {
       // createDocument throws if one already exists (lost a race) — that's the
@@ -787,6 +807,12 @@ function nudgeSocketHealth() {
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg?.type === 'offscreen:keepalive') {
     nudgeSocketHealth()
+    return false
+  }
+  // Remote-control peer (offscreen) → service worker: signaling to relay over the
+  // socket, or an input event to inject via CDP.
+  if (msg?.rc && msg.dir === 'to-bg') {
+    handleOffscreenRcMessage(msg, rcSend)
     return false
   }
 })

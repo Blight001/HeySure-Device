@@ -55,6 +55,24 @@ class Settings(context: Context) {
         get() = prefs.getBoolean(KEY_KEEP_AWAKE, false)
         set(value) = prefs.edit().putBoolean(KEY_KEEP_AWAKE, value).apply()
 
+    /**
+     * "远程控制模式"：屏幕常亮 + 系统亮度调到最低。投屏抓的是帧缓冲，与背光无关，
+     * 因此远端仍看到清晰画面，而本机背光最低，省电且不显眼。
+     */
+    var remoteControlMode: Boolean
+        get() = prefs.getBoolean(KEY_REMOTE_CONTROL, false)
+        set(value) = prefs.edit().putBoolean(KEY_REMOTE_CONTROL, value).apply()
+
+    /** 进入远程控制模式前的系统亮度（0-255），用于退出时还原；-1 表示未保存。 */
+    var savedBrightness: Int
+        get() = prefs.getInt(KEY_SAVED_BRIGHTNESS, -1)
+        set(value) = prefs.edit().putInt(KEY_SAVED_BRIGHTNESS, value).apply()
+
+    /** 进入远程控制模式前的亮度模式（手动/自动），用于退出时还原；-1 表示未保存。 */
+    var savedBrightnessMode: Int
+        get() = prefs.getInt(KEY_SAVED_BRIGHTNESS_MODE, -1)
+        set(value) = prefs.edit().putInt(KEY_SAVED_BRIGHTNESS_MODE, value).apply()
+
     var captureQuality: CaptureQuality
         get() = CaptureQuality.fromId(prefs.getString(KEY_CAPTURE_QUALITY, null))
         set(value) = prefs.edit().putString(KEY_CAPTURE_QUALITY, value.id).apply()
@@ -99,6 +117,9 @@ class Settings(context: Context) {
         const val KEY_REMEMBER_LOGIN = "rememberLogin"
         const val KEY_DEVICE_ID = "deviceId"
         const val KEY_KEEP_AWAKE = "keepScreenAwake"
+        const val KEY_REMOTE_CONTROL = "remoteControlMode"
+        const val KEY_SAVED_BRIGHTNESS = "savedBrightness"
+        const val KEY_SAVED_BRIGHTNESS_MODE = "savedBrightnessMode"
         const val KEY_CAPTURE_QUALITY = "captureQuality"
     }
 }

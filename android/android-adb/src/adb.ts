@@ -70,9 +70,21 @@ export const swipe = (t: AdbTarget, x1: number, y1: number, x2: number, y2: numb
 export const keyevent = (t: AdbTarget, code: number | string) =>
   adbText(t, ['shell', 'input', 'keyevent', String(code)])
 
-/** `input text` cannot carry spaces/specials directly; encode them. */
-export const inputText = (t: AdbTarget, text: string) =>
-  adbText(t, ['shell', 'input', 'text', text.replace(/ /g, '%s').replace(/(["'`$&|;<>()])/g, '\\$1')])
+/** `input text` cannot carry newlines, and mishandles spaces/shell specials.
+ *  Send each line separately, pressing ENTER (66) between them, and escape shell
+ *  metacharacters (backslash first, then spaces → %s last so the tokens survive). */
+export async function inputText(t: AdbTarget, text: string): Promise<void> {
+  const lines = String(text ?? '').split(/\r?\n/)
+  for (let i = 0; i < lines.length; i++) {
+    if (i > 0) await keyevent(t, 66) // KEYCODE_ENTER between lines
+    const line = lines[i]
+    if (!line.length) continue
+    const escaped = line
+      .replace(/([\\"'`$&|;<>()*~?\[\]{}])/g, '\\$1')
+      .replace(/ /g, '%s')
+    await adbText(t, ['shell', 'input', 'text', escaped])
+  }
+}
 
 /** Wake the screen (KEYCODE_WAKEUP=224). Lets tasks run from a dark screen. */
 export const wake = (t: AdbTarget) => keyevent(t, 224)

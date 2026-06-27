@@ -1,5 +1,6 @@
 package ai.heysure.agent.executor
 
+import kotlinx.coroutines.CancellationException
 import org.json.JSONObject
 
 data class TaskResult(
@@ -30,6 +31,11 @@ class TaskExecutor(private val catalog: ToolCatalog) {
         return try {
             val result = def.run(args)
             TaskResult(true, tool, result, "$tool completed successfully")
+        } catch (e: CancellationException) {
+            // Never swallow coroutine cancellation (e.g. agent shutdown) — let it
+            // propagate so the scope can unwind cleanly. Tool-level timeouts are
+            // already converted to ordinary failures by the tools themselves.
+            throw e
         } catch (e: Exception) {
             TaskResult(false, tool, null, e.message ?: e.toString())
         }

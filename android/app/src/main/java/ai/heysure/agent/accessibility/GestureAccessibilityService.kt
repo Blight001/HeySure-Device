@@ -8,6 +8,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * The only way (without root) to inject taps/swipes system-wide. Exposes a
@@ -37,17 +38,25 @@ class GestureAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) { /* no-op: we only inject */ }
     override fun onInterrupt() { /* no-op */ }
 
-    /** Dispatch a single-stroke gesture from a Path; resumes with success. */
-    suspend fun dispatch(path: Path, startMs: Long, durationMs: Long): Boolean =
-        suspendCancellableCoroutine { cont ->
-            val stroke = GestureDescription.StrokeDescription(path, startMs, durationMs.coerceAtLeast(1))
-            val gesture = GestureDescription.Builder().addStroke(stroke).build()
-            val ok = dispatchGesture(gesture, object : GestureResultCallback() {
-                override fun onCompleted(d: GestureDescription?) { if (cont.isActive) cont.resume(true) }
-                override fun onCancelled(d: GestureDescription?) { if (cont.isActive) cont.resume(false) }
-            }, null)
-            if (!ok && cont.isActive) cont.resume(false)
-        }
+    /**
+     * Dispatch a single-stroke gesture from a Path; resumes with success.
+     * Bounded by a timeout (gesture duration + buffer): if the platform never
+     * fires the result callback, the task fails fast instead of hanging forever.
+     */
+    suspend fun dispatch(path: Path, startMs: Long, durationMs: Long): Boolean {
+        val safeDuration = durationMs.coerceAtLeast(1)
+        return withTimeoutOrNull(safeDuration + GESTURE_TIMEOUT_BUFFER_MS) {
+            suspendCancellableCoroutine { cont ->
+                val stroke = GestureDescription.StrokeDescription(path, startMs, safeDuration)
+                val gesture = GestureDescription.Builder().addStroke(stroke).build()
+                val ok = dispatchGesture(gesture, object : GestureResultCallback() {
+                    override fun onCompleted(d: GestureDescription?) { if (cont.isActive) cont.resume(true) }
+                    override fun onCancelled(d: GestureDescription?) { if (cont.isActive) cont.resume(false) }
+                }, null)
+                if (!ok && cont.isActive) cont.resume(false)
+            }
+        } ?: false
+    }
 
     fun showTapEffect(x: Float, y: Float) {
         effectOverlay.showTap(x, y)
@@ -72,6 +81,8 @@ class GestureAccessibilityService : AccessibilityService() {
     }
 
     companion object {
+        private const val GESTURE_TIMEOUT_BUFFER_MS = 8_000L
+
         @Volatile
         var instance: GestureAccessibilityService? = null
             private set

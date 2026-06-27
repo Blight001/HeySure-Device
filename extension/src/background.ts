@@ -21,9 +21,10 @@ const popupPorts   = new Set<chrome.runtime.Port>()
 const offlineChatControllers = new Map<string, { canceled: boolean }>()
 let _machineId:    string | null = null
 let currentAgentId: string | null = null
-// Set while connect() is resolving/opening the server-provided endpoint so a
-// parallel call (e.g. from the keepalive alarm or popup) doesn't duplicate it.
-let connecting = false
+// In-flight connect() promise. A single login fires BOTH the auth-storage
+// watcher and the popup's device:connect message; sharing one promise stops
+// each from opening its own socket and tearing the other down mid-handshake.
+let connectPromise: Promise<void> | null = null
 // Set when the server rejected registration for a non-transient reason
 // (expired/invalid token or AI-ownership mismatch). Retrying with the same
 // token just loops forever, so we stop auto-reconnect and the keepalive
@@ -156,9 +157,19 @@ async function emitRegisterOn(s: Socket): Promise<void> {
 }
 
 // ── Connect ───────────────────────────────────────────────────────────────
-async function connect() {
+async function connect(): Promise<void> {
+  // Serialize concurrent callers. A single login fires both the auth-storage
+  // watcher and the popup's device:connect message; returning the in-flight
+  // promise ensures only one socket is ever opened per connect cycle.
+  if (socket?.connected) return
+  if (connectPromise) return connectPromise
+  connectPromise = doConnect().finally(() => { connectPromise = null })
+  return connectPromise
+}
+
+async function doConnect(): Promise<void> {
   const settings = await getSettings()
-  if (socket?.connected || connecting) return
+  if (socket?.connected) return
   if (settings.offlineMode) {
     log('system', 'info', '离线模式已开启，跳过服务器连接')
     return
@@ -198,20 +209,15 @@ async function connect() {
   }
 
   authRejected = false
-  connecting = true
   setStatus('connecting')
 
-  try {
-    log('system', 'info', `正在连接 Agent 服务器: ${agentSocketUrl}`)
-    socket = io(agentSocketUrl, {
-      transports: ['websocket', 'polling'],
-      reconnectionDelay: 2000,
-      reconnectionAttempts: Infinity,
-    })
-    attachOperationalListeners(socket, settings.agentName || 'Browser Agent')
-  } finally {
-    connecting = false
-  }
+  log('system', 'info', `正在连接 Agent 服务器: ${agentSocketUrl}`)
+  socket = io(agentSocketUrl, {
+    transports: ['websocket', 'polling'],
+    reconnectionDelay: 2000,
+    reconnectionAttempts: Infinity,
+  })
+  attachOperationalListeners(socket, settings.agentName || 'Browser Agent')
 }
 
 function attachOperationalListeners(s: Socket, agentName: string) {
@@ -226,6 +232,15 @@ function attachOperationalListeners(s: Socket, agentName: string) {
     void clearServerSyncedTools()
     setStatus('disconnected', reason)
     log('system', 'warn', `连接断开: ${reason}`)
+    // Socket.IO auto-reconnects for transport-level drops, but NOT when the
+    // server explicitly closes us (reason 'io server disconnect') — which a
+    // server restart can produce. Nudge a reconnect ourselves unless the
+    // disconnect was intentional ('io client disconnect' from logout/disconnect)
+    // or registration was rejected. The keepalive alarm is the slower backstop
+    // if the worker is asleep when this fires.
+    if (reason === 'io server disconnect' && !authRejected) {
+      setTimeout(() => { if (socket && !socket.connected && !socket.active) socket.connect() }, 2000)
+    }
   })
 
   s.on('connect_error', (err: Error) => {
@@ -732,9 +747,18 @@ chrome.runtime.onConnect.addListener((port) => {
 // ── Keepalive alarm ───────────────────────────────────────────────────────
 chrome.alarms.create('keepalive', { periodInMinutes: 0.4 })
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === 'keepalive' && socket && !socket.connected && currentStatus !== 'connecting' && !authRejected) {
-    socket.connect()
+  if (alarm.name !== 'keepalive' || authRejected) return
+  // MV3 tears down the service worker (and its socket) when idle; the alarm
+  // wakes it again. If the socket object is gone, re-establish from stored auth.
+  // If it exists but is neither connected nor actively reconnecting (e.g. after
+  // an 'io server disconnect', which Socket.IO does not auto-retry), kick it.
+  // When socket.active is true the manager is already retrying — calling
+  // connect() then would spawn a duplicate, flapping attempt.
+  if (!socket) {
+    void restoreAndConnectOnStartup()
+    return
   }
+  if (!socket.connected && !socket.active) socket.connect()
 })
 
 // ── Context menus ─────────────────────────────────────────────────────────

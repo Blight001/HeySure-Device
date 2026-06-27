@@ -22,6 +22,7 @@ import java.io.File
 import kotlin.coroutines.resume
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Owns the single MediaProjection grant and turns it into screenshots
@@ -61,8 +62,17 @@ class ScreenCaptureManager(private val appContext: Context) {
     private fun metrics(): DisplayMetrics {
         val wm = appContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
         val dm = DisplayMetrics()
-        @Suppress("DEPRECATION")
-        wm.defaultDisplay.getRealMetrics(dm)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // getRealMetrics is deprecated on API 30+; maximumWindowMetrics gives
+            // the full physical display bounds (the screencap target).
+            val bounds = wm.maximumWindowMetrics.bounds
+            dm.widthPixels = bounds.width()
+            dm.heightPixels = bounds.height()
+            dm.densityDpi = appContext.resources.configuration.densityDpi
+        } else {
+            @Suppress("DEPRECATION")
+            wm.defaultDisplay.getRealMetrics(dm)
+        }
         return dm
     }
 
@@ -87,10 +97,16 @@ class ScreenCaptureManager(private val appContext: Context) {
             val image = awaitImage(reader)
             val bitmap = imageToBitmap(image, width)
             image.close()
+            // The buffer-backed bitmap is padded to rowStride; crop to the real
+            // width and free the padded original to avoid churning ~10MB/frame.
             val cropped = if (bitmap.width != width) {
-                Bitmap.createBitmap(bitmap, 0, 0, width, height)
+                Bitmap.createBitmap(bitmap, 0, 0, width, height).also { bitmap.recycle() }
             } else bitmap
-            return "data:image/jpeg;base64," + encodeJpegUnderLimit(cropped, quality)
+            try {
+                return "data:image/jpeg;base64," + encodeJpegUnderLimit(cropped, quality)
+            } finally {
+                cropped.recycle()
+            }
         } finally {
             display.release()
             reader.close()
@@ -144,15 +160,17 @@ class ScreenCaptureManager(private val appContext: Context) {
     }
 
     private suspend fun awaitImage(reader: ImageReader): Image =
-        suspendCancellableCoroutine { cont ->
-            reader.setOnImageAvailableListener({ r ->
-                val img = r.acquireLatestImage()
-                if (img != null && cont.isActive) {
-                    r.setOnImageAvailableListener(null, null)
-                    cont.resume(img)
-                }
-            }, mainHandler)
-        }
+        withTimeoutOrNull(IMAGE_TIMEOUT_MS) {
+            suspendCancellableCoroutine { cont ->
+                reader.setOnImageAvailableListener({ r ->
+                    val img = r.acquireLatestImage()
+                    if (img != null && cont.isActive) {
+                        r.setOnImageAvailableListener(null, null)
+                        cont.resume(img)
+                    }
+                }, mainHandler)
+            }
+        } ?: throw IllegalStateException("截屏超时：未能从屏幕获取画面帧（请确认屏幕已点亮且投屏授权有效）")
 
     private fun imageToBitmap(image: Image, width: Int): Bitmap {
         val plane = image.planes[0]
@@ -166,6 +184,8 @@ class ScreenCaptureManager(private val appContext: Context) {
     }
 
     private fun encodeJpegUnderLimit(source: Bitmap, quality: CaptureQuality): String {
+        // `source` is owned by the caller (recycled there); only recycle the
+        // intermediate scaled copies we create here.
         var current = scaleToMaxSide(source, quality.imageMaxSide)
         var jpegQuality = quality.imageStartQuality
         var bytes = jpegBytes(current, jpegQuality)
@@ -178,11 +198,14 @@ class ScreenCaptureManager(private val appContext: Context) {
         while (bytes.size > MAX_CAPTURE_BYTES && current.width > MIN_IMAGE_SIDE && current.height > MIN_IMAGE_SIDE) {
             val nextWidth = even((current.width * 0.86f).toInt()).coerceAtLeast(MIN_IMAGE_SIDE)
             val nextHeight = even((current.height * 0.86f).toInt()).coerceAtLeast(MIN_IMAGE_SIDE)
-            current = Bitmap.createScaledBitmap(current, nextWidth, nextHeight, true)
+            val next = Bitmap.createScaledBitmap(current, nextWidth, nextHeight, true)
+            if (current !== source) current.recycle()
+            current = next
             jpegQuality = minOf(jpegQuality, 68)
             bytes = jpegBytes(current, jpegQuality)
         }
 
+        if (current !== source) current.recycle()
         return Base64.encodeToString(bytes, Base64.NO_WRAP)
     }
 
@@ -210,6 +233,7 @@ class ScreenCaptureManager(private val appContext: Context) {
     private fun even(value: Int): Int = value.coerceAtLeast(2).let { if (it % 2 == 0) it else it - 1 }
 
     private companion object {
+        const val IMAGE_TIMEOUT_MS = 10_000L
         const val MAX_CAPTURE_BYTES = 500 * 1024
         const val MIN_JPEG_QUALITY = 28
         const val MIN_IMAGE_SIDE = 160

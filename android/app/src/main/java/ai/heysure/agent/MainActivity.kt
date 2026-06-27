@@ -50,6 +50,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var settings: Settings
     private var dialogLogText: TextView? = null
+    private val logLines = ArrayDeque<String>()
     private var permissionDialog: AlertDialog? = null
     private var accessibilityStep: StepViews? = null
     private var captureStep: StepViews? = null
@@ -376,8 +377,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun appendLog(msg: String) {
         val ts = android.text.format.DateFormat.format("HH:mm:ss", System.currentTimeMillis())
-        binding.logText.text = "[$ts] $msg\n${binding.logText.text}".take(4000)
-        dialogLogText?.text = binding.logText.text
+        logLines.addFirst("[$ts] $msg")
+        while (logLines.size > MAX_LOG_LINES) logLines.removeLast()
+        val text = logLines.joinToString("\n")
+        binding.logText.text = text
+        dialogLogText?.text = text
     }
 
     private fun updateSessionUi() {
@@ -435,7 +439,13 @@ class MainActivity : AppCompatActivity() {
         if (avatarUrl.isBlank()) return
         lifecycleScope.launch {
             val bitmap = withContext(Dispatchers.IO) {
-                runCatching { URL(avatarUrl).openStream().use(android.graphics.BitmapFactory::decodeStream) }.getOrNull()
+                runCatching {
+                    val conn = URL(avatarUrl).openConnection().apply {
+                        connectTimeout = 8_000
+                        readTimeout = 8_000
+                    }
+                    conn.getInputStream().use(android.graphics.BitmapFactory::decodeStream)
+                }.getOrNull()
             }
             if (bitmap != null && settings.isLoggedIn) {
                 binding.userAvatarImage.setImageBitmap(bitmap)
@@ -945,6 +955,8 @@ class MainActivity : AppCompatActivity() {
     )
 
     private companion object {
+        const val MAX_LOG_LINES = 120
+
         val ANDROID_MCP_TOOLS = listOf(
             AndroidMcpTool("触控操作", "点击", "touch.tap", "在指定屏幕坐标执行一次点击，用于按钮、列表项和输入框聚焦。"),
             AndroidMcpTool("触控操作", "长按", "touch.long_press", "在指定坐标保持按压，可用于唤出菜单、拖动起点或长按选择。"),

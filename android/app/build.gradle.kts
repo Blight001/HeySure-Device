@@ -18,13 +18,37 @@ android {
         versionName = "2.0.0"
     }
 
+    signingConfigs {
+        // Optional release keystore — supplied via gradle.properties or env vars so
+        // the repo carries no secrets. If absent, release falls back to debug signing
+        // (still installable; for store/anti-fraud use, set these and re-sign).
+        val storeFilePath = providers.gradleProperty("HEYSURE_RELEASE_STORE_FILE").orNull
+            ?: System.getenv("HEYSURE_RELEASE_STORE_FILE")
+        if (!storeFilePath.isNullOrBlank()) {
+            create("release") {
+                storeFile = file(storeFilePath)
+                storePassword = (providers.gradleProperty("HEYSURE_RELEASE_STORE_PASSWORD").orNull
+                    ?: System.getenv("HEYSURE_RELEASE_STORE_PASSWORD")).orEmpty()
+                keyAlias = (providers.gradleProperty("HEYSURE_RELEASE_KEY_ALIAS").orNull
+                    ?: System.getenv("HEYSURE_RELEASE_KEY_ALIAS")).orEmpty()
+                keyPassword = (providers.gradleProperty("HEYSURE_RELEASE_KEY_PASSWORD").orNull
+                    ?: System.getenv("HEYSURE_RELEASE_KEY_PASSWORD")).orEmpty()
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 shrink + obfuscate + resource shrink: smaller APK and fewer
+            // Play Protect / anti-fraud false positives. Keep rules in proguard-rules.pro.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            signingConfig = signingConfigs.findByName("release")
+                ?: signingConfigs.getByName("debug")
         }
     }
 

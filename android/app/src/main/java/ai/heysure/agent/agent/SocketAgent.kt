@@ -35,7 +35,14 @@ class SocketAgent(
 ) {
     private var socket: Socket? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val finishedTasks = mutableSetOf<String>()
+
+    // Bounded, access-ordered LRU of task ids we've already accepted. A plain
+    // growing set leaked memory over a long-lived session; this caps it while
+    // still ignoring duplicate dispatches (idempotent replay guard).
+    private val seenTasks = object : LinkedHashMap<String, Boolean>(MAX_SEEN_TASKS, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Boolean>?): Boolean =
+            size > MAX_SEEN_TASKS
+    }
 
     fun connect() {
         if (socket != null) return
@@ -137,7 +144,13 @@ class SocketAgent(
     private suspend fun handleTask(task: JSONObject) {
         val taskId = task.optString("taskId")
         if (taskId.isBlank()) return
-        if (taskId in finishedTasks) return  // idempotent replay guard
+        // Reserve the id up-front (under lock) so two near-simultaneous dispatches
+        // of the same task can't both slip past and replay a gesture. The previous
+        // check-then-add-after-run window was racy.
+        synchronized(seenTasks) {
+            if (seenTasks.containsKey(taskId)) return
+            seenTasks[taskId] = true
+        }
 
         val tool = task.optString("tool")
         val args = task.optJSONObject("args") ?: JSONObject()
@@ -149,7 +162,6 @@ class SocketAgent(
             .put("taskId", taskId).put("progress", 0).put("message", "开始执行 $tool…"))
 
         val outcome = executor.execute(tool, args, allowed)
-        finishedTasks.add(taskId)
 
         if (outcome.success) {
             socket?.emit("task:result", JSONObject()
@@ -169,5 +181,9 @@ class SocketAgent(
                 .put("error", outcome.summary))
             onLog("任务[$taskId] 失败: ${outcome.summary}")
         }
+    }
+
+    private companion object {
+        const val MAX_SEEN_TASKS = 500
     }
 }

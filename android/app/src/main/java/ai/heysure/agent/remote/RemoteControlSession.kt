@@ -3,11 +3,14 @@ package ai.heysure.agent.remote
 import ai.heysure.agent.accessibility.GestureAccessibilityService
 import ai.heysure.agent.capture.ScreenCaptureManager
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
 import android.content.Context
 import android.graphics.Path
 import java.nio.charset.StandardCharsets
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 import org.webrtc.DataChannel
 import org.webrtc.EglBase
@@ -50,6 +53,10 @@ class RemoteControlSession(
     private var videoTrack: VideoTrack? = null
     private var dataChannel: DataChannel? = null
     private var closed = false
+    private val inputMutex = Mutex()
+    private var activeDragStroke: GestureDescription.StrokeDescription? = null
+    private var activeDragX = 0f
+    private var activeDragY = 0f
 
     fun start() {
         val projection = capture.activeProjection()
@@ -134,6 +141,7 @@ class RemoteControlSession(
         runCatching { videoTrack?.dispose() }
         runCatching { videoSource?.dispose() }
         runCatching { pc?.dispose() }
+        activeDragStroke = null
         pc = null
         if (notifyPeer) {
             sendSignal("rc:stopped", JSONObject().put("sessionId", sessionId).put("reason", reason))
@@ -191,14 +199,17 @@ class RemoteControlSession(
                 data.get(bytes)
                 val text = String(bytes, StandardCharsets.UTF_8)
                 val json = runCatching { JSONObject(text) }.getOrNull() ?: return
-                scope.launch { handleInput(json, realW, realH) }
+                scope.launch { inputMutex.withLock { handleInput(json, realW, realH) } }
             }
         }
 
     /** Translate one normalized input event into an injected gesture. */
     private suspend fun handleInput(json: JSONObject, realW: Int, realH: Int) {
         val service = GestureAccessibilityService.instance ?: return
-        fun px(key: String, span: Int) = (json.optDouble(key, 0.0) * span).toFloat()
+        fun px(key: String, span: Int, default: Double = 0.0) =
+            (json.optDouble(key, default) * span)
+                .coerceIn(0.0, (span - 1).coerceAtLeast(1).toDouble())
+                .toFloat()
         when (json.optString("type")) {
             "tap" -> {
                 val x = px("x", realW); val y = px("y", realH)
@@ -218,6 +229,40 @@ class RemoteControlSession(
                 service.showDragEffect(x1, y1, x2, y2, dur)
                 service.dispatch(Path().apply { moveTo(x1, y1); lineTo(x2, y2) }, 0, dur)
             }
+            "down" -> {
+                val x = px("x", realW); val y = px("y", realH)
+                startDrag(service, x, y)
+            }
+            "move" -> {
+                val x = px("x", realW); val y = px("y", realH)
+                continueDrag(
+                    service,
+                    x,
+                    y,
+                    json.optLong("durationMs", DRAG_MOVE_MS).coerceIn(16L, 180L),
+                    willContinue = true,
+                )
+            }
+            "up" -> {
+                val x = px("x", realW, activeDragX.toDouble() / realW)
+                val y = px("y", realH, activeDragY.toDouble() / realH)
+                continueDrag(service, x, y, DRAG_UP_MS, willContinue = false)
+            }
+            "scroll" -> {
+                val dy = json.optDouble("dy", 0.0)
+                if (kotlin.math.abs(dy) >= 1.0) {
+                    val x = px("x", realW, 0.5)
+                    val y = px("y", realH, 0.5)
+                    val travel = (kotlin.math.abs(dy).toFloat() / 700f)
+                        .coerceIn(0.10f, 0.36f) * realH
+                    val fingerDirection = if (dy > 0) -1f else 1f
+                    val y1 = (y - fingerDirection * travel / 2f).coerceIn(realH * 0.05f, realH * 0.95f)
+                    val y2 = (y + fingerDirection * travel / 2f).coerceIn(realH * 0.05f, realH * 0.95f)
+                    val dur = (160 + travel / realH * 260).toLong().coerceIn(160L, 320L)
+                    service.showDragEffect(x, y1, x, y2, dur)
+                    service.dispatch(Path().apply { moveTo(x, y1); lineTo(x, y2) }, 0, dur)
+                }
+            }
             "key" -> when (json.optString("key")) {
                 "back" -> service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
                 "home" -> { service.showHomeEffect(); service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME) }
@@ -225,6 +270,38 @@ class RemoteControlSession(
             }
             "text" -> service.typeIntoFocused(json.optString("text"))
         }
+    }
+
+    private suspend fun startDrag(
+        service: GestureAccessibilityService,
+        x: Float,
+        y: Float,
+    ) {
+        activeDragX = x
+        activeDragY = y
+        val path = Path().apply { moveTo(x, y) }
+        val stroke = GestureDescription.StrokeDescription(path, 0, DRAG_DOWN_MS, true)
+        activeDragStroke = if (service.dispatchStroke(stroke, DRAG_DOWN_MS)) stroke else null
+        service.showTapEffect(x, y)
+    }
+
+    private suspend fun continueDrag(
+        service: GestureAccessibilityService,
+        x: Float,
+        y: Float,
+        durationMs: Long,
+        willContinue: Boolean,
+    ) {
+        val previous = activeDragStroke ?: return
+        val path = Path().apply {
+            moveTo(activeDragX, activeDragY)
+            lineTo(x, y)
+        }
+        val next = previous.continueStroke(path, 0, durationMs.coerceAtLeast(1), willContinue)
+        val ok = service.dispatchStroke(next, durationMs)
+        activeDragX = x
+        activeDragY = y
+        activeDragStroke = if (willContinue && ok) next else null
     }
 
     private fun scaledStreamSize(width: Int, height: Int): Pair<Int, Int> {
@@ -239,5 +316,8 @@ class RemoteControlSession(
     private companion object {
         const val TARGET_FPS = 30
         const val MAX_STREAM_SIDE = 1280
+        const val DRAG_DOWN_MS = 80L
+        const val DRAG_MOVE_MS = 55L
+        const val DRAG_UP_MS = 36L
     }
 }

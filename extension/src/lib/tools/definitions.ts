@@ -94,7 +94,8 @@ export const BROWSER_TOOLS: AIToolDef[] = [
       '· scroll：滚动页面，返回滚动后的位置、移动像素数与进入视野的小节/标题。\n' +
       '· type：向 input/textarea 输入文本（单字段；多字段请多次 type 或配合 observe 逐字段操作）。\n' +
       '· press_key：在焦点元素或指定 selector 上按键，可带 Ctrl/Shift/Alt/Meta 修饰键。\n' +
-      '用途：统一的点击/滚动/输入/键盘入口。场景：先 browser_observe 拿到编号，再 browser_action {action:"click", ref:id} 点击；输入用 {action:"type"}；快捷键用 {action:"press_key"}。',
+      '· 自动 observe：click/double_click/right_click/type/press_key 执行后会自动检测页面是否变化并等待加载完毕；若变化，结果里直接带上最新 observe 快照（observe 字段，含 items/elements/texts/frames，编号 id 仍可用于点击）并置 page_changed:true，无需再调用 browser_observe；未变化则 page_changed:false。不需要时传 observe_after:false 关闭。\n' +
+      '用途：统一的点击/滚动/输入/键盘入口。场景：先 browser_observe 拿到编号，再 browser_action {action:"click", ref:id} 点击；点击后若页面变了，直接读返回里的 observe 字段继续操作即可。',
     input_schema: {
       type: 'object',
       properties: {
@@ -118,6 +119,9 @@ export const BROWSER_TOOLS: AIToolDef[] = [
         shift:       { type: 'boolean', description: 'action=press_key 时按住 Shift。' },
         alt:         { type: 'boolean', description: 'action=press_key 时按住 Alt。' },
         meta:        { type: 'boolean', description: 'action=press_key 时按住 Meta/Cmd。' },
+        // 自动 observe（click/double_click/right_click/type/press_key 生效）
+        observe_after:   { type: 'boolean', description: '点击/输入/按键后若页面变化，是否自动等待加载并在结果里附带最新 observe 快照。默认 true；传 false 关闭（例如只想要点击不需要后续感知时）。' },
+        settle_timeout:  { type: 'number',  description: '自动 observe：等待页面变化稳定的最长时间（毫秒，默认 3000，上限 8000）；遇到持续加载/动画时到此上限即收尾并 observe。' },
       },
       required: ['action'],
     },

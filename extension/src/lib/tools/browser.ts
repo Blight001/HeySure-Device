@@ -853,15 +853,80 @@ function routeTarget(args: any): { frameId: number; ref: any; selector?: string;
   return { frameId, ref, selector: args.selector, text: args.text, x: args.x, y: args.y }
 }
 
+// ── Auto-observe after an interaction ───────────────────────────────────────
+// After a click (or other widget interaction) that changes the page, the AI
+// would otherwise have to call browser_observe again to learn the new state.
+// Instead we detect the change, wait for the page to settle, and fold a fresh
+// observe snapshot straight into the action result (observe field) so no extra
+// round-trip is needed. Disable per-call with observe_after:false.
+function wantsAutoObserve(args: any): boolean {
+  return args?.observe_after !== false && args?.auto_observe !== false
+}
+
+async function autoObserveAfterAction(tab: chrome.tabs.Tab, args: any, frameId = 0): Promise<any | null> {
+  const tabId = tab.id!
+  let changed = false
+  let navigated = false
+
+  try {
+    // Watch in the frame the interaction targeted: a change inside a cross-origin
+    // iframe is invisible to the top frame's observer.
+    const settle = await contentMsg(tabId, {
+      action: 'await_settle',
+      timeout: args.settle_timeout,
+      quiet: args.settle_quiet,
+      idle_window: args.settle_idle_window,
+    }, frameId)
+    changed = !!settle?.changed
+    navigated = !!settle?.navigating
+  } catch (err: any) {
+    // A full-page navigation tears down the content script mid-wait. That *is* a
+    // change — wait for the new document to load, then observe it.
+    const message = err?.message || ''
+    if (isNoReceiverError(err) || /message channel closed|context invalidated|frame (was )?removed|No tab with id/i.test(message)) {
+      changed = true
+      navigated = true
+    } else {
+      return null  // unexpected failure — don't mask or alter the action result
+    }
+  }
+
+  if (navigated) await waitForTabLoad(tabId).catch(() => {})
+  if (!changed) return null
+
+  try {
+    return await toolObserve(args)
+  } catch {
+    return null  // observe is a best-effort enrichment; never fail the action over it
+  }
+}
+
+// Fold a fresh observe snapshot into an interaction result when the page changed.
+async function withAutoObserve(tab: chrome.tabs.Tab, args: any, result: any, frameId = 0): Promise<any> {
+  if (!wantsAutoObserve(args)) return result
+  // Soft failures (occluded / not_visible / not found) didn't touch the page.
+  if (result && result.success === false) return result
+
+  const observe = await autoObserveAfterAction(tab, args, frameId)
+  if (!observe) return { ...result, page_changed: false }
+  return {
+    ...result,
+    page_changed: true,
+    observe,
+    observe_hint: '此操作触发了页面变化，已自动附带最新 observe 结果（见 observe 字段：items/elements/texts/frames，编号 id 仍可用于 browser_action click）。无需再调用 browser_observe。',
+  }
+}
+
 async function toolClick(args: any): Promise<any> {
   const tab = await getActiveTab()
   const t = routeTarget(args)
-  return contentMsg(tab.id!, {
+  const result = await contentMsg(tab.id!, {
     action: 'click',
     ref: t.ref,
     selector: t.selector, text: t.text, x: t.x, y: t.y,
     force: !!args.force,
   }, t.frameId)
+  return withAutoObserve(tab, args, result, t.frameId)
 }
 
 function observeMsg(args: any) {
@@ -960,19 +1025,19 @@ async function toolType(args: any): Promise<any> {
     clearFirst: args.clear_first !== false,
     submit: false,
   }, frameId)
-  if (!args.submit) return result
+  if (!args.submit) return withAutoObserve(tab, args, result, frameId)
 
   try {
     const pressed = await debuggerPressKey(tab.id!, { key: 'Enter' })
-    return { ...result, submitted: true, submit_method: pressed.method }
+    return withAutoObserve(tab, args, { ...result, submitted: true, submit_method: pressed.method }, frameId)
   } catch (debuggerErr: any) {
     await contentMsg(tab.id!, { action: 'press_key', key: 'Enter' })
-    return {
+    return withAutoObserve(tab, args, {
       ...result,
       submitted: true,
       submit_method: 'content.KeyboardEvent',
       warning: `Native submit key dispatch failed, fell back to synthetic KeyboardEvent: ${debuggerErr?.message || String(debuggerErr)}`,
-    }
+    }, frameId)
   }
 }
 
@@ -1332,22 +1397,25 @@ async function toolProfileSet(args: any): Promise<any> {
 async function toolRightClick(args: any): Promise<any> {
   const tab = await getActiveTab()
   const t = routeTarget(args)
-  return contentMsg(tab.id!, { action: 'right_click', ref: t.ref, selector: t.selector, text: t.text, x: t.x, y: t.y }, t.frameId)
+  const result = await contentMsg(tab.id!, { action: 'right_click', ref: t.ref, selector: t.selector, text: t.text, x: t.x, y: t.y }, t.frameId)
+  return withAutoObserve(tab, args, result, t.frameId)
 }
 
 async function toolDoubleClick(args: any): Promise<any> {
   const tab = await getActiveTab()
   const t = routeTarget(args)
-  return contentMsg(tab.id!, { action: 'double_click', ref: t.ref, selector: t.selector, text: t.text, x: t.x, y: t.y }, t.frameId)
+  const result = await contentMsg(tab.id!, { action: 'double_click', ref: t.ref, selector: t.selector, text: t.text, x: t.x, y: t.y }, t.frameId)
+  return withAutoObserve(tab, args, result, t.frameId)
 }
 
 async function toolDrag(args: any): Promise<any> {
   const tab = await getActiveTab()
-  return contentMsg(tab.id!, {
+  const result = await contentMsg(tab.id!, {
     action: 'drag',
     selector: args.selector, text: args.text, x: args.x, y: args.y,
     toSelector: args.to_selector, toText: args.to_text, toX: args.to_x, toY: args.to_y,
   })
+  return withAutoObserve(tab, args, result)
 }
 
 async function toolPressKey(args: any): Promise<any> {
@@ -1358,19 +1426,20 @@ async function toolPressKey(args: any): Promise<any> {
     ctrl: !!args.ctrl, shift: !!args.shift, alt: !!args.alt, meta: !!args.meta,
   })
 
+  let result: any
   try {
     if (args.selector) {
       await contentMsg(tab.id!, { action: 'focus_target', selector: args.selector })
     }
-    return await debuggerPressKey(tab.id!, args)
+    result = await debuggerPressKey(tab.id!, args)
   } catch (debuggerErr: any) {
-    const result = await fallback()
-    return {
-      ...result,
+    result = {
+      ...(await fallback()),
       method: 'content.KeyboardEvent',
       warning: `Native key dispatch failed, fell back to synthetic KeyboardEvent: ${debuggerErr?.message || String(debuggerErr)}`,
     }
   }
+  return withAutoObserve(tab, args, result)
 }
 
 // ── Action-dispatching handlers ───────────────────────────────────────────

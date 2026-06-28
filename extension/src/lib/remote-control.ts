@@ -30,6 +30,23 @@ interface RcSession {
   send: SignalSender
   metadata: ScreencastMetadata | null
   buttons: number // pressed-button bitmask for drag moves
+  // Whether the CDP debugger is currently attached + screencasting this tab.
+  // false on restricted pages (chrome://, web store, …) where attach is refused —
+  // the session stays alive (so the address bar / tab strip keep working) and
+  // auto-recovers once the tab navigates back to a controllable http/https page.
+  attached: boolean
+  attaching: boolean // re-entrancy guard for startCapture
+}
+
+// Pages the extension's debugger cannot attach to / screencast. Navigating *to*
+// one is allowed (chrome.tabs.update), it just can't be live-controlled — so we
+// keep the session and let the operator type a new URL to leave.
+function isControllableUrl(url?: string): boolean {
+  const raw = String(url || '')
+  if (!raw) return false
+  if (/^(chrome|edge|brave|vivaldi|opera|about|chrome-extension|devtools|view-source):/i.test(raw)) return false
+  if (/^https:\/\/chromewebstore\.google\.com\//i.test(raw)) return false
+  return true
 }
 
 const sessions = new Map<string, RcSession>()
@@ -60,8 +77,51 @@ function attach(tabId: number): Promise<void> {
   })
 }
 
+// Tabs we are detaching on purpose (tab switch, session end, partial-attach
+// cleanup). The onDetach listener consults this so a *self*-initiated detach is
+// never mistaken for an external one (devtools takeover / forced restricted-page
+// detach), which would otherwise tear the session down.
+const selfDetaching = new Set<number>()
+
 function detach(tabId: number): void {
-  try { chrome.debugger.detach({ tabId }, () => void chrome.runtime.lastError) } catch { /* noop */ }
+  selfDetaching.add(tabId)
+  try {
+    chrome.debugger.detach({ tabId }, () => {
+      void chrome.runtime.lastError
+      // If the tab wasn't attached, no onDetach fires — drop the guard next tick
+      // so a later genuine external detach isn't wrongly ignored.
+      setTimeout(() => selfDetaching.delete(tabId), 0)
+    })
+  } catch { selfDetaching.delete(tabId) }
+}
+
+// Attach the debugger and start the JPEG screencast for the session's current
+// tab. On a restricted page (or any attach failure) it leaves attached=false and
+// resolves false instead of throwing — the caller keeps the session alive so the
+// operator can still drive the tab strip / address bar and navigate away.
+async function startCapture(session: RcSession): Promise<boolean> {
+  const tabId = session.tabId
+  if (session.attaching || session.attached) return session.attached
+  let tab: chrome.tabs.Tab
+  try { tab = await chrome.tabs.get(tabId) } catch { return false }
+  if (!isControllableUrl(tab.url)) {
+    session.attached = false
+    return false
+  }
+  session.attaching = true
+  try {
+    await attach(tabId)
+    await cdp(tabId, 'Page.enable')
+    await cdp(tabId, 'Page.startScreencast', FRAME_OPTS)
+    session.attached = true
+    return true
+  } catch {
+    session.attached = false
+    detach(tabId) // clean up a half-open attach without killing the session
+    return false
+  } finally {
+    session.attaching = false
+  }
 }
 
 function findSessionByTab(tabId: number): RcSession | undefined {
@@ -97,16 +157,40 @@ export function initRemoteControl(): void {
     toOffscreen('frame', { sessionId: session.sessionId, dataUrl: `data:image/jpeg;base64,${params.data}` })
   })
 
-  // If the operator/devtools detaches the debugger, end the matching session.
+  // Debugger detach handling. A self-initiated detach (tab switch / cleanup) is
+  // ignored. An external one is either: the tab closed → end; the tab navigated
+  // to a restricted page (Chrome force-detaches) → keep the session alive and let
+  // recovery re-attach once it leaves; or a real external takeover (devtools) on
+  // a still-controllable tab → end.
   chrome.debugger.onDetach.addListener((source) => {
-    if (source.tabId == null) return
-    const session = findSessionByTab(source.tabId)
-    if (session) endSession(session.sessionId, 'debugger_detached', true)
+    const tabId = source.tabId
+    if (tabId == null) return
+    if (selfDetaching.delete(tabId)) return
+    const session = findSessionByTab(tabId)
+    if (!session) return
+    session.attached = false
+    chrome.tabs.get(tabId).then((tab) => {
+      if (isControllableUrl(tab.url)) {
+        // Still a normal page but our debugger was evicted (devtools / user) — end.
+        endSession(session.sessionId, 'debugger_detached', true)
+      } else {
+        // Forced detach by a restricted navigation: keep the session so the
+        // address bar still works; recovery re-attaches when it navigates back.
+        void broadcastBrowserState(session)
+      }
+    }).catch(() => endSession(session.sessionId, 'tab_closed', true))
   })
 
-  // Keep the operator's Edge-style tab strip / address bar live: any tab change
-  // in a controlled window re-broadcasts that window's state.
-  const onTabsChanged = () => { for (const s of sessions.values()) void broadcastBrowserState(s) }
+  // Keep the operator's Edge-style tab strip / address bar live, and auto-recover
+  // capture: any tab change re-broadcasts state and, for a session whose tab is
+  // not currently captured (e.g. it just navigated off a chrome:// page), retries
+  // attaching so the live stream resumes without operator action.
+  const onTabsChanged = () => {
+    for (const s of sessions.values()) {
+      void broadcastBrowserState(s)
+      if (!s.attached && !s.attaching) void startCapture(s).then((ok) => { if (ok) void broadcastBrowserState(s) })
+    }
+  }
   chrome.tabs.onUpdated.addListener(onTabsChanged)
   chrome.tabs.onActivated.addListener(onTabsChanged)
   chrome.tabs.onCreated.addListener(onTabsChanged)
@@ -128,13 +212,16 @@ export async function handleRcSocketSignal(event: string, data: any, send: Signa
     const tabId = tab.id
     try {
       initRemoteControl()
-      await attach(tabId)
-      await cdp(tabId, 'Page.enable')
-      const session: RcSession = { sessionId, tabId, windowId: tab.windowId, send, metadata: null, buttons: 0 }
+      const session: RcSession = {
+        sessionId, tabId, windowId: tab.windowId, send,
+        metadata: null, buttons: 0, attached: false, attaching: false,
+      }
       sessions.set(sessionId, session)
-      await cdp(tabId, 'Page.startScreencast', FRAME_OPTS)
-      // Ask the offscreen peer to offer (it owns the RTCPeerConnection).
+      // Start the peer regardless of controllability: even if the active tab is a
+      // restricted page, the operator still gets an interactive surface (tab strip
+      // + address bar) and can navigate to a normal page, which auto-attaches.
       toOffscreen('peer-start', { sessionId })
+      await startCapture(session)
       void broadcastBrowserState(session)
     } catch (err: any) {
       detach(tabId)
@@ -178,7 +265,7 @@ function endSession(sessionId: string, reason: string, notifyPeer: boolean): voi
   const session = sessions.get(sessionId)
   if (!session) return
   sessions.delete(sessionId)
-  cdp(session.tabId, 'Page.stopScreencast').catch(() => {})
+  if (session.attached) cdp(session.tabId, 'Page.stopScreencast').catch(() => {})
   detach(session.tabId)
   toOffscreen('peer-stop', { sessionId })
   if (notifyPeer) session.send('rc:stopped', { sessionId, reason })
@@ -262,8 +349,13 @@ async function dispatchKey(tabId: number, input: any): Promise<void> {
 async function broadcastBrowserState(session: RcSession): Promise<void> {
   try {
     const tabs = await chrome.tabs.query({ windowId: session.windowId })
+    const captured = tabs.find(t => t.id === session.tabId)
     const state = {
       activeTabId: session.tabId,
+      // false on a restricted page (chrome://, web store, …): the live screen is
+      // frozen and pointer/keyboard do nothing, but the address bar still works.
+      // The web UI uses this to show a hint instead of looking broken.
+      controllable: isControllableUrl(captured?.url),
       tabs: tabs.map(t => ({
         id: t.id,
         title: t.title || t.url || '新标签页',
@@ -289,22 +381,23 @@ function normalizeAddress(input: string): string {
 async function switchCaptureTab(session: RcSession, newTabId: number): Promise<void> {
   if (session.tabId === newTabId) {
     await chrome.tabs.update(newTabId, { active: true }).catch(() => {})
+    if (!session.attached) await startCapture(session)
+    void broadcastBrowserState(session)
     return
   }
-  const oldTabId = session.tabId
-  try { await cdp(oldTabId, 'Page.stopScreencast') } catch { /* noop */ }
-  detach(oldTabId)
+  if (session.attached) {
+    try { await cdp(session.tabId, 'Page.stopScreencast') } catch { /* noop */ }
+    detach(session.tabId)
+  }
   session.tabId = newTabId
   session.metadata = null
   session.buttons = 0
-  try {
-    await chrome.tabs.update(newTabId, { active: true })
-    await attach(newTabId)
-    await cdp(newTabId, 'Page.enable')
-    await cdp(newTabId, 'Page.startScreencast', FRAME_OPTS)
-  } catch (err: any) {
-    session.send('rc:error', { sessionId: session.sessionId, code: 'switch_failed', message: err?.message || '切换标签页失败' })
-  }
+  session.attached = false
+  await chrome.tabs.update(newTabId, { active: true }).catch(() => {})
+  // Restricted target → stays attached:false (no fatal error); the operator can
+  // still see the tab strip + address bar and navigate away to resume control.
+  await startCapture(session)
+  void broadcastBrowserState(session)
 }
 
 async function handleBrowserCommand(session: RcSession, cmd: any): Promise<void> {

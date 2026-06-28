@@ -9,7 +9,7 @@
 
 import {
   doClick, doDoubleClick, doRightClick, doDrag, doPressKey,
-  doType, getContent, doScroll, doWait, doEvaluate, doExtract,
+  doType, getContent, doScroll, doWait, doAwaitSettle, doEvaluate, doExtract,
   findText, fillForm, doSelect, doHover, storageGet, storageSet, storageRemove,
   storageList, domSnapshot, iframeList, performanceInfo, fileUpload,
   screenshotTargetInfo, focusTarget, doScreenshotFx,
@@ -57,6 +57,7 @@ async function handleAction(msg: any): Promise<any> {
     case 'get_content':  return getContent(msg)
     case 'scroll':       return doScroll(msg)
     case 'wait':         return doWait(msg)
+    case 'await_settle': return doAwaitSettle(msg)
     case 'evaluate':     return doEvaluate(msg)
     case 'extract':      return doExtract(msg)
     case 'find_text':    return findText(msg)

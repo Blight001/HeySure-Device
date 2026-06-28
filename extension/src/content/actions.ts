@@ -430,6 +430,84 @@ export async function doWait(msg: any) {
   return { success: true, waited_ms: 0 }
 }
 
+// ── Await settle (auto-observe support) ─────────────────────────────────────
+// After an interaction (click/drag/key/type) the background calls this to learn
+// whether the page actually changed and to wait until it stops changing, so it
+// can decide whether to attach a fresh browser_observe snapshot to the action
+// result. Designed to return *fast* when nothing changes (no extra latency on
+// inert clicks) and to ride out spinners/animations up to a hard cap otherwise.
+export function doAwaitSettle(msg: any): Promise<any> {
+  const timeout    = Math.min(Math.max(Number(msg.timeout ?? 3000), 200), 8000)
+  const quietFor   = Math.min(Math.max(Number(msg.quiet ?? 350), 80), 2000)
+  // If nothing has mutated within idleWindow, conclude "no change" and bail —
+  // this bounds the cost of an action that doesn't alter the page.
+  const idleWindow = Math.min(Math.max(Number(msg.idle_window ?? 600), 150), timeout)
+  const startUrl   = location.href
+  const startTitle = document.title
+
+  return new Promise(resolve => {
+    let mutations = 0
+    let lastMutationAt = 0
+    let done = false
+    const start = Date.now()
+
+    // Our own marks/cursor overlays mutate the DOM; never count them as a page change.
+    const isOurs = (node: Node | null): boolean => {
+      let el: Element | null = node instanceof Element ? node : node?.parentElement ?? null
+      while (el) {
+        const id = (el as HTMLElement).id
+        if (typeof id === 'string' && (id.startsWith('__hs_marks') || id.startsWith('__hs_mouse_fx'))) return true
+        el = el.parentElement
+      }
+      return false
+    }
+
+    const observer = new MutationObserver(records => {
+      for (const r of records) {
+        if (isOurs(r.target)) continue
+        let real = r.type === 'attributes'
+        r.addedNodes.forEach(n => { if (!isOurs(n)) real = true })
+        r.removedNodes.forEach(n => { if (!isOurs(n)) real = true })
+        if (real) { mutations++; lastMutationAt = Date.now() }
+      }
+    })
+    observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true })
+
+    // A full-page navigation tears the document down; flag it so the result is
+    // honest about "the page is leaving" (the background then waits for load).
+    const onHide = () => finish(true)
+    window.addEventListener('pagehide', onHide, { once: true })
+
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const poll = () => {
+      const now = Date.now()
+      if (location.href !== startUrl) return finish(false)                          // SPA route change → changed
+      if (mutations > 0 && now - lastMutationAt >= quietFor) return finish(false)    // mutated then went quiet → settled
+      if (mutations === 0 && now - start >= idleWindow) return finish(false)         // nothing happened → bail fast
+      if (now - start >= timeout) return finish(false)                              // hard cap (e.g. endless spinner)
+      timer = setTimeout(poll, 80)
+    }
+
+    function finish(navigating: boolean) {
+      if (done) return
+      done = true
+      if (timer) clearTimeout(timer)
+      observer.disconnect()
+      window.removeEventListener('pagehide', onHide)
+      resolve({
+        success: true,
+        changed: navigating || mutations > 0 || location.href !== startUrl || document.title !== startTitle,
+        navigating,
+        mutations,
+        urlChanged: location.href !== startUrl,
+        settleMs: Date.now() - start,
+      })
+    }
+
+    timer = setTimeout(poll, 100)  // small head start so the click's own handlers can fire first
+  })
+}
+
 // ── Evaluate ──────────────────────────────────────────────────────────────
 export function doEvaluate(msg: any) {
   const code = String(msg.code || '')

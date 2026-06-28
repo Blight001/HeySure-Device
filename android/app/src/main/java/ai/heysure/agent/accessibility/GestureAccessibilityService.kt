@@ -45,9 +45,17 @@ class GestureAccessibilityService : AccessibilityService() {
      */
     suspend fun dispatch(path: Path, startMs: Long, durationMs: Long): Boolean {
         val safeDuration = durationMs.coerceAtLeast(1)
+        val stroke = GestureDescription.StrokeDescription(path, startMs, safeDuration)
+        return dispatchStroke(stroke, safeDuration)
+    }
+
+    suspend fun dispatchStroke(
+        stroke: GestureDescription.StrokeDescription,
+        durationMs: Long,
+    ): Boolean {
+        val safeDuration = durationMs.coerceAtLeast(1)
         return withTimeoutOrNull(safeDuration + GESTURE_TIMEOUT_BUFFER_MS) {
             suspendCancellableCoroutine { cont ->
-                val stroke = GestureDescription.StrokeDescription(path, startMs, safeDuration)
                 val gesture = GestureDescription.Builder().addStroke(stroke).build()
                 val ok = dispatchGesture(gesture, object : GestureResultCallback() {
                     override fun onCompleted(d: GestureDescription?) { if (cont.isActive) cont.resume(true) }

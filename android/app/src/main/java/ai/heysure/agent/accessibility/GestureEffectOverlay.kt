@@ -70,12 +70,24 @@ class GestureEffectOverlay(private val context: Context) {
         ).apply {
             gravity = Gravity.TOP or Gravity.START
             title = "HeySure gesture effects"
+            // Let the window extend into the status-bar / display-cutout band so it
+            // can physically cover y=0. Even when the system still shrinks it, the
+            // draw-time getLocationOnScreen() correction below keeps effects aligned.
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            }
         }
         attached = runCatching { windowManager.addView(view, params) }.isSuccess
     }
 
     private class EffectView(context: Context) : View(context) {
         private val effects = mutableListOf<Effect>()
+        // Reused buffer for this view's real top-left position on the physical
+        // screen. Gesture coordinates are physical-screen pixels (origin at the
+        // true top of the display), but the window may be inset below the status
+        // bar / cutout — so we subtract this offset before drawing.
+        private val screenLoc = IntArray(2)
         private val accent = Color.rgb(99, 102, 241)
         private val cyan = Color.rgb(56, 189, 248)
         private val green = Color.rgb(34, 197, 94)
@@ -147,10 +159,29 @@ class GestureEffectOverlay(private val context: Context) {
 
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
+            // Map physical-screen coordinates → this view's local space. If the
+            // window was inset (status bar / cutout), screenLoc[1] > 0 and this
+            // shift pulls the effect back up onto the real touch point instead of
+            // letting it drift downward.
+            getLocationOnScreen(screenLoc)
+            val offsetX = screenLoc[0].toFloat()
+            val offsetY = screenLoc[1].toFloat()
             effects.toList().forEach { effect ->
                 when (effect) {
-                    is Effect.Tap -> drawTap(canvas, effect)
-                    is Effect.Drag -> drawDrag(canvas, effect)
+                    is Effect.Tap -> {
+                        canvas.save()
+                        canvas.translate(-offsetX, -offsetY)
+                        drawTap(canvas, effect)
+                        canvas.restore()
+                    }
+                    is Effect.Drag -> {
+                        canvas.save()
+                        canvas.translate(-offsetX, -offsetY)
+                        drawDrag(canvas, effect)
+                        canvas.restore()
+                    }
+                    // Home is anchored to the view's own bounds (bottom panel +
+                    // centered icon), so it stays in local space — no shift.
                     is Effect.Home -> drawHome(canvas, effect)
                 }
             }

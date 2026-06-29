@@ -6,6 +6,10 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.content.Context
 import android.graphics.Path
+import android.hardware.display.DisplayManager
+import android.os.Handler
+import android.os.Looper
+import android.view.Display
 import java.nio.charset.StandardCharsets
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -58,14 +62,32 @@ class RemoteControlSession(
     private var activeDragX = 0f
     private var activeDragY = 0f
 
+    // Live physical display size. Mutable because it swaps on rotation, and input
+    // scaling (handleInput) must use the *current* dimensions, not the ones from
+    // session start. Volatile: written on the display-listener thread, read on the
+    // input coroutine.
+    @Volatile
+    private var realW = 0
+    @Volatile
+    private var realH = 0
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var displayManager: DisplayManager? = null
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) {}
+        override fun onDisplayRemoved(displayId: Int) {}
+        override fun onDisplayChanged(displayId: Int) {
+            if (displayId == Display.DEFAULT_DISPLAY) handleRotation()
+        }
+    }
+
     fun start() {
         val projection = capture.activeProjection()
         if (projection == null) {
             fail("needs_projection", "未授权截屏：请先在 App 内点击\"授权截屏/录屏\"")
             return
         }
-        val realW = capture.displayWidthPx()
-        val realH = capture.displayHeightPx()
+        realW = capture.displayWidthPx()
+        realH = capture.displayHeightPx()
         val dpi = capture.displayDensityDpi()
         val (streamW, streamH) = scaledStreamSize(realW, realH)
 
@@ -93,7 +115,14 @@ class RemoteControlSession(
         pc = connection
         connection.addTrack(track, listOf("rc-stream"))
         dataChannel = connection.createDataChannel("control", DataChannel.Init()).also {
-            it.registerObserver(makeChannelObserver(it, realW, realH))
+            it.registerObserver(makeChannelObserver())
+        }
+
+        // Follow device rotation: resize the mirror so the stream (and the
+        // operator's window) tracks the live orientation instead of letterboxing.
+        (appContext.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager)?.let {
+            displayManager = it
+            it.registerDisplayListener(displayListener, mainHandler)
         }
 
         // Tell the operator the geometry up-front so the canvas can size itself
@@ -105,6 +134,25 @@ class RemoteControlSession(
             .put("rotation", 0))
 
         createOffer(connection)
+    }
+
+    /** Device rotated (or the display geometry otherwise changed): resize the
+     *  mirror to the new physical size and tell the operator so the floating
+     *  window re-shapes between portrait and landscape. */
+    private fun handleRotation() {
+        if (closed) return
+        val newW = capture.displayWidthPx()
+        val newH = capture.displayHeightPx()
+        if (newW <= 0 || newH <= 0 || (newW == realW && newH == realH)) return
+        realW = newW
+        realH = newH
+        val (streamW, streamH) = scaledStreamSize(newW, newH)
+        capturer?.resize(streamW, streamH)
+        sendSignal("rc:ready", JSONObject()
+            .put("sessionId", sessionId)
+            .put("width", newW)
+            .put("height", newH)
+            .put("rotation", 0))
     }
 
     fun onAnswer(sdp: String?) {
@@ -133,6 +181,8 @@ class RemoteControlSession(
     fun close(reason: String, notifyPeer: Boolean) {
         if (closed) return
         closed = true
+        runCatching { displayManager?.unregisterDisplayListener(displayListener) }
+        displayManager = null
         runCatching { dataChannel?.unregisterObserver() }
         runCatching { dataChannel?.close() }
         runCatching { capturer?.stopCapture() }
@@ -189,7 +239,7 @@ class RemoteControlSession(
         }
     }
 
-    private fun makeChannelObserver(channel: DataChannel, realW: Int, realH: Int) =
+    private fun makeChannelObserver() =
         object : DataChannel.Observer {
             override fun onBufferedAmountChange(previousAmount: Long) {}
             override fun onStateChange() {}
@@ -199,12 +249,13 @@ class RemoteControlSession(
                 data.get(bytes)
                 val text = String(bytes, StandardCharsets.UTF_8)
                 val json = runCatching { JSONObject(text) }.getOrNull() ?: return
-                scope.launch { inputMutex.withLock { handleInput(json, realW, realH) } }
+                scope.launch { inputMutex.withLock { handleInput(json) } }
             }
         }
 
-    /** Translate one normalized input event into an injected gesture. */
-    private suspend fun handleInput(json: JSONObject, realW: Int, realH: Int) {
+    /** Translate one normalized input event into an injected gesture. Reads the
+     *  live realW/realH so coordinates stay correct across rotation. */
+    private suspend fun handleInput(json: JSONObject) {
         val service = GestureAccessibilityService.instance ?: return
         fun px(key: String, span: Int, default: Double = 0.0) =
             (json.optDouble(key, default) * span)

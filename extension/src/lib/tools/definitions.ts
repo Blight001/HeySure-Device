@@ -32,18 +32,23 @@ export const BROWSER_TOOLS: AIToolDef[] = [
   // ───── 页面观察 ───────────────────────────────────────────────────────
   {
     name: 'browser_observe',
-    description: '感知当前视口里用户能看到的内容，区分普通可见文本与可交互元素：返回 items 混排列表，其中 kind=text 是页面文字（不可点击），kind=frame 是页面内 iframe 边界（frames 数组与之相同；accessible=true 表示同源已扫描，子控件见 inFrame=true 的 interactive；accessible=false 为跨域不可用坐标点击），kind=interactive 是最顶层、未被遮挡的按钮/链接/输入框/下拉/菜单项等，kind=group 是同类型大批量元素的折叠摘要（无 id）。同源 iframe 内的元素会一并扫描，inFrame=true 且 center/rect 已换算为页面视口坐标，frameSelector 指向所属 iframe，点击仍用 browser_action {action:"click", ref:id}。跨域 iframe 内容现也会被扫描并合并进来：这些 items 带 crossOrigin=true、frameId 和形如 "3:5" 的 id，其 center/rect 是该 iframe 内部坐标（coordsLocalToFrame=true，勿与主页面坐标或截图坐标混用），点击/输入直接把该 id 当 ref 回传即可（browser_action {action:"click", ref:"3:5"}），会自动路由到对应框架；crossOriginFrames 字段汇总了各跨域框架命中的元素/文本数。interactive 项额外带 id、角色 role、文本和中心坐标 center；默认同 tag+role+type 且数量≥group_min 的批量元素会折叠为 kind=group，需要单独获取编号时传 expand_group 为对应 groupKey 展开。页面标记：紫色虚线=iframe 边界，绿色=可点击，浅蓝=同类型批量/已展开批量，红色=不可点击/被禁用/被遮挡。用途：既能读取页面文字，又能作为点击/输入前的首选观察手段，配合 browser_screenshot 形成「看图—按 id 点击」闭环。场景：先 observe 理解页面；大批量列表先读 group 摘要，再 expand_group 展开后 browser_action {action:"click", ref:id} 精确点击；页面变化后重新 observe 以刷新 id。勿用 Playwright 语法（如 button:has-text）；用 text 参数或 observe 返回的 ref/selector。',
+    description: '感知当前视口里用户能看到的内容，区分普通可见文本与可交互元素：返回 items 混排列表，其中 kind=text 是页面文字（不可点击），kind=frame 是页面内 iframe 边界（frames 数组与之相同；accessible=true 表示同源已扫描，子控件见 inFrame=true 的 interactive；accessible=false 为跨域不可用坐标点击），kind=interactive 是最顶层、未被遮挡的按钮/链接/输入框/下拉/菜单项等，每个 interactive 都带独立 id（不再做同类型折叠，所有可交互元素都会逐个返回并编号）。同源 iframe 内的元素会一并扫描，inFrame=true 且 center/rect 已换算为页面视口坐标，frameSelector 指向所属 iframe，点击仍用 browser_action {action:"click", ref:id}。跨域 iframe 内容现也会被扫描并合并进来：这些 items 带 crossOrigin=true、frameId 和形如 "3:5" 的 id，其 center/rect 是该 iframe 内部坐标（coordsLocalToFrame=true，勿与主页面坐标或截图坐标混用），点击/输入直接把该 id 当 ref 回传即可（browser_action {action:"click", ref:"3:5"}），会自动路由到对应框架；crossOriginFrames 字段汇总了各跨域框架命中的元素/文本数。interactive 项额外带 id、角色 role、类别 category、文本和中心坐标 center。页面标记：紫色虚线=iframe 边界，绿色=可点击，红色=不可点击/被禁用/被遮挡。用途：既能读取页面文字，又能作为点击/输入前的首选观察手段，配合 browser_screenshot 形成「看图—按 id 点击」闭环。场景：先 observe 理解页面，再 browser_action {action:"click", ref:id} 精确点击；元素太多时用 filter 只看某类（如 filter:"button"）或调小 limit；页面变化后重新 observe 以刷新 id。勿用 Playwright 语法（如 button:has-text）；用 text 参数或 observe 返回的 ref/selector。',
     input_schema: {
       type: 'object',
       properties: {
-        limit: { type: 'number', description: '最多返回的可交互元素/分组条目数。默认 120，最大 200。' },
+        limit: { type: 'number', description: '最多返回的可交互元素条目数。默认 120，最大 200。' },
+        filter: {
+          type: ['string', 'array'],
+          items: { type: 'string' },
+          description: '按类别筛选只返回想看的元素，缩小噪音。可传单个字符串、逗号分隔字符串或字符串数组。可选类别：' +
+            'button（按钮）、link（链接）、input（输入框/文本域/可编辑区）、select（下拉框）、checkbox（复选/开关）、radio（单选）、tab（标签页）、menuitem（菜单项）、option（选项）、label（标签元素）、' +
+            'text（普通可见文本）、frame（iframe 边界）、interactive（所有可交互元素，不含纯文本）。' +
+            '例：filter:"button" 只看按钮；filter:["input","select"] 只看输入框和下拉框；filter:"text" 只看全部文字元素；不传或传 "all" 则返回全部。' +
+            '返回的每个 interactive 项都带 category 字段标明其类别。',
+        },
         include_text: { type: 'boolean', description: '是否同时返回普通可见文本 texts/items。默认 true；传 false 时只返回可交互 elements。' },
         text_limit: { type: 'number', description: '最多返回的普通可见文本条数。默认 200，最大 500。' },
-        mark:  { type: 'boolean', description: '是否在页面上绘制无序号状态色标记，便于随后截图查看。默认 true；绿色=可点击，浅蓝=同类型批量/已展开批量，红色=不可点击/被禁用/被遮挡；传 false 仅返回列表并清除已有标记。标记仅为视觉叠加，不影响其他取数工具或截图，也不拦截点击。' },
-        group_similar: { type: 'boolean', description: '是否将大批量同类型元素折叠为 kind=group 摘要。默认 true。' },
-        group_min: { type: 'number', description: '触发折叠的最少同类型数量。默认 3，范围 2~50。' },
-        group_key: { type: 'string', description: '可选：只折叠指定 groupKey（格式 tag|role|type，文本为 text|role|tag）；不传则对所有达标批量自动折叠。' },
-        expand_group: { type: 'string', description: '可选：展开指定 groupKey，返回该批全部 interactive 编号（页面标记为浅蓝）；其他批量仍保持折叠。用于「先概览、再单独取详情」。' },
+        mark:  { type: 'boolean', description: '是否在页面上绘制无序号状态色标记，便于随后截图查看。默认 true；绿色=可点击，红色=不可点击/被禁用/被遮挡；传 false 仅返回列表并清除已有标记。标记仅为视觉叠加，不影响其他取数工具或截图，也不拦截点击。' },
       },
     },
   },

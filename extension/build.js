@@ -18,6 +18,7 @@ const sharedOpts = {
 const entries = [
   { in: 'src/background.ts',    out: 'dist/background.js' },
   { in: 'src/content/index.ts', out: 'dist/content.js' },
+  { in: 'src/shadow-patch.ts',  out: 'dist/shadow-patch.js' },
   { in: 'src/popup/index.ts',   out: 'dist/popup.js' },
   { in: 'src/offline-chat.ts',  out: 'dist/offline-chat.js' },
   { in: 'src/offscreen.ts',     out: 'dist/offscreen.js' },

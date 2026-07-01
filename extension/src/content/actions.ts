@@ -63,6 +63,22 @@ export async function doClick(msg: any) {
     }
   }
 
+  // resolveOnly: the background wants to drive the click through the CDP debugger
+  // (a *trusted* mouse event that sites can't reject the way they reject our
+  // synthetic dispatch). We've already scrolled the target into view and passed
+  // the visibility/occlusion guards above, so just hand back the final viewport
+  // coordinates and let background dispatch the real click. No events fired here.
+  if (msg.resolveOnly) {
+    return {
+      success: true,
+      resolved: true,
+      x, y,
+      tag: el.tagName,
+      text: textOf(el, 100),
+      selector: cssPath(el),
+    }
+  }
+
   if (isFxEnabled()) {
     if (!viaCoords) await fxSleep(220)   // let the smooth scroll settle before aiming
     await fxToElement(el)                // glide the virtual cursor to the element

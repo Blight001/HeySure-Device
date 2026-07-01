@@ -920,13 +920,43 @@ async function withAutoObserve(tab: chrome.tabs.Tab, args: any, result: any, fra
 async function toolClick(args: any): Promise<any> {
   const tab = await getActiveTab()
   const t = routeTarget(args)
-  const result = await contentMsg(tab.id!, {
+  const clickMsg = {
     action: 'click',
     ref: t.ref,
     selector: t.selector, text: t.text, x: t.x, y: t.y,
     force: !!args.force,
-  }, t.frameId)
-  return withAutoObserve(tab, args, result, t.frameId)
+  }
+
+  // Cross-origin frame targets resolve to viewport coords *local to that frame*,
+  // which CDP (top-level page coords) can't use — keep the synthetic path there.
+  if (t.frameId !== 0) {
+    const result = await contentMsg(tab.id!, clickMsg, t.frameId)
+    return withAutoObserve(tab, args, result, t.frameId)
+  }
+
+  // Top frame: ask the content script to resolve + scroll + run the visibility /
+  // occlusion guards, then return the final viewport coords WITHOUT clicking.
+  const resolved = await contentMsg(tab.id!, { ...clickMsg, resolveOnly: true }, t.frameId)
+
+  // Guard tripped (not_visible / occluded) or resolution failed — surface as-is.
+  if (!resolved?.resolved || resolved.success === false) {
+    return withAutoObserve(tab, args, resolved, t.frameId)
+  }
+
+  // Drive a trusted CDP click; fall back to the synthetic dispatch if the
+  // debugger can't attach (restricted page, devtools already open, etc.).
+  try {
+    const cdp = await debuggerClick(tab.id!, resolved.x, resolved.y)
+    const result = { success: true, tag: resolved.tag, text: resolved.text, click_method: cdp.method }
+    return withAutoObserve(tab, args, result, t.frameId)
+  } catch (debuggerErr: any) {
+    const fallback = await contentMsg(tab.id!, clickMsg, t.frameId)
+    return withAutoObserve(tab, args, {
+      ...fallback,
+      click_method: 'synthetic',
+      warning: `Native CDP click failed, fell back to synthetic dispatch: ${debuggerErr?.message || String(debuggerErr)}`,
+    }, t.frameId)
+  }
 }
 
 function observeMsg(args: any) {
@@ -936,10 +966,7 @@ function observeMsg(args: any) {
     mark: args.mark,
     include_text: args.include_text,
     text_limit: args.text_limit,
-    group_similar: args.group_similar,
-    group_min: args.group_min,
-    group_key: args.group_key,
-    expand_group: args.expand_group,
+    filter: args.filter,
   }
 }
 
@@ -1188,6 +1215,36 @@ async function debuggerPressKey(tabId: number, args: any): Promise<any> {
       text: undefined,
     })
     return { success: true, key: info.key, code: info.code, method: 'debugger.Input.dispatchKeyEvent' }
+  } finally {
+    if (attached) {
+      try { await chrome.debugger.detach(target) } catch { /* tab may have closed */ }
+    }
+  }
+}
+
+// Dispatch a *trusted* mouse click through the CDP debugger at top-level page
+// viewport coordinates. Unlike content-script dispatchEvent (isTrusted=false,
+// which many sites / native default actions reject), this is indistinguishable
+// from a real user click — the fix for "clicked but nothing happened". Throws on
+// restricted pages (chrome://, web store, devtools already attached) so the
+// caller can fall back to the synthetic content-script click.
+async function debuggerClick(tabId: number, x: number, y: number, opts?: {
+  button?: 'left' | 'right' | 'middle'; clickCount?: number
+}): Promise<any> {
+  const target = { tabId }
+  let attached = false
+  try {
+    await chrome.debugger.attach(target, '1.3')
+    attached = true
+    const button = opts?.button ?? 'left'
+    const buttons = button === 'right' ? 2 : button === 'middle' ? 4 : 1
+    const clickCount = opts?.clickCount ?? 1
+    const base = { x, y, button, clickCount }
+    // Move first so hover-gated handlers (menus, tooltips) arm before the press.
+    await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', { type: 'mouseMoved', ...base, buttons: 0, button: 'none', clickCount: 0 })
+    await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', { type: 'mousePressed', ...base, buttons })
+    await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', { type: 'mouseReleased', ...base, buttons: 0 })
+    return { method: 'debugger.Input.dispatchMouseEvent' }
   } finally {
     if (attached) {
       try { await chrome.debugger.detach(target) } catch { /* tab may have closed */ }

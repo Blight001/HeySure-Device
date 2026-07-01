@@ -169,8 +169,19 @@ function hitAtPoint(
 ): ViewportHit | null {
   const lx = clampX(x, win)
   const ly = clampY(y, win)
-  const hit = doc.elementFromPoint(lx, ly)
+  let hit = doc.elementFromPoint(lx, ly)
   if (!hit) return null
+
+  // Pierce shadow roots: elementFromPoint() returns the shadow *host*, not the
+  // inner element actually painted at the point (shadow-DOM retargeting). Without
+  // this, controls inside a shadow root (e.g. Xiaohongshu's <xhs-publish-btn>)
+  // fail the hittable test and get wrongly flagged blocked/red. shadow-patch.ts
+  // forces closed roots open, so shadowRoot is readable here.
+  while (hit.shadowRoot) {
+    const inner = hit.shadowRoot.elementFromPoint(lx, ly)
+    if (!inner || inner === hit) break
+    hit = inner
+  }
 
   if (hit.tagName === 'IFRAME' || hit.tagName === 'FRAME') {
     const frameEl = hit as HTMLIFrameElement

@@ -5,11 +5,13 @@
 // click them precisely with browser_click {ref:id}; plain visible text is kept
 // separate so reading the page is not confused with clicking controls.
 //
+// Every interactive control is returned individually (no same-type collapsing),
+// so each gets its own id. Use the filter param to narrow by category when a page
+// has too many controls.
+//
 // When mark!==false it also paints static status-colored outlines on the page
 // (border only, no fill animation) so a follow-up browser_screenshot shows
-// clickable controls in green, same-type batches in light blue, and blocked
-// controls in red. Large same-type batches collapse into kind=group summaries;
-// pass expand_group to unfold one batch. The overlay is
+// clickable controls in green and blocked controls in red. The overlay is
 // attached to <html> (not <body>), pointer-events:none, so it never pollutes
 // browser_get_content / browser_dom_snapshot (which read from <body>) and never
 // intercepts clicks or future hit-tests.
@@ -58,6 +60,102 @@ function implicitRole(el: Element): string {
   return ''
 }
 
+// Custom widgets built from a plain <div>/<span> plus a framework click handler
+// (Vue @click, React onClick) expose no role / onclick / tabindex, and often not
+// even cursor:pointer, so every structural check misses them. As a last-resort
+// signal we read the element's own class/id: a token that *ends in* button / btn
+// / link is a strong author hint that this node is that control. The keyword must
+// sit at a token boundary end so an inner label like "edit-text-button-text"
+// (ends in -text) is NOT matched while the real control "edit-text-button" is.
+const NAME_ROLE_PATTERNS: Array<{ re: RegExp; category: string }> = [
+  { re: /(^|[-_])(btn|button)$/i, category: 'button' },
+  { re: /(^|[-_])link$/i, category: 'link' },
+]
+
+function nameRole(el: Element): string {
+  if (!(el instanceof HTMLElement)) return ''
+  const tokens = [...String(el.className || '').split(/\s+/), el.id || ''].filter(Boolean)
+  for (const token of tokens) {
+    for (const { re, category } of NAME_ROLE_PATTERNS) {
+      if (re.test(token)) return category
+    }
+  }
+  return ''
+}
+
+// Coarse, human-meaningful bucket for an interactive element so callers can
+// filter by "只看按钮 / 只看输入框 / 只看下拉" without knowing tag/role/type
+// internals. Mirrors implicitRole but collapses synonyms (input[type=submit] →
+// button, role=switch → checkbox, …) into a small stable vocabulary.
+function elementCategory(el: Element): string {
+  const tag = el.tagName.toLowerCase()
+  const role = (el.getAttribute('role') || '').toLowerCase()
+  if (tag === 'textarea') return 'input'
+  if (tag === 'select' || role === 'combobox' || role === 'listbox') return 'select'
+  if (tag === 'input') {
+    const t = ((el as HTMLInputElement).type || 'text').toLowerCase()
+    if (t === 'button' || t === 'submit' || t === 'reset' || t === 'image') return 'button'
+    if (t === 'checkbox') return 'checkbox'
+    if (t === 'radio') return 'radio'
+    return 'input'
+  }
+  if (el.matches('[contenteditable=""],[contenteditable="true"]')) return 'input'
+  if (role === 'textbox' || role === 'searchbox') return 'input'
+  if (role === 'button' || tag === 'button' || tag === 'summary') return 'button'
+  if (role === 'link' || tag === 'a') return 'link'
+  if (role === 'checkbox' || role === 'switch') return 'checkbox'
+  if (role === 'radio') return 'radio'
+  if (role === 'tab') return 'tab'
+  if (role === 'menuitem' || role === 'menuitemcheckbox' || role === 'menuitemradio') return 'menuitem'
+  if (role === 'option') return 'option'
+  if (tag === 'label') return 'label'
+  return nameRole(el) || 'other'
+}
+
+// Normalize one user-supplied filter token to a canonical category, or '' to
+// ignore. Returns the sentinel 'all' to mean "no filtering" so a caller can
+// reset. Accepts common plurals/synonyms so the AI doesn't have to guess.
+const FILTER_ALIASES: Record<string, string> = {
+  button: 'button', buttons: 'button', btn: 'button',
+  link: 'link', links: 'link', anchor: 'link', a: 'link',
+  input: 'input', inputs: 'input', textbox: 'input', textfield: 'input', textarea: 'input', editable: 'input',
+  select: 'select', selects: 'select', dropdown: 'select', combobox: 'select', combo: 'select',
+  checkbox: 'checkbox', checkboxes: 'checkbox', check: 'checkbox', toggle: 'checkbox', switch: 'checkbox',
+  radio: 'radio', radios: 'radio',
+  tab: 'tab', tabs: 'tab',
+  menuitem: 'menuitem', menu: 'menuitem', menuitems: 'menuitem',
+  option: 'option', options: 'option',
+  label: 'label', labels: 'label',
+  text: 'text', texts: 'text', 'text-element': 'text',
+  frame: 'frame', frames: 'frame', iframe: 'frame', iframes: 'frame',
+  interactive: 'interactive', interactives: 'interactive', clickable: 'interactive', control: 'interactive', controls: 'interactive',
+  all: 'all', any: 'all', '*': 'all',
+}
+
+function normalizeFilterToken(raw: string): string {
+  return FILTER_ALIASES[raw.trim().toLowerCase()] ?? ''
+}
+
+// Parse msg.filter (array or comma/space-separated string) into a Set of
+// canonical categories, or null when there is no effective filter (empty, all
+// unknown tokens, or an explicit 'all').
+function parseFilter(raw: any): Set<string> | null {
+  if (raw == null) return null
+  const parts = Array.isArray(raw) ? raw.map(String) : String(raw).split(/[,\s]+/)
+  const out = new Set<string>()
+  for (const part of parts) {
+    const token = normalizeFilterToken(part)
+    if (token === 'all') return null
+    if (token) out.add(token)
+  }
+  return out.size ? out : null
+}
+
+function interactiveCategoryAllowed(category: string, filter: Set<string> | null): boolean {
+  if (!filter) return true
+  return filter.has('interactive') || filter.has(category)
+}
+
 function isDisabled(el: Element): boolean {
   const html = el as HTMLElement
   return html.hasAttribute('disabled') ||
@@ -68,6 +166,7 @@ function isDisabled(el: Element): boolean {
 function hasInteractiveSemantics(el: Element): boolean {
   if (!(el instanceof HTMLElement) || isDisabled(el)) return false
   if (el.matches(INTERACTIVE)) return true
+  if (nameRole(el)) return true
   const s = getComputedStyle(el)
   return s.cursor === 'pointer'
 }
@@ -235,7 +334,6 @@ function collectVisibleTextsIn(root: ParentNode, limit: number, frame?: FrameCon
       selector,
       center: viewportCenter,
       rect: viewportRect,
-      groupKey: buildTextGroupKey(role, tag),
       ...(frame ? { inFrame: true, frameSelector: frame.frameSelector, framePath: buildFramePath(frame) } : {}),
     })
   }
@@ -324,7 +422,7 @@ function collectFrameItems(): { items: any[]; overlay: Array<{ el: HTMLIFrameEle
   return { items, overlay }
 }
 
-type MarkStatus = 'clickable' | 'blocked' | 'grouped' | 'frame'
+type MarkStatus = 'clickable' | 'blocked' | 'frame'
 
 interface ElementRecord {
   el: HTMLElement
@@ -336,41 +434,7 @@ interface ElementRecord {
   selector: string
   center: { x: number; y: number }
   rect: { x: number; y: number; w: number; h: number }
-  groupKey: string
-}
-
-interface TextRecord {
-  role: string
-  tag: string
-  text: string
-  selector: string
-  center: { x: number; y: number }
-  rect: { x: number; y: number; w: number; h: number }
-  groupKey: string
-  inFrame?: boolean
-  frameSelector?: string
-  framePath?: string[]
-}
-
-function buildInteractiveGroupKey(tag: string, role: string, type?: string): string {
-  return `${tag}|${role}|${type || ''}`
-}
-
-function buildTextGroupKey(role: string, tag: string): string {
-  return `text|${role}|${tag}`
-}
-
-function unionRects(rects: Array<{ x: number; y: number; w: number; h: number }>) {
-  if (!rects.length) return { x: 0, y: 0, w: 0, h: 0 }
-  const left = Math.min(...rects.map(r => r.x))
-  const top = Math.min(...rects.map(r => r.y))
-  const right = Math.max(...rects.map(r => r.x + r.w))
-  const bottom = Math.max(...rects.map(r => r.y + r.h))
-  return { x: left, y: top, w: Math.max(0, right - left), h: Math.max(0, bottom - top) }
-}
-
-function rectToCenter(rect: { x: number; y: number; w: number; h: number }) {
-  return { x: Math.round(rect.x + rect.w / 2), y: Math.round(rect.y + rect.h / 2) }
+  category: string
 }
 
 function elementRecord(el: HTMLElement, frame?: FrameContext): ElementRecord {
@@ -388,7 +452,7 @@ function elementRecord(el: HTMLElement, frame?: FrameContext): ElementRecord {
     selector: cssPath(el),
     center: frame ? elementViewportCenter(el, frame) : centerInfo(r),
     rect: frame ? elementViewportRect(el, frame) : rectInfo(r),
-    groupKey: buildInteractiveGroupKey(tag, role, type),
+    category: elementCategory(el),
   }
 }
 
@@ -398,11 +462,11 @@ function interactiveItemFromRecord(rec: ElementRecord, id: number) {
     id,
     tag: rec.tag,
     role: rec.role,
+    category: rec.category,
     text: rec.text,
     selector: rec.selector,
     center: rec.center,
     rect: rec.rect,
-    groupKey: rec.groupKey,
   }
   if (rec.frame) {
     item.inFrame = true
@@ -412,72 +476,6 @@ function interactiveItemFromRecord(rec: ElementRecord, id: number) {
   if (rec.type) item.type = rec.type
   if ((rec.el as HTMLInputElement).value) item.value = String((rec.el as HTMLInputElement).value).slice(0, 60)
   return item
-}
-
-function buildInteractiveGroupItem(members: ElementRecord[]) {
-  const rect = unionRects(members.map(m => m.rect))
-  const first = members[0]
-  return {
-    kind: 'group',
-    groupKey: first.groupKey,
-    tag: first.tag,
-    role: first.role,
-    ...(first.type ? { type: first.type } : {}),
-    count: members.length,
-    rect,
-    center: rectToCenter(rect),
-    samples: members.slice(0, 5).map(m => ({
-      text: m.text,
-      selector: m.selector,
-      center: m.center,
-      rect: m.rect,
-    })),
-  }
-}
-
-function buildTextGroupItem(members: TextRecord[]) {
-  const rect = unionRects(members.map(m => m.rect))
-  const first = members[0]
-  return {
-    kind: 'group',
-    groupKey: first.groupKey,
-    tag: first.tag,
-    role: first.role,
-    count: members.length,
-    rect,
-    center: rectToCenter(rect),
-    samples: members.slice(0, 5).map(m => ({
-      text: m.text,
-      selector: m.selector,
-      center: m.center,
-      rect: m.rect,
-    })),
-  }
-}
-
-function partitionByKey<T extends { groupKey: string }>(rows: T[]): Map<string, T[]> {
-  const map = new Map<string, T[]>()
-  for (const row of rows) {
-    const bucket = map.get(row.groupKey)
-    if (bucket) bucket.push(row)
-    else map.set(row.groupKey, [row])
-  }
-  return map
-}
-
-function shouldCollapseBatch(
-  key: string,
-  count: number,
-  opts: { groupSimilar: boolean; groupMin: number; groupKeyFilter: string | null; expandGroup: string | null },
-): boolean {
-  if (!opts.groupSimilar || count < opts.groupMin) return false
-  if (opts.groupKeyFilter && key !== opts.groupKeyFilter) return false
-  if (opts.expandGroup) return opts.expandGroup !== key
-  return true
-}
-
-function shouldExpandBatch(key: string, opts: { expandGroup: string | null }): boolean {
-  return !!opts.expandGroup && opts.expandGroup === key
 }
 
 function shouldDropNested(child: HTMLElement, parent: HTMLElement): boolean {
@@ -512,7 +510,6 @@ function ensureMarkStyles() {
       background:transparent;}
     #${MARK_LAYER_ID} .hs-mark-clickable{--hs-mark-color:rgba(34,197,94,.92);}
     #${MARK_LAYER_ID} .hs-mark-blocked{--hs-mark-color:rgba(239,68,68,.92);}
-    #${MARK_LAYER_ID} .hs-mark-grouped{--hs-mark-color:rgba(56,189,248,.9);}
     #${MARK_LAYER_ID} .hs-mark-frame{--hs-mark-color:rgba(168,85,247,.88);border-style:dashed;}`
 }
 
@@ -542,11 +539,9 @@ export function doObserve(msg: any) {
   const limit = Math.min(Math.max(Number(msg.limit ?? 120), 1), 200)
   const includeText = msg.include_text !== false
   const textLimit = Math.min(Math.max(Number(msg.text_limit ?? 200), 0), 500)
-  const groupSimilar = msg.group_similar !== false
-  const groupMin = Math.min(Math.max(Number(msg.group_min ?? 3), 2), 50)
-  const groupKeyFilter = String(msg.group_key || '').trim() || null
-  const expandGroup = String(msg.expand_group || '').trim() || null
-  const groupOpts = { groupSimilar, groupMin, groupKeyFilter, expandGroup }
+  const categoryFilter = parseFilter(msg.filter)
+  const wantText = !categoryFilter || categoryFilter.has('text')
+  const wantFrame = !categoryFilter || categoryFilter.has('frame')
 
   const all = collectCandidates()
   const iframeCandidates = all.filter(item => item.frame)
@@ -557,7 +552,9 @@ export function doObserve(msg: any) {
   const iframeHittable = hittable.filter(item => item.frame)
   const set = new Set<HTMLElement>(hittable.map(item => item.el))
   const blockedForMarks = collectBlockedCandidates(all, set)
-  const { items: frameItems, overlay: frameOverlay } = collectFrameItems()
+  const frameScan = collectFrameItems()
+  const frameItems = wantFrame ? frameScan.items : []
+  const frameOverlay = wantFrame ? frameScan.overlay : []
   const frameChildCounts = new Map<string, number>()
   for (const item of all) {
     if (!item.frame) continue
@@ -576,54 +573,34 @@ export function doObserve(msg: any) {
     return true
   })
 
-  const interactiveRecords = pruned.map(item => elementRecord(item.el, item.frame))
-  const interactiveBuckets = partitionByKey(interactiveRecords)
-  const interactiveDrafts: Array<{ item: any; rec?: ElementRecord }> = []
+  const interactiveRecords = pruned
+    .map(item => elementRecord(item.el, item.frame))
+    .filter(rec => interactiveCategoryAllowed(rec.category, categoryFilter))
+  interactiveRecords.sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x)
+  const slicedRecords = interactiveRecords.slice(0, limit)
+
   const overlayMarks: Array<{ el: Element; status: MarkStatus; frame?: FrameContext }> = []
-  const collapsedMembers: ElementRecord[] = []
-
-  for (const members of interactiveBuckets.values()) {
-    const key = members[0].groupKey
-    const collapse = shouldCollapseBatch(key, members.length, groupOpts)
-    const expand = shouldExpandBatch(key, groupOpts)
-
-    if (collapse) {
-      interactiveDrafts.push({ item: buildInteractiveGroupItem(members) })
-      collapsedMembers.push(...members)
-      overlayMarks.push(...members.map(m => ({ el: m.el, status: 'grouped' as const, frame: m.frame })))
-      continue
-    }
-
-    const markStatus: MarkStatus = expand ? 'grouped' : 'clickable'
-    for (const rec of members) {
-      interactiveDrafts.push({ item: interactiveItemFromRecord(rec, 0), rec })
-      overlayMarks.push({ el: rec.el, status: markStatus, frame: rec.frame })
-    }
-  }
-
-  interactiveDrafts.sort((a, b) => a.item.rect.y - b.item.rect.y || a.item.rect.x - b.item.rect.x)
-  const slicedInteractive = interactiveDrafts.slice(0, limit)
-
   const markTargets: Array<{ el: HTMLElement; selector: string; text: string; center: { x: number; y: number }; frameSelector?: string; framePath?: string[] }> = []
   let nextId = 1
   const elements: any[] = []
-  const interactiveItems = slicedInteractive.map(draft => {
-    if (draft.item.kind !== 'interactive' || !draft.rec) return draft.item
-    const item = { ...draft.item, id: nextId }
+  const interactiveItems = slicedRecords.map(rec => {
+    const id = nextId
     nextId += 1
-    elements.push(item)
     markTargets.push({
-      el: draft.rec.el,
-      selector: draft.rec.selector,
-      text: draft.rec.text,
-      center: draft.rec.center,
-      frameSelector: draft.rec.frame?.frameSelector,
-      framePath: draft.rec.frame ? buildFramePath(draft.rec.frame) : undefined,
+      el: rec.el,
+      selector: rec.selector,
+      text: rec.text,
+      center: rec.center,
+      frameSelector: rec.frame?.frameSelector,
+      framePath: rec.frame ? buildFramePath(rec.frame) : undefined,
     })
+    const item = interactiveItemFromRecord(rec, id)
+    elements.push(item)
+    overlayMarks.push({ el: rec.el, status: 'clickable', frame: rec.frame })
     return item
   })
 
-  const rawTexts = includeText ? collectVisibleTexts(textLimit) : []
+  const rawTexts = (includeText && wantText) ? collectVisibleTexts(textLimit) : []
   const iframeTextCount = rawTexts.filter((t: any) => t.inFrame).length
   const iframeTexts = rawTexts.filter((t: any) => t.inFrame)
   for (const frame of frameItems) {
@@ -645,41 +622,16 @@ export function doObserve(msg: any) {
       frame.scanNote = 'iframe 内仅有可见文本，无可交互控件；发布/投稿按钮通常在主页面 items 中（inFrame=false）'
     }
   }
-  const textRecords: TextRecord[] = rawTexts.map((t: any) => ({
+  const textItems: any[] = rawTexts.map((t: any) => ({
+    kind: 'text',
     role: t.role,
     tag: t.tag,
     text: t.text,
     selector: t.selector,
     center: t.center,
     rect: t.rect,
-    groupKey: t.groupKey,
-    inFrame: t.inFrame,
-    frameSelector: t.frameSelector,
-    framePath: t.framePath,
+    ...(t.inFrame ? { inFrame: true, frameSelector: t.frameSelector, framePath: t.framePath } : {}),
   }))
-  const textBuckets = partitionByKey(textRecords)
-  const textItems: any[] = []
-
-  for (const members of textBuckets.values()) {
-    const key = members[0].groupKey
-    if (shouldCollapseBatch(key, members.length, groupOpts)) {
-      textItems.push(buildTextGroupItem(members))
-      continue
-    }
-    for (const rec of members) {
-      textItems.push({
-        kind: 'text',
-        role: rec.role,
-        tag: rec.tag,
-        text: rec.text,
-        selector: rec.selector,
-        center: rec.center,
-        rect: rec.rect,
-        groupKey: rec.groupKey,
-        ...(rec.inFrame ? { inFrame: true, frameSelector: rec.frameSelector, framePath: rec.framePath } : {}),
-      })
-    }
-  }
 
   textItems.sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x)
 
@@ -688,12 +640,11 @@ export function doObserve(msg: any) {
 
   const texts = textItems
 
-  const groupedCount = items.filter(item => item.kind === 'group').length
-  const groupedMemberCount = collapsedMembers.length
-
   setMarks(markTargets)
 
-  const blockedChosen = blockedForMarks.slice(0, limit)
+  const blockedChosen = blockedForMarks
+    .filter(el => interactiveCategoryAllowed(elementCategory(el), categoryFilter))
+    .slice(0, limit)
   const marked = msg.mark !== false
   if (marked) {
     drawMarksOverlay([
@@ -704,11 +655,11 @@ export function doObserve(msg: any) {
   }
 
   const ctx = viewportContext()
-  const groupingHint = groupSimilar
-    ? ` 默认同类型≥${groupMin}个会折叠为 kind=group；传 expand_group:"<groupKey>" 可单独展开获取编号。`
+  const filterHint = categoryFilter
+    ? ` 已按 filter=[${Array.from(categoryFilter).join(',')}] 过滤：只返回这些类别（interactive 项的 category 字段标明类别：button/link/input/select/checkbox/radio/tab/menuitem/option/label/other；text=普通文本，frame=iframe 边界）。`
     : ''
   const markHint = marked
-    ? ' 页面标记：紫色虚线=iframe 边界，绿色=可点击，浅蓝=同类型批量/已展开批量，红色=不可点击/被禁用/被遮挡。'
+    ? ' 页面标记：紫色虚线=iframe 边界，绿色=可点击，红色=不可点击/被禁用/被遮挡。'
     : ''
 
   return {
@@ -724,8 +675,6 @@ export function doObserve(msg: any) {
     iframeCandidates: iframeCandidates.length,
     iframeHittable: iframeHittable.length,
     iframeTextCount,
-    groupCount: groupedCount,
-    groupedMemberCount,
     stats: {
       candidates: all.length,
       hittable: hittable.length,
@@ -734,18 +683,13 @@ export function doObserve(msg: any) {
       limit,
       textLimit,
       includeText,
-      groupSimilar,
-      groupMin,
-      groupKey: groupKeyFilter,
-      expandGroup,
-      groups: groupedCount,
-      groupedMembers: groupedMemberCount,
+      filter: categoryFilter ? Array.from(categoryFilter) : null,
       frames: frameItems.length,
       accessibleFrames: frameItems.filter(f => f.accessible).length,
       iframeCandidates: iframeCandidates.length,
       iframeHittable: iframeHittable.length,
     },
-    truncated: interactiveDrafts.length > slicedInteractive.length,
+    truncated: interactiveRecords.length > slicedRecords.length,
     textTruncated: includeText && rawTexts.length >= textLimit,
     marked,
     scroll: { y: ctx.scrollY, percent: ctx.scrollPercent, atTop: ctx.atTop, atBottom: ctx.atBottom },
@@ -754,16 +698,15 @@ export function doObserve(msg: any) {
     frames: frameItems,
     texts,
     elements,
-    hint: '返回 items：kind=text 可见文本，kind=frame 页面内 iframe 边界（accessible=true 表示同源已扫描，子元素见 inFrame=true 的 interactive；accessible=false 为跨域不可用坐标点击），kind=interactive 可点击元素（有 id），kind=group 同类型批量摘要（无 id）。' +
+    hint: '返回 items：kind=text 可见文本，kind=frame 页面内 iframe 边界（accessible=true 表示同源已扫描，子元素见 inFrame=true 的 interactive；accessible=false 为跨域不可用坐标点击），kind=interactive 可点击元素（每个都带独立 id）。' +
       ' frames 数组与 items 中 kind=frame 条目一致；interactive 可用 browser_click {ref:id} 点击；inFrame=true 表示元素在同源 iframe 内，frameSelector 指向所属 iframe。' +
       ' 勿使用 Playwright 语法（如 :has-text）；用 text 参数或 observe 返回的 ref/selector。' +
-      groupingHint + markHint,
+      filterHint + markHint,
   }
 }
 
 function kindSortRank(kind: string): number {
   if (kind === 'text') return 0
   if (kind === 'frame') return 1
-  if (kind === 'group') return 2
-  return 3
+  return 2
 }

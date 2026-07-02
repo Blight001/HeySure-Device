@@ -853,17 +853,147 @@ function routeTarget(args: any): { frameId: number; ref: any; selector?: string;
   return { frameId, ref, selector: args.selector, text: args.text, x: args.x, y: args.y }
 }
 
+const observeCacheByTab = new Map<number, any>()
+
+function rememberObserveSnapshot(tabId: number, observe: any): any {
+  if (observe?.success && Array.isArray(observe.items) && !observe.delta) {
+    observeCacheByTab.set(tabId, {
+      url: observe.url,
+      title: observe.title,
+      scroll: observe.scroll,
+      itemCount: observe.itemCount,
+      count: observe.count,
+      textCount: observe.textCount,
+      frameCount: observe.frameCount,
+      categoryCounts: observe.categoryCounts,
+      items: observe.items,
+    })
+  }
+  return observe
+}
+
+function normalizedObserveText(value: any): string {
+  return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, 240)
+}
+
+function roundedPointKey(point: any, bucket = 12): string {
+  if (!point || typeof point.x !== 'number' || typeof point.y !== 'number') return ''
+  return `${Math.round(point.x / bucket)}:${Math.round(point.y / bucket)}`
+}
+
+function observeIdentityKey(item: any): string {
+  const frame = item?.frameId ?? item?.frameSelector ?? (Array.isArray(item?.framePath) ? item.framePath.join('>') : '')
+  const parts = [
+    item?.kind || '',
+    item?.category || '',
+    item?.role || '',
+    item?.tag || '',
+    frame,
+    normalizedObserveText(item?.text),
+    item?.kind === 'interactive' ? '' : roundedPointKey(item?.center),
+  ]
+  return parts.join('|')
+}
+
+function observeFingerprint(item: any): string {
+  const center = roundedPointKey(item?.center, 4)
+  return JSON.stringify({
+    kind: item?.kind || null,
+    category: item?.category || null,
+    role: item?.role || null,
+    text: normalizedObserveText(item?.text),
+    center,
+    inFrame: !!item?.inFrame,
+    frameId: item?.frameId ?? null,
+    frameSelector: item?.frameSelector ?? null,
+    crossOrigin: !!item?.crossOrigin,
+    coordsLocalToFrame: !!item?.coordsLocalToFrame,
+    accessible: item?.accessible ?? null,
+  })
+}
+
+function observeDelta(previous: any | undefined, current: any): any {
+  const previousItems = Array.isArray(previous?.items) ? previous.items : []
+  const currentItems = Array.isArray(current?.items) ? current.items : []
+  const previousByKey = new Map<string, any>()
+  const currentByKey = new Map<string, any>()
+
+  for (const item of previousItems) {
+    const key = observeIdentityKey(item)
+    if (!previousByKey.has(key)) previousByKey.set(key, item)
+  }
+  for (const item of currentItems) {
+    const key = observeIdentityKey(item)
+    if (!currentByKey.has(key)) currentByKey.set(key, item)
+  }
+
+  const addedItems: any[] = []
+  const changedItems: any[] = []
+  const removedItems: any[] = []
+
+  for (const [key, item] of currentByKey) {
+    const before = previousByKey.get(key)
+    if (!before) {
+      addedItems.push(item)
+    } else if (observeFingerprint(before) !== observeFingerprint(item)) {
+      changedItems.push({ before, after: item })
+    }
+  }
+  for (const [key, item] of previousByKey) {
+    if (!currentByKey.has(key)) removedItems.push(item)
+  }
+
+  const changedAfterItems = changedItems.map(item => item.after)
+  const deltaItems = [...addedItems, ...changedAfterItems]
+  const changedCount = addedItems.length + changedItems.length + removedItems.length
+
+  return {
+    success: true,
+    source: 'browser_observe_delta',
+    delta: true,
+    url: current?.url,
+    title: current?.title,
+    page: {
+      previousUrl: previous?.url ?? null,
+      url: current?.url,
+      previousTitle: previous?.title ?? null,
+      title: current?.title,
+      previousScroll: previous?.scroll ?? null,
+      scroll: current?.scroll ?? null,
+      previousItemCount: previous?.itemCount ?? previousItems.length,
+      itemCount: current?.itemCount ?? currentItems.length,
+      previousCategoryCounts: previous?.categoryCounts ?? null,
+      categoryCounts: current?.categoryCounts ?? null,
+    },
+    counts: {
+      added: addedItems.length,
+      changed: changedItems.length,
+      removed: removedItems.length,
+      totalChanged: changedCount,
+      unchanged: Math.max(0, currentItems.length - addedItems.length - changedItems.length),
+    },
+    items: deltaItems,
+    addedItems,
+    changedItems,
+    removedItems,
+    fullObserveOmitted: true,
+    hint: changedCount
+      ? '自动 observe 仅返回相对上一次 observe 的变化：items=新增和变化后的可继续点击元素；addedItems/changedItems/removedItems 分别列出新增、变化、消失条目。完整快照已省略，需要全量时再调用 browser_observe。'
+      : '自动 observe 检测到页面事件，但相对上一次 observe 没有可见条目变化；完整快照已省略，需要全量时再调用 browser_observe。',
+  }
+}
+
 // ── Auto-observe after an interaction ───────────────────────────────────────
 // After a click (or other widget interaction) that changes the page, the AI
 // would otherwise have to call browser_observe again to learn the new state.
-// Instead we detect the change, wait for the page to settle, and fold a fresh
-// observe snapshot straight into the action result (observe field) so no extra
-// round-trip is needed. Disable per-call with observe_after:false.
+// Instead we detect the change, wait for the page to settle, and fold only the
+// changed observe items into the action result. Disable per-call with
+// observe_after:false.
 function wantsAutoObserve(args: any): boolean {
   return args?.observe_after !== false && args?.auto_observe !== false
 }
 
-async function autoObserveAfterAction(tab: chrome.tabs.Tab, args: any, frameId = 0): Promise<any | null> {
+async function autoObserveAfterAction(tab: chrome.tabs.Tab, args: any, frameId = 0): Promise<{ observe: any; previousObserve: any | undefined } | null> {
   const tabId = tab.id!
   let changed = false
   let navigated = false
@@ -895,7 +1025,8 @@ async function autoObserveAfterAction(tab: chrome.tabs.Tab, args: any, frameId =
   if (!changed) return null
 
   try {
-    return await toolObserve(args)
+    const previousObserve = observeCacheByTab.get(tabId)
+    return { observe: await toolObserve(args), previousObserve }
   } catch {
     return null  // observe is a best-effort enrichment; never fail the action over it
   }
@@ -907,13 +1038,14 @@ async function withAutoObserve(tab: chrome.tabs.Tab, args: any, result: any, fra
   // Soft failures (occluded / not_visible / not found) didn't touch the page.
   if (result && result.success === false) return result
 
-  const observe = await autoObserveAfterAction(tab, args, frameId)
-  if (!observe) return { ...result, page_changed: false }
+  const observed = await autoObserveAfterAction(tab, args, frameId)
+  if (!observed) return { ...result, page_changed: false }
+  const observe = observeDelta(observed.previousObserve, observed.observe)
   return {
     ...result,
     page_changed: true,
     observe,
-    observe_hint: '此操作触发了页面变化，已自动附带最新 observe 结果（见 observe 字段：items/elements/texts/frames，编号 id 仍可用于 browser_action click）。无需再调用 browser_observe。',
+    observe_hint: '此操作触发了页面变化，observe 字段只附带相对上一次 observe 的变化元素（delta:true；items=新增/变化后的条目，removedItems=消失条目），完整快照已省略。需要全量时再调用 browser_observe。',
   }
 }
 
@@ -963,10 +1095,17 @@ function observeMsg(args: any) {
   return {
     action: 'observe',
     limit: args.limit,
+    max_items: args.max_items,
     mark: args.mark,
     include_text: args.include_text,
     text_limit: args.text_limit,
     filter: args.filter,
+    tag: args.tag,
+    tags: args.tags,
+    keyword: args.keyword,
+    query: args.query,
+    text_filter: args.text_filter,
+    allow_truncate: args.allow_truncate,
   }
 }
 
@@ -977,7 +1116,7 @@ function observeMsg(args: any) {
 // own viewport space (clicks route by ref, and each frame paints its own overlay
 // for screenshots), flagged via coordsLocalToFrame so they're not misread as
 // top-level page coordinates.
-function tagFrameObserveResult(res: any, frame: FrameNode): { items: any[]; elements: any[]; frames: any[]; texts: any[] } {
+function tagFrameObserveResult(res: any, frame: FrameNode): { items: any[] } {
   const fid = frame.frameId
   const reId = (id: any) => `${fid}:${id}`
   const tag = (item: any) => ({
@@ -989,17 +1128,32 @@ function tagFrameObserveResult(res: any, frame: FrameNode): { items: any[]; elem
     frameUrl: frame.url,
     coordsLocalToFrame: true,
   })
+  // observe now returns a single deduped `items` list (kind=text|frame|interactive);
+  // there are no separate elements/texts/frames arrays to merge anymore.
   return {
     items: Array.isArray(res?.items) ? res.items.map(tag) : [],
-    elements: Array.isArray(res?.elements) ? res.elements.map(tag) : [],
-    frames: Array.isArray(res?.frames) ? res.frames.map(tag) : [],
-    texts: Array.isArray(res?.texts) ? res.texts.map(tag) : [],
   }
+}
+
+function observeItemCategory(item: any): string {
+  if (item?.kind === 'text') return 'text'
+  if (item?.kind === 'frame') return 'frame'
+  return String(item?.category || item?.kind || 'other')
+}
+
+function observeCategoryCounts(items: any[]): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const item of items) {
+    const key = observeItemCategory(item)
+    counts[key] = (counts[key] || 0) + 1
+  }
+  return Object.fromEntries(Object.entries(counts).sort((a, b) => a[0].localeCompare(b[0])))
 }
 
 async function toolObserve(args: any): Promise<any> {
   const tab = await getActiveTab()
   const base = await contentMsg(tab.id!, observeMsg(args), 0)
+  if (base?.tooMany) return rememberObserveSnapshot(tab.id!, base)
 
   // Cross-origin iframes can't be read from the top frame; observe each one in
   // its own frame and merge. Same-origin frames are already covered by the top
@@ -1020,13 +1174,13 @@ async function toolObserve(args: any): Promise<any> {
   const crossFrames: any[] = []
   for (const fr of frameResults) {
     if (!fr) continue
+    if (!Array.isArray(base.items)) base.items = []
     base.items.push(...fr.items)
-    base.elements.push(...fr.elements)
-    base.frames.push(...fr.frames)
-    base.texts.push(...fr.texts)
-    extraInteractive += fr.elements.length
-    extraText += fr.texts.length
-    crossFrames.push({ frameId: fr.frame.frameId, url: fr.frame.url, interactive: fr.elements.length, text: fr.texts.length })
+    const fInteractive = fr.items.filter((i: any) => i.kind === 'interactive').length
+    const fText = fr.items.filter((i: any) => i.kind === 'text').length
+    extraInteractive += fInteractive
+    extraText += fText
+    crossFrames.push({ frameId: fr.frame.frameId, url: fr.frame.url, interactive: fInteractive, text: fText })
   }
 
   if (crossFrames.length) {
@@ -1035,10 +1189,26 @@ async function toolObserve(args: any): Promise<any> {
     base.itemCount = Array.isArray(base.items) ? base.items.length : base.itemCount
     base.crossOriginFrames = crossFrames
     base.crossOriginFramesTruncated = roots.length > observed.length
-    base.hint = `${base.hint || ''} 跨域 iframe 内容已合并：带 crossOrigin=true / frameId 的 items 来自跨域子框架，其 center/rect 为该框架内部坐标（coordsLocalToFrame=true，勿与主页面坐标混用）；点击用 browser_action {action:"click", ref:"<frameId>:<id>"}（observe 返回的 id 已是该格式）。`
+    base.hint = `${base.hint || ''} 跨域 iframe 内容已合并：带 crossOrigin=true / frameId 的 items 来自跨域子框架，其 center 为该框架内部坐标（coordsLocalToFrame=true，勿与主页面坐标混用）；点击用 browser_action {action:"click", ref:"<frameId>:<id>"}（observe 返回的 id 已是该格式）。`
   }
 
-  return base
+  const allItems = Array.isArray(base.items) ? base.items : []
+  const limit = Math.min(Math.max(Number(args.limit ?? base?.stats?.limit ?? 120), 1), 200)
+  const maxItems = Math.min(Math.max(Number(args.max_items ?? base.maxItems ?? 500), 1), 500)
+  const interactiveCount = allItems.filter((item: any) => item?.kind === 'interactive').length
+  if (args.allow_truncate !== true && (interactiveCount > limit || allItems.length > maxItems)) {
+    base.tooMany = true
+    base.overLimit = true
+    base.itemCount = allItems.length
+    base.count = 0
+    base.textCount = 0
+    base.categoryCounts = observeCategoryCounts(allItems)
+    base.items = []
+    base.marked = false
+    base.hint = `当前 observe 合并跨域 iframe 后匹配到 ${allItems.length} 个条目（可交互 ${interactiveCount} 个），超过 limit=${limit} 或 max_items=${maxItems}，为避免返回过多内容已不返回 items。请使用 filter、tag/tags、keyword，或提高 limit/max_items；categoryCounts 给出了各类别数量。`
+  }
+
+  return rememberObserveSnapshot(tab.id!, base)
 }
 
 async function toolType(args: any): Promise<any> {

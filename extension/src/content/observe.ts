@@ -38,6 +38,7 @@ const INTERACTIVE = [
 const MARK_LAYER_ID = '__hs_marks_layer'
 const MARK_STYLE_ID = '__hs_marks_style'
 const TEXT_NODE_TAGS_TO_SKIP = new Set(['script', 'style', 'noscript', 'template', 'svg', 'canvas'])
+const MEDIA_SELECTOR = 'img,video,audio'
 const CONTROL = [
   'a[href]', 'button', 'input:not([type="hidden"])', 'select', 'textarea',
   'summary', 'label[for]',
@@ -90,6 +91,9 @@ function nameRole(el: Element): string {
 function elementCategory(el: Element): string {
   const tag = el.tagName.toLowerCase()
   const role = (el.getAttribute('role') || '').toLowerCase()
+  if (tag === 'img' || role === 'img') return 'image'
+  if (tag === 'video') return 'video'
+  if (tag === 'audio') return 'audio'
   if (tag === 'textarea') return 'input'
   if (tag === 'select' || role === 'combobox' || role === 'listbox') return 'select'
   if (tag === 'input') {
@@ -126,6 +130,10 @@ const FILTER_ALIASES: Record<string, string> = {
   menuitem: 'menuitem', menu: 'menuitem', menuitems: 'menuitem',
   option: 'option', options: 'option',
   label: 'label', labels: 'label',
+  image: 'image', images: 'image', img: 'image', imgs: 'image', picture: 'image', pictures: 'image',
+  video: 'video', videos: 'video',
+  audio: 'audio', audios: 'audio',
+  media: 'media',
   text: 'text', texts: 'text', 'text-element': 'text',
   frame: 'frame', frames: 'frame', iframe: 'frame', iframes: 'frame',
   interactive: 'interactive', interactives: 'interactive', clickable: 'interactive', control: 'interactive', controls: 'interactive',
@@ -154,6 +162,51 @@ function parseFilter(raw: any): Set<string> | null {
 function interactiveCategoryAllowed(category: string, filter: Set<string> | null): boolean {
   if (!filter) return true
   return filter.has('interactive') || filter.has(category)
+}
+
+function mediaCategoryAllowed(category: string, filter: Set<string> | null): boolean {
+  if (!filter) return true
+  return filter.has('media') || filter.has(category)
+}
+
+function parseStringList(raw: any): string[] {
+  if (raw == null) return []
+  const parts = Array.isArray(raw) ? raw : String(raw).split(/[,\s]+/)
+  return parts.map((p: any) => String(p || '').trim()).filter(Boolean)
+}
+
+function parseTagFilter(raw: any): Set<string> | null {
+  const tags = parseStringList(raw)
+    .map(t => t.toLowerCase().replace(/[^a-z0-9-]/g, ''))
+    .filter(Boolean)
+  return tags.length ? new Set(tags) : null
+}
+
+function parseKeyword(raw: any): string {
+  return String(raw ?? '').replace(/\s+/g, ' ').trim().toLowerCase()
+}
+
+function elementSearchText(el: Element, fallback = ''): string {
+  const html = el as HTMLElement
+  const parts = [
+    fallback,
+    textOf(el, 240),
+    html.getAttribute('aria-label') || '',
+    html.getAttribute('title') || '',
+    html.getAttribute('alt') || '',
+    html.getAttribute('placeholder') || '',
+    html.getAttribute('name') || '',
+    html.id || '',
+    html.getAttribute('src') || '',
+    html.getAttribute('href') || '',
+  ]
+  return parts.join(' ').replace(/\s+/g, ' ').trim().toLowerCase()
+}
+
+function matchesElementFilters(el: Element, tagFilter: Set<string> | null, keyword: string, fallbackText = ''): boolean {
+  if (tagFilter && !tagFilter.has(el.tagName.toLowerCase())) return false
+  if (keyword && !elementSearchText(el, fallbackText).includes(keyword)) return false
+  return true
 }
 
 function isDisabled(el: Element): boolean {
@@ -437,6 +490,20 @@ interface ElementRecord {
   category: string
 }
 
+interface MediaRecord {
+  el: HTMLElement
+  frame?: FrameContext
+  kind: 'media'
+  category: string
+  tag: string
+  role: string
+  text: string
+  selector: string
+  center: { x: number; y: number }
+  rect: { x: number; y: number; w: number; h: number }
+  src?: string
+}
+
 function elementRecord(el: HTMLElement, frame?: FrameContext): ElementRecord {
   const r = el.getBoundingClientRect()
   const tag = el.tagName.toLowerCase()
@@ -478,6 +545,73 @@ function interactiveItemFromRecord(rec: ElementRecord, id: number) {
   return item
 }
 
+function mediaRecord(el: HTMLElement, frame?: FrameContext): MediaRecord {
+  const r = el.getBoundingClientRect()
+  const tag = el.tagName.toLowerCase()
+  const category = elementCategory(el)
+  const src = (el as HTMLMediaElement).currentSrc || (el as HTMLImageElement).src || el.getAttribute('src') || ''
+  const alt = el.getAttribute('alt') || el.getAttribute('aria-label') || el.getAttribute('title') || ''
+  return {
+    el,
+    frame,
+    kind: 'media',
+    category,
+    tag,
+    role: el.getAttribute('role') || (category === 'image' ? 'img' : category),
+    text: (alt || textOf(el, 80) || src.split('/').pop() || category).slice(0, 120),
+    selector: cssPath(el),
+    center: frame ? elementViewportCenter(el, frame) : centerInfo(r),
+    rect: frame ? elementViewportRect(el, frame) : rectInfo(r),
+    ...(src ? { src: src.slice(0, 240) } : {}),
+  }
+}
+
+function mediaItemFromRecord(rec: MediaRecord) {
+  const item: any = {
+    kind: 'media',
+    category: rec.category,
+    role: rec.role,
+    text: rec.text,
+    selector: rec.selector,
+    center: rec.center,
+    rect: rec.rect,
+  }
+  if (rec.frame) {
+    item.inFrame = true
+    item.frameSelector = rec.frame.frameSelector
+    item.framePath = buildFramePath(rec.frame)
+  }
+  if (rec.src) item.src = rec.src
+  return item
+}
+
+function collectVisibleMediaIn(root: ParentNode, frame?: FrameContext): MediaRecord[] {
+  const out: MediaRecord[] = []
+  const seen = new Set<Element>()
+  const add = (el: Element | null) => {
+    if (!(el instanceof HTMLElement) || seen.has(el)) return
+    seen.add(el)
+    if (!isVisible(el) || isInsideInteractive(el)) return
+    const r = frame ? elementViewportRect(el, frame) : rectInfo(el.getBoundingClientRect())
+    if (r.w <= 0 || r.h <= 0) return
+    const center = frame ? elementViewportCenter(el, frame) : centerInfo(el.getBoundingClientRect())
+    if (center.y < 0 || center.x < 0 || center.y > window.innerHeight || center.x > window.innerWidth) return
+    out.push(mediaRecord(el, frame))
+  }
+  for (const scanRoot of enumerateScanRoots(root)) {
+    scanRoot.querySelectorAll(MEDIA_SELECTOR).forEach(add)
+  }
+  return out
+}
+
+function collectVisibleMedia(): MediaRecord[] {
+  const out = collectVisibleMediaIn(scanRoot(document))
+  for (const ctx of getAccessibleFrames(cssPath)) {
+    out.push(...collectVisibleMediaIn(scanRoot(ctx.doc), ctx))
+  }
+  return out
+}
+
 function shouldDropNested(child: HTMLElement, parent: HTMLElement): boolean {
   if (isStrongControl(child)) return false
   if (isStrongControl(parent)) return true
@@ -494,6 +628,37 @@ function shouldDropNested(child: HTMLElement, parent: HTMLElement): boolean {
 
 export function clearMarksOverlay(): void {
   document.getElementById(MARK_LAYER_ID)?.remove()
+}
+
+// Project one item down to just what the AI needs to understand + act on it.
+// The model clicks by ref:id (interactive items), so the long CSS-path selector
+// and the full rect are pure overhead — dropping them (plus the low-value tag,
+// kept implicitly in role/category) keeps the payload dense so far more of the
+// page survives the server-side 12000-char tool-result truncation. center is
+// retained for screenshot correlation / coordinate fallback.
+const ITEM_DROP_KEYS = new Set(['selector', 'rect', 'tag'])
+function slimItem(item: any): any {
+  const out: any = {}
+  for (const k of Object.keys(item)) {
+    if (ITEM_DROP_KEYS.has(k)) continue
+    out[k] = item[k]
+  }
+  return out
+}
+
+function itemCategory(item: any): string {
+  if (item?.kind === 'text') return 'text'
+  if (item?.kind === 'frame') return 'frame'
+  return String(item?.category || item?.kind || 'other')
+}
+
+function countItemsByCategory(items: any[]): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const item of items) {
+    const key = itemCategory(item)
+    counts[key] = (counts[key] || 0) + 1
+  }
+  return Object.fromEntries(Object.entries(counts).sort((a, b) => a[0].localeCompare(b[0])))
 }
 
 function ensureMarkStyles() {
@@ -539,7 +704,11 @@ export function doObserve(msg: any) {
   const limit = Math.min(Math.max(Number(msg.limit ?? 120), 1), 200)
   const includeText = msg.include_text !== false
   const textLimit = Math.min(Math.max(Number(msg.text_limit ?? 200), 0), 500)
+  const defaultMaxItems = includeText ? Math.min(500, limit + textLimit + 40) : limit
+  const maxItems = Math.min(Math.max(Number(msg.max_items ?? defaultMaxItems), 1), 500)
   const categoryFilter = parseFilter(msg.filter)
+  const tagFilter = parseTagFilter(msg.tag ?? msg.tags)
+  const keyword = parseKeyword(msg.keyword ?? msg.query ?? msg.text_filter)
   const wantText = !categoryFilter || categoryFilter.has('text')
   const wantFrame = !categoryFilter || categoryFilter.has('frame')
 
@@ -553,7 +722,11 @@ export function doObserve(msg: any) {
   const set = new Set<HTMLElement>(hittable.map(item => item.el))
   const blockedForMarks = collectBlockedCandidates(all, set)
   const frameScan = collectFrameItems()
-  const frameItems = wantFrame ? frameScan.items : []
+  const frameItems = wantFrame
+    ? frameScan.items.filter(frame =>
+      (!tagFilter || tagFilter.has('iframe')) &&
+      (!keyword || [frame.text, frame.name, frame.title, frame.src].join(' ').toLowerCase().includes(keyword)))
+    : []
   const frameOverlay = wantFrame ? frameScan.overlay : []
   const frameChildCounts = new Map<string, number>()
   for (const item of all) {
@@ -576,8 +749,16 @@ export function doObserve(msg: any) {
   const interactiveRecords = pruned
     .map(item => elementRecord(item.el, item.frame))
     .filter(rec => interactiveCategoryAllowed(rec.category, categoryFilter))
+    .filter(rec => matchesElementFilters(rec.el, tagFilter, keyword, rec.text))
   interactiveRecords.sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x)
   const slicedRecords = interactiveRecords.slice(0, limit)
+
+  const mediaRecords = (!categoryFilter || categoryFilter.has('media') || categoryFilter.has('image') || categoryFilter.has('video') || categoryFilter.has('audio'))
+    ? collectVisibleMedia()
+      .filter(rec => mediaCategoryAllowed(rec.category, categoryFilter))
+      .filter(rec => matchesElementFilters(rec.el, tagFilter, keyword, rec.text))
+      .sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x)
+    : []
 
   const overlayMarks: Array<{ el: Element; status: MarkStatus; frame?: FrameContext }> = []
   const markTargets: Array<{ el: HTMLElement; selector: string; text: string; center: { x: number; y: number }; frameSelector?: string; framePath?: string[] }> = []
@@ -600,7 +781,9 @@ export function doObserve(msg: any) {
     return item
   })
 
-  const rawTexts = (includeText && wantText) ? collectVisibleTexts(textLimit) : []
+  const rawTexts = (includeText && wantText) ? collectVisibleTexts(textLimit)
+    .filter((t: any) => (!tagFilter || tagFilter.has(String(t.tag || '').toLowerCase())) && (!keyword || String(t.text || '').toLowerCase().includes(keyword)))
+    : []
   const iframeTextCount = rawTexts.filter((t: any) => t.inFrame).length
   const iframeTexts = rawTexts.filter((t: any) => t.inFrame)
   for (const frame of frameItems) {
@@ -635,7 +818,55 @@ export function doObserve(msg: any) {
 
   textItems.sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x)
 
-  const items = [...textItems, ...frameItems, ...interactiveItems]
+  const mediaItems = mediaRecords.map(mediaItemFromRecord)
+  const candidateItems = [...textItems, ...frameItems, ...mediaItems, ...interactiveRecords.map((rec, i) => interactiveItemFromRecord(rec, i + 1))]
+    .sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x || kindSortRank(a.kind) - kindSortRank(b.kind))
+  const categoryCounts = countItemsByCategory(candidateItems)
+  const tooMany = interactiveRecords.length > limit || candidateItems.length > maxItems
+
+  if (tooMany && msg.allow_truncate !== true) {
+    setMarks([])
+    const ctx = viewportContext()
+    return {
+      success: true,
+      source: 'browser_observe',
+      url: location.href,
+      title: document.title,
+      count: 0,
+      textCount: 0,
+      itemCount: candidateItems.length,
+      frameCount: frameItems.length,
+      tooMany: true,
+      overLimit: true,
+      maxItems,
+      categoryCounts,
+      stats: {
+        candidates: all.length,
+        hittable: hittable.length,
+        afterDedupe: pruned.length,
+        blocked: blockedForMarks.length,
+        limit,
+        maxItems,
+        textLimit,
+        includeText,
+        filter: categoryFilter ? Array.from(categoryFilter) : null,
+        tag: tagFilter ? Array.from(tagFilter) : null,
+        keyword: keyword || null,
+        media: mediaRecords.length,
+        frames: frameItems.length,
+        accessibleFrames: frameItems.filter(f => f.accessible).length,
+        iframeCandidates: iframeCandidates.length,
+        iframeHittable: iframeHittable.length,
+      },
+      marked: false,
+      scroll: { y: ctx.scrollY, percent: ctx.scrollPercent, atTop: ctx.atTop, atBottom: ctx.atBottom },
+      currentSection: ctx.currentSection,
+      items: [],
+      hint: `当前 observe 匹配到 ${candidateItems.length} 个条目（可交互 ${interactiveRecords.length} 个），超过 limit=${limit} 或 max_items=${maxItems}，为避免返回过多内容已不返回 items。请使用 filter（button/link/input/image/video/text/frame 等）、tag/tags、keyword，或提高 limit/max_items；categoryCounts 给出了各类别数量。`,
+    }
+  }
+
+  const items = [...textItems, ...frameItems, ...mediaItems, ...interactiveItems]
     .sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x || kindSortRank(a.kind) - kindSortRank(b.kind))
 
   const texts = textItems
@@ -656,8 +887,12 @@ export function doObserve(msg: any) {
 
   const ctx = viewportContext()
   const filterHint = categoryFilter
-    ? ` 已按 filter=[${Array.from(categoryFilter).join(',')}] 过滤：只返回这些类别（interactive 项的 category 字段标明类别：button/link/input/select/checkbox/radio/tab/menuitem/option/label/other；text=普通文本，frame=iframe 边界）。`
+    ? ` 已按 filter=[${Array.from(categoryFilter).join(',')}] 过滤：只返回这些类别（interactive 项的 category 字段标明类别：button/link/input/select/checkbox/radio/tab/menuitem/option/label/other；media 项 category=image/video/audio；text=普通文本，frame=iframe 边界）。`
     : ''
+  const queryHint = [
+    tagFilter ? `tag=[${Array.from(tagFilter).join(',')}]` : '',
+    keyword ? `keyword="${keyword}"` : '',
+  ].filter(Boolean).join(' ')
   const markHint = marked
     ? ' 页面标记：紫色虚线=iframe 边界，绿色=可点击，红色=不可点击/被禁用/被遮挡。'
     : ''
@@ -684,6 +919,9 @@ export function doObserve(msg: any) {
       textLimit,
       includeText,
       filter: categoryFilter ? Array.from(categoryFilter) : null,
+      tag: tagFilter ? Array.from(tagFilter) : null,
+      keyword: keyword || null,
+      media: mediaRecords.length,
       frames: frameItems.length,
       accessibleFrames: frameItems.filter(f => f.accessible).length,
       iframeCandidates: iframeCandidates.length,
@@ -691,22 +929,24 @@ export function doObserve(msg: any) {
     },
     truncated: interactiveRecords.length > slicedRecords.length,
     textTruncated: includeText && rawTexts.length >= textLimit,
+    tooMany: false,
+    maxItems,
+    categoryCounts,
     marked,
     scroll: { y: ctx.scrollY, percent: ctx.scrollPercent, atTop: ctx.atTop, atBottom: ctx.atBottom },
     currentSection: ctx.currentSection,
-    items,
-    frames: frameItems,
-    texts,
-    elements,
-    hint: '返回 items：kind=text 可见文本，kind=frame 页面内 iframe 边界（accessible=true 表示同源已扫描，子元素见 inFrame=true 的 interactive；accessible=false 为跨域不可用坐标点击），kind=interactive 可点击元素（每个都带独立 id）。' +
-      ' frames 数组与 items 中 kind=frame 条目一致；interactive 可用 browser_click {ref:id} 点击；inFrame=true 表示元素在同源 iframe 内，frameSelector 指向所属 iframe。' +
-      ' 勿使用 Playwright 语法（如 :has-text）；用 text 参数或 observe 返回的 ref/selector。' +
-      filterHint + markHint,
+    items: items.map(slimItem),
+    hint: '返回 items 单一混排列表（按位置排序，已去重——不再单独返回 texts/elements/frames，全部内容都在 items 里，用 kind 区分）：' +
+      'kind=text 可见文本（不可点击），kind=media 图片/视频/音频（不可点击；category=image/video/audio），kind=frame 页面内 iframe 边界（accessible=true 表示同源已扫描，子元素见 inFrame=true 的 interactive；accessible=false 为跨域不可用坐标点击），kind=interactive 可点击元素（每个带独立 id，用 browser_action {action:"click", ref:id} 点击）。' +
+      ' 为节省上下文每条已省略 selector/rect/tag，仅保留 role/category/text/center；inFrame=true 表示元素在同源 iframe 内，frameSelector 指向所属 iframe。' +
+      ' 勿使用 Playwright 语法（如 :has-text）；用 text 参数或 observe 返回的 ref 定位。' +
+      filterHint + (queryHint ? ` 已按 ${queryHint} 筛选。` : '') + markHint,
   }
 }
 
 function kindSortRank(kind: string): number {
   if (kind === 'text') return 0
-  if (kind === 'frame') return 1
-  return 2
+  if (kind === 'media') return 1
+  if (kind === 'frame') return 2
+  return 3
 }

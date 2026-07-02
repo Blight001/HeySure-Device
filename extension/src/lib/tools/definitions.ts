@@ -32,22 +32,29 @@ export const BROWSER_TOOLS: AIToolDef[] = [
   // ───── 页面观察 ───────────────────────────────────────────────────────
   {
     name: 'browser_observe',
-    description: '感知当前视口里用户能看到的内容，区分普通可见文本与可交互元素：返回 items 混排列表，其中 kind=text 是页面文字（不可点击），kind=frame 是页面内 iframe 边界（frames 数组与之相同；accessible=true 表示同源已扫描，子控件见 inFrame=true 的 interactive；accessible=false 为跨域不可用坐标点击），kind=interactive 是最顶层、未被遮挡的按钮/链接/输入框/下拉/菜单项等，每个 interactive 都带独立 id（不再做同类型折叠，所有可交互元素都会逐个返回并编号）。同源 iframe 内的元素会一并扫描，inFrame=true 且 center/rect 已换算为页面视口坐标，frameSelector 指向所属 iframe，点击仍用 browser_action {action:"click", ref:id}。跨域 iframe 内容现也会被扫描并合并进来：这些 items 带 crossOrigin=true、frameId 和形如 "3:5" 的 id，其 center/rect 是该 iframe 内部坐标（coordsLocalToFrame=true，勿与主页面坐标或截图坐标混用），点击/输入直接把该 id 当 ref 回传即可（browser_action {action:"click", ref:"3:5"}），会自动路由到对应框架；crossOriginFrames 字段汇总了各跨域框架命中的元素/文本数。interactive 项额外带 id、角色 role、类别 category、文本和中心坐标 center。页面标记：紫色虚线=iframe 边界，绿色=可点击，红色=不可点击/被禁用/被遮挡。用途：既能读取页面文字，又能作为点击/输入前的首选观察手段，配合 browser_screenshot 形成「看图—按 id 点击」闭环。场景：先 observe 理解页面，再 browser_action {action:"click", ref:id} 精确点击；元素太多时用 filter 只看某类（如 filter:"button"）或调小 limit；页面变化后重新 observe 以刷新 id。勿用 Playwright 语法（如 button:has-text）；用 text 参数或 observe 返回的 ref/selector。',
+    description: '感知当前视口里用户能看到的内容，区分普通可见文本、图片/视频/音频、iframe 边界与可交互元素：返回单一 items 混排列表（已去重，不再另附 texts/elements/frames 数组，全部内容都在 items 里用 kind 区分），其中 kind=text 是页面文字（不可点击），kind=media 是图片/视频/音频（category=image/video/audio），kind=frame 是页面内 iframe 边界（accessible=true 表示同源已扫描，子控件见 inFrame=true 的 interactive；accessible=false 为跨域不可用坐标点击），kind=interactive 是最顶层、未被遮挡的按钮/链接/输入框/下拉/菜单项等，每个 interactive 都带独立 id。为节省上下文，每条已省略 selector/rect/tag，仅保留 id/role/category/text/center——请用 ref:id 点击，不要依赖 selector。同源 iframe 内的元素会一并扫描，inFrame=true 且 center/rect 已换算为页面视口坐标，frameSelector 指向所属 iframe，点击仍用 browser_action {action:"click", ref:id}。跨域 iframe 内容现也会被扫描并合并进来：这些 items 带 crossOrigin=true、frameId 和形如 "3:5" 的 id，其 center/rect 是该 iframe 内部坐标（coordsLocalToFrame=true，勿与主页面坐标或截图坐标混用），点击/输入直接把该 id 当 ref 回传即可。若匹配条目超过 limit/max_items，默认不返回 items，只返回 tooMany=true 与 categoryCounts，提示继续用 filter/tag/keyword 缩小范围。用途：既能读取页面文字，又能作为点击/输入前的首选观察手段，配合 browser_screenshot 形成「看图—按 id 点击」闭环。场景：先 observe 理解页面，再 browser_action {action:"click", ref:id} 精确点击；元素太多时用 filter 只看某类（如 filter:"button" 或 filter:"image"）、tag 指定 HTML 标签、keyword 查关键词；页面变化后重新 observe 以刷新 id。勿用 Playwright 语法（如 button:has-text）；用 text 参数或 observe 返回的 ref/selector。',
     input_schema: {
       type: 'object',
       properties: {
-        limit: { type: 'number', description: '最多返回的可交互元素条目数。默认 120，最大 200。' },
+        limit: { type: 'number', description: '最多返回的可交互元素条目数；超过时默认不返回 items，只返回 tooMany/categoryCounts，提示继续筛选。默认 120，最大 200。' },
+        max_items: { type: 'number', description: '最终 items 混排列表允许返回的最大总条数；超过时默认不返回 items，只返回 categoryCounts。默认约等于 limit + text_limit + 40，最大 500。' },
         filter: {
           type: ['string', 'array'],
           items: { type: 'string' },
           description: '按类别筛选只返回想看的元素，缩小噪音。可传单个字符串、逗号分隔字符串或字符串数组。可选类别：' +
             'button（按钮）、link（链接）、input（输入框/文本域/可编辑区）、select（下拉框）、checkbox（复选/开关）、radio（单选）、tab（标签页）、menuitem（菜单项）、option（选项）、label（标签元素）、' +
-            'text（普通可见文本）、frame（iframe 边界）、interactive（所有可交互元素，不含纯文本）。' +
-            '例：filter:"button" 只看按钮；filter:["input","select"] 只看输入框和下拉框；filter:"text" 只看全部文字元素；不传或传 "all" 则返回全部。' +
+            'image/img（图片）、video（视频）、audio（音频）、media（全部图片/视频/音频）、text（普通可见文本）、frame（iframe 边界）、interactive（所有可交互元素，不含纯文本/媒体）。' +
+            '例：filter:"button" 只看按钮；filter:["input","select"] 只看输入框和下拉框；filter:"image" 只看图片；filter:"text" 只看全部文字元素；不传或传 "all" 则返回全部。' +
             '返回的每个 interactive 项都带 category 字段标明其类别。',
         },
-        include_text: { type: 'boolean', description: '是否同时返回普通可见文本 texts/items。默认 true；传 false 时只返回可交互 elements。' },
+        tag: { type: ['string', 'array'], items: { type: 'string' }, description: '按 HTML 标签名进一步筛选，可传 "img"、"video"、"button"、"a"、"input"、"label"、"iframe" 等，也可传数组或逗号分隔字符串。' },
+        tags: { type: ['string', 'array'], items: { type: 'string' }, description: 'tag 的别名。' },
+        keyword: { type: 'string', description: '按关键词筛选，匹配可见文本、alt/title/aria-label、name/id、src/href 等常用字段；也兼容 query/text_filter。' },
+        query: { type: 'string', description: 'keyword 的兼容别名。' },
+        text_filter: { type: 'string', description: 'keyword 的兼容别名。' },
+        include_text: { type: 'boolean', description: '是否同时包含普通可见文本（items 中 kind=text 的条目）。默认 true；传 false 时只返回可交互元素。' },
         text_limit: { type: 'number', description: '最多返回的普通可见文本条数。默认 200，最大 500。' },
+        allow_truncate: { type: 'boolean', description: '为 true 时即使超过 limit/max_items 也截断返回；默认 false，即超量时不返回 items，只给 categoryCounts 和筛选提示。' },
         mark:  { type: 'boolean', description: '是否在页面上绘制无序号状态色标记，便于随后截图查看。默认 true；绿色=可点击，红色=不可点击/被禁用/被遮挡；传 false 仅返回列表并清除已有标记。标记仅为视觉叠加，不影响其他取数工具或截图，也不拦截点击。' },
       },
     },
@@ -99,8 +106,8 @@ export const BROWSER_TOOLS: AIToolDef[] = [
       '· scroll：滚动页面，返回滚动后的位置、移动像素数与进入视野的小节/标题。\n' +
       '· type：向 input/textarea 输入文本（单字段；多字段请多次 type 或配合 observe 逐字段操作）。\n' +
       '· press_key：在焦点元素或指定 selector 上按键，可带 Ctrl/Shift/Alt/Meta 修饰键。\n' +
-      '· 自动 observe：click/double_click/right_click/type/press_key 执行后会自动检测页面是否变化并等待加载完毕；若变化，结果里直接带上最新 observe 快照（observe 字段，含 items/elements/texts/frames，编号 id 仍可用于点击）并置 page_changed:true，无需再调用 browser_observe；未变化则 page_changed:false。不需要时传 observe_after:false 关闭。\n' +
-      '用途：统一的点击/滚动/输入/键盘入口。场景：先 browser_observe 拿到编号，再 browser_action {action:"click", ref:id} 点击；点击后若页面变了，直接读返回里的 observe 字段继续操作即可。',
+      '· 自动 observe：click/double_click/right_click/type/press_key 执行后会自动检测页面是否变化并等待加载完毕；若变化，结果里附带增量 observe（observe.delta=true），只返回相对上一次 observe 新增/变化/消失的元素，完整快照不再重复返回；未变化则 page_changed:false。不需要时传 observe_after:false 关闭。\n' +
+      '用途：统一的点击/滚动/输入/键盘入口。场景：先 browser_observe 拿到编号，再 browser_action {action:"click", ref:id} 点击；点击后若页面变了，直接读 observe.items / addedItems / changedItems / removedItems 里的变化元素继续操作；需要全量时再调用 browser_observe。',
     input_schema: {
       type: 'object',
       properties: {
@@ -125,7 +132,7 @@ export const BROWSER_TOOLS: AIToolDef[] = [
         alt:         { type: 'boolean', description: 'action=press_key 时按住 Alt。' },
         meta:        { type: 'boolean', description: 'action=press_key 时按住 Meta/Cmd。' },
         // 自动 observe（click/double_click/right_click/type/press_key 生效）
-        observe_after:   { type: 'boolean', description: '点击/输入/按键后若页面变化，是否自动等待加载并在结果里附带最新 observe 快照。默认 true；传 false 关闭（例如只想要点击不需要后续感知时）。' },
+        observe_after:   { type: 'boolean', description: '点击/输入/按键后若页面变化，是否自动等待加载并在结果里附带增量 observe（只显示相对上一次 observe 的变化元素）。默认 true；传 false 关闭。' },
         settle_timeout:  { type: 'number',  description: '自动 observe：等待页面变化稳定的最长时间（毫秒，默认 3000，上限 8000）；遇到持续加载/动画时到此上限即收尾并 observe。' },
       },
       required: ['action'],

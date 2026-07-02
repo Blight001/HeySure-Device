@@ -554,7 +554,7 @@ async function runChat(messages: ChatMessage[]): Promise<{ text: string; toolsUs
       toolsUsed.push(tu.name)
       log('task', 'running', `[AI工具] ${tu.name}`, tu.input)
       try {
-        const result = await executeBrowserTool(tu.name, tu.input)
+        const result = await withTaskTimeout(executeBrowserTool(tu.name, tu.input), taskTimeoutMs({ tool: tu.name, args: tu.input } as DispatchedTask), tu.name)
         let content: any = typeof result === 'string' ? result : JSON.stringify(result)
         if (tu.name === 'browser_screenshot' && result?.dataUrl) {
           content = screenshotToolContent(result)

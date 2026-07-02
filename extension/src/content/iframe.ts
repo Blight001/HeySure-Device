@@ -24,6 +24,31 @@ export interface ViewportPoint {
 function clampX(x: number, win: Window) { return Math.min(Math.max(x, 1), win.innerWidth - 1) }
 function clampY(y: number, win: Window) { return Math.min(Math.max(y, 1), win.innerHeight - 1) }
 
+// ── Cross-realm-safe type checks ────────────────────────────────────────────
+// Elements inside a same-origin iframe belong to that frame window's realm, so
+// a bare `instanceof HTMLElement` (the *top* window's constructor) is always
+// false for them. Those bare checks silently filtered out every element found
+// inside same-origin iframes — the scan reached the frame document but reported
+// zero candidates/texts. Always use these helpers on nodes that may come from a
+// frame document.
+
+export function isElement(el: unknown): el is Element {
+  return !!el && typeof el === 'object' && (el as Node).nodeType === 1
+}
+
+export function isHTMLElement(el: unknown): el is HTMLElement {
+  if (el instanceof HTMLElement) return true  // fast path: same realm
+  if (!isElement(el)) return false
+  const win: any = el.ownerDocument?.defaultView
+  return !!win && typeof win.HTMLElement === 'function' && el instanceof win.HTMLElement
+}
+
+export function isFrameElement(el: unknown): el is HTMLIFrameElement {
+  if (!isElement(el)) return false
+  const tag = el.tagName
+  return tag === 'IFRAME' || tag === 'FRAME'
+}
+
 export function isVisibleInOwnerViewport(el: HTMLElement): boolean {
   const s = getComputedStyle(el)
   if (s.display === 'none' || s.visibility === 'hidden' || Number(s.opacity) === 0) return false
@@ -35,7 +60,7 @@ export function isVisibleInOwnerViewport(el: HTMLElement): boolean {
 
 export function listIframeElementsIn(doc: Document): HTMLIFrameElement[] {
   return Array.from(doc.querySelectorAll('iframe,frame'))
-    .filter((el): el is HTMLIFrameElement => el instanceof HTMLIFrameElement && isVisibleInOwnerViewport(el))
+    .filter((el): el is HTMLIFrameElement => isFrameElement(el) && isVisibleInOwnerViewport(el))
 }
 
 export function listIframeElements(): HTMLIFrameElement[] {
@@ -74,7 +99,7 @@ export function resolveFrameByPath(path: string[]): FrameContext | null {
 
   for (const frameSelector of path) {
     const frameEl = doc.querySelector(frameSelector)
-    if (!(frameEl instanceof HTMLIFrameElement)) return null
+    if (!isFrameElement(frameEl)) return null
     const base = tryFrameContext(frameEl)
     if (!base) return null
     resolved = { ...base, frameSelector, parent }
@@ -110,7 +135,11 @@ export function getAccessibleFrames(attachSelector: (frameEl: HTMLIFrameElement)
   return out
 }
 
-function toTopViewportPoint(localX: number, localY: number, frame?: FrameContext): ViewportPoint {
+// Translate a point in a frame's local viewport space to the top page's
+// viewport space by accumulating every ancestor iframe's offset. CDP input
+// dispatch and the fx cursor overlay both live in top-page coordinates, while
+// getBoundingClientRect / elementFromPoint inside a frame are frame-local.
+export function toTopViewportPoint(localX: number, localY: number, frame?: FrameContext): ViewportPoint {
   let x = localX
   let y = localY
   let cur = frame

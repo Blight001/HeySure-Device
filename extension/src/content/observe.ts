@@ -19,8 +19,10 @@
 import { isHittable, isVisible, cssPath, textOf, elementArea } from './dom'
 import {
   FrameContext, buildFramePath, elementViewportCenter, elementViewportRect,
-  getAccessibleFrames, isCenterOnMainViewport, isFrameChainVisible, isLikelyInteractableInFrame,
-  isTopmostAtViewport, isVisibleInOwnerViewport, listIframeElementsIn, scanRoot, tryFrameContext,
+  getAccessibleFrames, isCenterOnMainViewport, isFrameChainVisible, isFrameElement,
+  isHTMLElement, isLikelyInteractableInFrame,
+  isTopmostAtViewport, isVisibleInOwnerViewport, listIframeElementsIn,
+  resolveFrameBySelector, scanRoot, tryFrameContext, visitAccessibleFrames,
 } from './iframe'
 import { setMarks } from './marks'
 import { viewportContext } from './viewport'
@@ -74,7 +76,7 @@ const NAME_ROLE_PATTERNS: Array<{ re: RegExp; category: string }> = [
 ]
 
 function nameRole(el: Element): string {
-  if (!(el instanceof HTMLElement)) return ''
+  if (!isHTMLElement(el)) return ''
   const tokens = [...String(el.className || '').split(/\s+/), el.id || ''].filter(Boolean)
   for (const token of tokens) {
     for (const { re, category } of NAME_ROLE_PATTERNS) {
@@ -217,7 +219,7 @@ function isDisabled(el: Element): boolean {
 }
 
 function hasInteractiveSemantics(el: Element): boolean {
-  if (!(el instanceof HTMLElement) || isDisabled(el)) return false
+  if (!isHTMLElement(el) || isDisabled(el)) return false
   if (el.matches(INTERACTIVE)) return true
   if (nameRole(el)) return true
   const s = getComputedStyle(el)
@@ -260,7 +262,7 @@ function collectCandidatesIn(root: ParentNode, frame?: FrameContext): TaggedElem
   const out: TaggedElement[] = []
   const seen = new Set<Element>()
   const add = (el: Element | null) => {
-    if (!(el instanceof HTMLElement) || seen.has(el)) return
+    if (!isHTMLElement(el) || seen.has(el)) return
     seen.add(el)
     if (hasInteractiveSemantics(el) && isVisible(el)) out.push({ el, frame })
   }
@@ -278,17 +280,35 @@ function collectCandidatesIn(root: ParentNode, frame?: FrameContext): TaggedElem
   return out
 }
 
-function accessibleFrameSet(): Set<HTMLIFrameElement> {
-  return new Set(getAccessibleFrames(cssPath).map(f => f.frameEl))
+interface ScanScope { doc: Document; frame?: FrameContext }
+
+// The documents one observe pass scans: the whole page (top document plus every
+// reachable same-origin frame), or — when the caller passes frame / frame_path —
+// just that frame and its own reachable descendants. Scoping lets the AI drill
+// into one element-heavy iframe (an embedded editor, say) without paying for the
+// rest of the page, which is what keeps the result under the server-side
+// tool-result truncation.
+function scanScopes(scopeFrame?: FrameContext | null): ScanScope[] {
+  if (!scopeFrame) {
+    return [
+      { doc: document },
+      ...getAccessibleFrames(cssPath).map(ctx => ({ doc: ctx.doc, frame: ctx })),
+    ]
+  }
+  const scopes: ScanScope[] = [{ doc: scopeFrame.doc, frame: scopeFrame }]
+  visitAccessibleFrames(ctx => scopes.push({ doc: ctx.doc, frame: ctx }), cssPath, scopeFrame.doc, scopeFrame)
+  return scopes
 }
 
-function collectCandidates(): TaggedElement[] {
-  const accessibleFrames = accessibleFrameSet()
-  const all = collectCandidatesIn(scanRoot(document))
-  for (const ctx of getAccessibleFrames(cssPath)) {
-    all.push(...collectCandidatesIn(scanRoot(ctx.doc), ctx))
+function collectCandidates(scopes: ScanScope[]): TaggedElement[] {
+  const accessibleFrames = new Set(scopes.map(s => s.frame?.frameEl).filter(Boolean))
+  const all: TaggedElement[] = []
+  for (const scope of scopes) {
+    all.push(...collectCandidatesIn(scanRoot(scope.doc), scope.frame))
   }
-  return all.filter(item => !(item.frame === undefined && item.el instanceof HTMLIFrameElement && accessibleFrames.has(item.el)))
+  // An <iframe> element whose content is being scanned should not itself count
+  // as an interactive candidate — its children already represent it.
+  return all.filter(item => !(isFrameElement(item.el) && accessibleFrames.has(item.el)))
 }
 
 function isStrongControl(el: Element): boolean {
@@ -399,13 +419,10 @@ function collectVisibleTextsIn(root: ParentNode, limit: number, frame?: FrameCon
   return out
 }
 
-function collectVisibleTexts(limit: number): any[] {
+function collectVisibleTexts(limit: number, scopes: ScanScope[]): any[] {
   const out: any[] = []
-  for (const chunk of [
-    collectVisibleTextsIn(scanRoot(document), limit),
-    ...getAccessibleFrames(cssPath).map(ctx => collectVisibleTextsIn(scanRoot(ctx.doc), limit, ctx)),
-  ]) {
-    for (const item of chunk) {
+  for (const scope of scopes) {
+    for (const item of collectVisibleTextsIn(scanRoot(scope.doc), limit, scope.frame)) {
       out.push(item)
       if (out.length >= limit) return out
     }
@@ -413,24 +430,23 @@ function collectVisibleTexts(limit: number): any[] {
   return out
 }
 
-function collectBlockedCandidates(all: TaggedElement[], hittableSet: Set<HTMLElement>): HTMLElement[] {
+function collectBlockedCandidates(all: TaggedElement[], hittableSet: Set<HTMLElement>, scopes: ScanScope[]): HTMLElement[] {
   const out: HTMLElement[] = []
   const seen = new Set<Element>()
   const add = (el: Element | null) => {
-    if (!(el instanceof HTMLElement) || seen.has(el) || hittableSet.has(el)) return
+    if (!isHTMLElement(el) || seen.has(el) || hittableSet.has(el)) return
     seen.add(el)
     if (isVisible(el) && (isDisabled(el) || el.matches(CONTROL) || el.matches(INTERACTIVE))) out.push(el)
   }
 
   all.forEach(item => add(item.el))
-  document.querySelectorAll(CONTROL).forEach(add)
-  for (const ctx of getAccessibleFrames(cssPath)) {
-    scanRoot(ctx.doc).querySelectorAll(CONTROL).forEach(add)
+  for (const scope of scopes) {
+    scanRoot(scope.doc).querySelectorAll(CONTROL).forEach(add)
   }
   return out
 }
 
-function collectFrameItems(): { items: any[]; overlay: Array<{ el: HTMLIFrameElement; frame?: FrameContext }> } {
+function collectFrameItems(scopeFrame?: FrameContext | null): { items: any[]; overlay: Array<{ el: HTMLIFrameElement; frame?: FrameContext }> } {
   const items: any[] = []
   const overlay: Array<{ el: HTMLIFrameElement; frame?: FrameContext }> = []
 
@@ -454,7 +470,7 @@ function collectFrameItems(): { items: any[]; overlay: Array<{ el: HTMLIFrameEle
         role: 'document',
         text: ctx
           ? `iframe (same-origin: ${label})`
-          : 'iframe (cross-origin, content not accessible)',
+          : 'iframe (content not directly accessible from parent — cross-origin or isolated; 其内容若可注入会以 crossOrigin=true 的 items 合并返回)',
         name,
         title,
         src,
@@ -471,8 +487,26 @@ function collectFrameItems(): { items: any[]; overlay: Array<{ el: HTMLIFrameEle
     }
   }
 
-  visit(document)
+  if (scopeFrame) visit(scopeFrame.doc, scopeFrame)
+  else visit(document)
   return { items, overlay }
+}
+
+// Real document URLs of every frame the same-origin recursion actually reached.
+// The background compares this list against chrome.webNavigation's frame list to
+// find frames that *look* same-origin by URL but are not reachable through
+// contentDocument (document.domain mismatch — e.g. bilibili sets it on some pages
+// but not others — or sandboxed frames), and gives those their own per-frame
+// observe pass instead of silently losing their content.
+export function accessibleFrameDocUrls(): string[] {
+  const out: string[] = []
+  for (const ctx of getAccessibleFrames(cssPath)) {
+    try {
+      const href = ctx.doc.location?.href
+      if (href && href !== 'about:blank') out.push(href)
+    } catch { /* frame detached mid-scan */ }
+  }
+  return out
 }
 
 type MarkStatus = 'clickable' | 'blocked' | 'frame'
@@ -589,7 +623,7 @@ function collectVisibleMediaIn(root: ParentNode, frame?: FrameContext): MediaRec
   const out: MediaRecord[] = []
   const seen = new Set<Element>()
   const add = (el: Element | null) => {
-    if (!(el instanceof HTMLElement) || seen.has(el)) return
+    if (!isHTMLElement(el) || seen.has(el)) return
     seen.add(el)
     if (!isVisible(el) || isInsideInteractive(el)) return
     const r = frame ? elementViewportRect(el, frame) : rectInfo(el.getBoundingClientRect())
@@ -604,10 +638,10 @@ function collectVisibleMediaIn(root: ParentNode, frame?: FrameContext): MediaRec
   return out
 }
 
-function collectVisibleMedia(): MediaRecord[] {
-  const out = collectVisibleMediaIn(scanRoot(document))
-  for (const ctx of getAccessibleFrames(cssPath)) {
-    out.push(...collectVisibleMediaIn(scanRoot(ctx.doc), ctx))
+function collectVisibleMedia(scopes: ScanScope[]): MediaRecord[] {
+  const out: MediaRecord[] = []
+  for (const scope of scopes) {
+    out.push(...collectVisibleMediaIn(scanRoot(scope.doc), scope.frame))
   }
   return out
 }
@@ -712,7 +746,17 @@ export function doObserve(msg: any) {
   const wantText = !categoryFilter || categoryFilter.has('text')
   const wantFrame = !categoryFilter || categoryFilter.has('frame')
 
-  const all = collectCandidates()
+  // Optional frame scoping: observe only one same-origin iframe (and its
+  // descendants). This is the escape hatch when the full-page result is too
+  // large — the editor iframe alone fits comfortably where page+iframe doesn't.
+  const wantsScope = !!(msg.frame || msg.frame_selector || (Array.isArray(msg.frame_path) && msg.frame_path.length))
+  const scopeFrame = wantsScope ? resolveFrameBySelector(msg.frame ?? msg.frame_selector, msg.frame_path) : null
+  if (wantsScope && !scopeFrame) {
+    throw new Error(`Frame not found or not accessible: ${msg.frame || msg.frame_selector || (msg.frame_path || []).join(' > ')} — 用 browser_observe {filter:"frame"} 查看可用 iframe 的 frameSelector/framePath。`)
+  }
+  const scopes = scanScopes(scopeFrame)
+
+  const all = collectCandidates(scopes)
   const iframeCandidates = all.filter(item => item.frame)
   const isItemHittable = (item: TaggedElement) => item.frame
     ? isLikelyInteractableInFrame(item.el, item.frame)
@@ -720,8 +764,8 @@ export function doObserve(msg: any) {
   const hittable = all.filter(isItemHittable)
   const iframeHittable = hittable.filter(item => item.frame)
   const set = new Set<HTMLElement>(hittable.map(item => item.el))
-  const blockedForMarks = collectBlockedCandidates(all, set)
-  const frameScan = collectFrameItems()
+  const blockedForMarks = collectBlockedCandidates(all, set, scopes)
+  const frameScan = collectFrameItems(scopeFrame)
   const frameItems = wantFrame
     ? frameScan.items.filter(frame =>
       (!tagFilter || tagFilter.has('iframe')) &&
@@ -754,7 +798,7 @@ export function doObserve(msg: any) {
   const slicedRecords = interactiveRecords.slice(0, limit)
 
   const mediaRecords = (!categoryFilter || categoryFilter.has('media') || categoryFilter.has('image') || categoryFilter.has('video') || categoryFilter.has('audio'))
-    ? collectVisibleMedia()
+    ? collectVisibleMedia(scopes)
       .filter(rec => mediaCategoryAllowed(rec.category, categoryFilter))
       .filter(rec => matchesElementFilters(rec.el, tagFilter, keyword, rec.text))
       .sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x)
@@ -781,7 +825,7 @@ export function doObserve(msg: any) {
     return item
   })
 
-  const rawTexts = (includeText && wantText) ? collectVisibleTexts(textLimit)
+  const rawTexts = (includeText && wantText) ? collectVisibleTexts(textLimit, scopes)
     .filter((t: any) => (!tagFilter || tagFilter.has(String(t.tag || '').toLowerCase())) && (!keyword || String(t.text || '').toLowerCase().includes(keyword)))
     : []
   const iframeTextCount = rawTexts.filter((t: any) => t.inFrame).length
@@ -861,8 +905,9 @@ export function doObserve(msg: any) {
       marked: false,
       scroll: { y: ctx.scrollY, percent: ctx.scrollPercent, atTop: ctx.atTop, atBottom: ctx.atBottom },
       currentSection: ctx.currentSection,
+      ...(scopeFrame ? { scopedToFrame: buildFramePath(scopeFrame) } : {}),
       items: [],
-      hint: `当前 observe 匹配到 ${candidateItems.length} 个条目（可交互 ${interactiveRecords.length} 个），超过 limit=${limit} 或 max_items=${maxItems}，为避免返回过多内容已不返回 items。请使用 filter（button/link/input/image/video/text/frame 等）、tag/tags、keyword，或提高 limit/max_items；categoryCounts 给出了各类别数量。`,
+      hint: `当前 observe 匹配到 ${candidateItems.length} 个条目（可交互 ${interactiveRecords.length} 个），超过 limit=${limit} 或 max_items=${maxItems}，为避免返回过多内容已不返回 items。请使用 filter（button/link/input/image/video/text/frame 等）、tag/tags、keyword，或提高 limit/max_items；也可传 frame（iframe 的 frameSelector）或 frame_path 只观察某个 iframe 内部；categoryCounts 给出了各类别数量。`,
     }
   }
 
@@ -907,6 +952,7 @@ export function doObserve(msg: any) {
     itemCount: items.length,
     frameCount: frameItems.length,
     accessibleFrameCount: frameItems.filter(f => f.accessible).length,
+    accessibleFrameUrls: accessibleFrameDocUrls(),
     iframeCandidates: iframeCandidates.length,
     iframeHittable: iframeHittable.length,
     iframeTextCount,
@@ -935,6 +981,7 @@ export function doObserve(msg: any) {
     marked,
     scroll: { y: ctx.scrollY, percent: ctx.scrollPercent, atTop: ctx.atTop, atBottom: ctx.atBottom },
     currentSection: ctx.currentSection,
+    ...(scopeFrame ? { scopedToFrame: buildFramePath(scopeFrame) } : {}),
     items: items.map(slimItem),
     hint: '返回 items 单一混排列表（按位置排序，已去重——不再单独返回 texts/elements/frames，全部内容都在 items 里，用 kind 区分）：' +
       'kind=text 可见文本（不可点击），kind=media 图片/视频/音频（不可点击；category=image/video/audio），kind=frame 页面内 iframe 边界（accessible=true 表示同源已扫描，子元素见 inFrame=true 的 interactive；accessible=false 为跨域不可用坐标点击），kind=interactive 可点击元素（每个带独立 id，用 browser_action {action:"click", ref:id} 点击）。' +

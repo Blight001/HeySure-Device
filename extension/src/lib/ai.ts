@@ -151,7 +151,20 @@ export async function callAI(
     }
   }
 
-  const res  = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body) })
+  // A stalled connection (dropped packets, no RST) leaves plain fetch() hanging
+  // indefinitely with no way to cancel — this is what makes chat look "stuck" under
+  // network fluctuation. AbortController turns that into a bounded, clear failure.
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 60000)
+  let res: Response
+  try {
+    res = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body), signal: controller.signal })
+  } catch (err: any) {
+    if (err?.name === 'AbortError') throw new Error('AI API request timed out after 60s')
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
   const data: any = await res.json()
   if (!res.ok) throw new Error(data?.error?.message || `AI API error ${res.status}`)
 

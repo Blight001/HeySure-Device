@@ -328,11 +328,16 @@ export async function fxDragPath(sx: number, sy: number, ex: number, ey: number)
   fxScheduleHide()
 }
 
-export async function fxToElement(el: Element) {
+// `at` overrides the glide destination with explicit top-viewport coordinates —
+// needed for elements inside iframes, whose getBoundingClientRect is relative to
+// the frame's own viewport, not the top page where the fx overlay lives.
+export async function fxToElement(el: Element, at?: { x: number; y: number }) {
   if (!isFxEnabled()) return
   const r = (el as HTMLElement).getBoundingClientRect()
-  const x = Math.min(Math.max(r.left + r.width / 2, 4), window.innerWidth - 4)
-  const y = Math.min(Math.max(r.top + r.height / 2, 4), window.innerHeight - 4)
+  const cx = at ? at.x : r.left + r.width / 2
+  const cy = at ? at.y : r.top + r.height / 2
+  const x = Math.min(Math.max(cx, 4), window.innerWidth - 4)
+  const y = Math.min(Math.max(cy, 4), window.innerHeight - 4)
   await fxMoveTo(x, y)
 }
 

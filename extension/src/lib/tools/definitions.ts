@@ -55,6 +55,8 @@ export const BROWSER_TOOLS: AIToolDef[] = [
         include_text: { type: 'boolean', description: '是否同时包含普通可见文本（items 中 kind=text 的条目）。默认 true；传 false 时只返回可交互元素。' },
         text_limit: { type: 'number', description: '最多返回的普通可见文本条数。默认 200，最大 500。' },
         allow_truncate: { type: 'boolean', description: '为 true 时即使超过 limit/max_items 也截断返回；默认 false，即超量时不返回 items，只给 categoryCounts 和筛选提示。' },
+        frame: { type: 'string', description: '只观察指定同源 iframe 内部（含其子 iframe）：传该 iframe 的 CSS selector，即上次 observe 中 kind=frame 条目的 frameSelector。页面元素太多、返回内容被截断时，用它下钻到目标 iframe（如嵌入的富文本编辑器），单独拿它内部的完整元素列表。' },
+        frame_path: { type: 'array', items: { type: 'string' }, description: '嵌套 iframe 的逐层 selector 路径（即 observe 返回的 framePath），从顶层文档到目标 iframe。与 frame 二选一，嵌套多层时用它。' },
         mark:  { type: 'boolean', description: '是否在页面上绘制无序号状态色标记，便于随后截图查看。默认 true；绿色=可点击，红色=不可点击/被禁用/被遮挡；传 false 仅返回列表并清除已有标记。标记仅为视觉叠加，不影响其他取数工具或截图，也不拦截点击。' },
         observe_timeout_ms: { type: 'number', description: '本次 observe 等待/扫描的最大时长（毫秒，默认 8000，上限 30000）；包括顶层页面与跨域 iframe 的观察，超时则结束本次调用。' },
         wait_timeout_ms: { type: 'number', description: 'observe_timeout_ms 的通用别名：本次 observe 最多等待多久。' },

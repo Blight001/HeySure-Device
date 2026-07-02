@@ -73,8 +73,15 @@ async function isTabForeground(tab: chrome.tabs.Tab): Promise<boolean> {
 // (arbitrary) sendResponse would be kept — so every call must target a specific
 // frame. Default to the top frame (frameId 0); cross-frame tools pass an
 // explicit frameId obtained from chrome.webNavigation.getAllFrames.
+// A dead/stalled content script never calls sendResponse, and chrome.runtime.lastError
+// only fires for immediate delivery failures — not for a receiver that went silent
+// mid-flight (page navigation, network-stalled script, suspended service worker). Without
+// a hard timeout this promise can hang forever, which is what makes calls look "stuck"
+// under network fluctuation instead of failing fast.
+const CONTENT_MSG_TIMEOUT_MS = 15000
+
 function sendToContent(tabId: number, msg: any, frameId = 0): Promise<any> {
-  return new Promise<any>((resolve, reject) => {
+  const raw = new Promise<any>((resolve, reject) => {
     chrome.tabs.sendMessage(tabId, msg, { frameId }, (response) => {
       const err = chrome.runtime.lastError
       if (err) {
@@ -84,6 +91,7 @@ function sendToContent(tabId: number, msg: any, frameId = 0): Promise<any> {
       resolve(response)
     })
   })
+  return withTimeout(raw, CONTENT_MSG_TIMEOUT_MS, `content action "${msg?.action || 'message'}"`)
 }
 
 // The content script is normally auto-injected via the manifest, but only on
@@ -164,13 +172,18 @@ async function contentMsg(tabId: number, msg: any, frameId = 0): Promise<any> {
   }
 }
 
-// ── Cross-frame helpers (cross-origin iframe observe / click) ───────────────
+// ── Cross-frame helpers (isolated iframe observe / click) ───────────────────
 // The content script's doObserve already scans its own document plus every
-// *same-origin* descendant frame (reaching them through contentDocument). What
-// it cannot reach is a *cross-origin* iframe — the browser blocks contentDocument
-// access there. To cover those, the content script is injected into every frame
-// (manifest all_frames) and the background fans browser_observe out to each
-// cross-origin frame, then merges the per-frame results into one list.
+// descendant frame it can reach through contentDocument. What it cannot reach:
+//   - cross-origin iframes (browser blocks contentDocument), and
+//   - frames that *look* same-origin by URL but are still isolated — a
+//     document.domain mismatch (bilibili sets it on some member.bilibili.com
+//     pages but not on the embedded editor page) or a sandboxed frame.
+// To cover those, the content script is injected into every frame (manifest
+// all_frames) and the background fans browser_observe out to each unreached
+// frame, then merges the per-frame results into one list. The top frame reports
+// which frame documents it actually reached (accessibleFrameUrls), so "unreached"
+// is decided by observation, not by comparing URL origins alone.
 
 interface FrameNode {
   frameId: number
@@ -203,22 +216,31 @@ async function listFrames(tabId: number): Promise<FrameNode[]> {
   }
 }
 
-// A frame needs its own observe pass only when it is cross-origin relative to its
-// immediate parent. Same-origin frames (and about:blank / srcdoc, which inherit
-// their parent's origin) are already covered by an ancestor's same-origin
-// recursion, so observing them again would double-count their content.
-function crossOriginFrameRoots(frames: FrameNode[]): FrameNode[] {
+// A frame needs its own observe pass when the top frame's recursion did not
+// reach it: every cross-origin frame, plus same-URL-origin frames that are still
+// isolated (document.domain mismatch, sandbox). `reachedUrls` holds the document
+// URLs the top frame actually scanned; frames on that list — and about:blank /
+// srcdoc frames, which inherit their parent's origin — are skipped so their
+// content is not double-counted. A same-origin child of a frame that is itself
+// being fanned out is also skipped: that parent's own recursion covers it.
+function frameRootsNeedingOwnPass(frames: FrameNode[], reachedUrls: Set<string>): FrameNode[] {
   const byId = new Map<number, FrameNode>()
   for (const f of frames) byId.set(f.frameId, f)
+  const stripHash = (u: string) => u.split('#')[0]
+  const reachedByTop = (f: FrameNode | undefined) =>
+    !!f && (f.frameId === 0 || reachedUrls.has(stripHash(f.url)))
   const roots: FrameNode[] = []
   for (const f of frames) {
     if (f.frameId === 0) continue
-    const parent = byId.get(f.parentFrameId)
-    const childOrigin = f.origin
-    const parentOrigin = parent?.origin ?? ''
     // No usable origin (about:blank/srcdoc/empty) → inherits parent → skip.
-    if (!childOrigin) continue
-    if (childOrigin !== parentOrigin) roots.push(f)
+    if (!f.origin) continue
+    if (reachedUrls.has(stripHash(f.url))) continue
+    const parent = byId.get(f.parentFrameId)
+    if (f.origin !== (parent?.origin ?? '')) { roots.push(f); continue }
+    // Same URL origin as its parent yet unreached — isolated frame. Fan out only
+    // when the parent itself was reached from the top; otherwise the parent is
+    // (or will be) fanned out and its recursion is expected to cover this child.
+    if (reachedByTop(parent)) roots.push(f)
   }
   return roots
 }
@@ -1125,7 +1147,14 @@ function observeMsg(args: any) {
     query: args.query,
     text_filter: args.text_filter,
     allow_truncate: args.allow_truncate,
+    frame: args.frame,
+    frame_selector: args.frame_selector,
+    frame_path: args.frame_path,
   }
+}
+
+function observeIsFrameScoped(args: any): boolean {
+  return !!(args?.frame || args?.frame_selector || (Array.isArray(args?.frame_path) && args.frame_path.length))
 }
 
 // Re-key a cross-origin frame's observe result so it merges cleanly into the
@@ -1185,10 +1214,20 @@ async function toolObserveWithin(args: any, timeoutMs: number): Promise<any> {
   )
   if (base?.tooMany) return rememberObserveSnapshot(tab.id!, base)
 
-  // Cross-origin iframes can't be read from the top frame; observe each one in
-  // its own frame and merge. Same-origin frames are already covered by the top
-  // frame's recursion, so they are intentionally not re-observed here.
-  const roots = crossOriginFrameRoots(await listFrames(tab.id!))
+  // A frame-scoped observe deliberately looks at one iframe only — merging
+  // other frames' content back in would defeat the point of scoping.
+  if (observeIsFrameScoped(args)) return rememberObserveSnapshot(tab.id!, base)
+
+  // Frames the top frame couldn't reach via contentDocument (cross-origin, or
+  // same-URL-origin but isolated by document.domain/sandbox) get their own
+  // observe pass and are merged. Frames the top frame reported as reached
+  // (accessibleFrameUrls) are intentionally not re-observed here.
+  const reachedUrls = new Set<string>(
+    (Array.isArray(base?.accessibleFrameUrls) ? base.accessibleFrameUrls : [])
+      .map((u: any) => String(u || '').split('#')[0])
+      .filter(Boolean),
+  )
+  const roots = frameRootsNeedingOwnPass(await listFrames(tab.id!), reachedUrls)
   const observed = roots.slice(0, MAX_CROSS_ORIGIN_FRAMES)
   const frameResults = await Promise.all(observed.map(async (frame) => {
     try {

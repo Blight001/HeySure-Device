@@ -8,7 +8,17 @@ import {
   fxToElement, fxClickAt, fxSleep, fxDragPath, fxScrollDrag, isFxEnabled, getFxPos,
   fxHoverOn, fxScreenshotBefore, fxScreenshotAfter, fxScreenshotClear,
 } from './fx'
+import { FrameContext, ownerWindow, toTopViewportPoint } from './iframe'
 import { viewportContext, waitScrollSettle } from './viewport'
+
+// Coordinates resolved for an element inside a same-origin iframe are local to
+// that frame's viewport. Anything that lives in the *top* page's coordinate
+// space — the CDP trusted click (resolveOnly), the fx cursor overlay — needs the
+// translated point; synthetic events dispatched to the element itself keep the
+// frame-local clientX/clientY a real user gesture would carry.
+function topViewportPoint(x: number, y: number, frame?: FrameContext): { x: number; y: number } {
+  return frame ? toTopViewportPoint(x, y, frame) : { x, y }
+}
 
 // ── Click ─────────────────────────────────────────────────────────────────
 export async function doClick(msg: any) {
@@ -69,10 +79,14 @@ export async function doClick(msg: any) {
   // the visibility/occlusion guards above, so just hand back the final viewport
   // coordinates and let background dispatch the real click. No events fired here.
   if (msg.resolveOnly) {
+    // CDP dispatches at top-page coordinates; translate frame-local centers so a
+    // trusted click on an element inside a same-origin iframe lands on it
+    // instead of on whatever sits at those coordinates in the main page.
+    const p = topViewportPoint(x, y, frame)
     return {
       success: true,
       resolved: true,
-      x, y,
+      x: p.x, y: p.y,
       tag: el.tagName,
       text: textOf(el, 100),
       selector: cssPath(el),
@@ -81,8 +95,9 @@ export async function doClick(msg: any) {
 
   if (isFxEnabled()) {
     if (!viaCoords) await fxSleep(220)   // let the smooth scroll settle before aiming
-    await fxToElement(el)                // glide the virtual cursor to the element
-    await fxClickAt(x, y)
+    const p = topViewportPoint(x, y, frame)
+    await fxToElement(el, frame ? p : undefined)  // glide the virtual cursor to the element
+    await fxClickAt(p.x, p.y)
     await fxSleep(80)
   }
   clickLikeUser(el, { x, y })
@@ -97,12 +112,12 @@ export async function doClick(msg: any) {
 
 // ── Double click ────────────────────────────────────────────────────────────
 export async function doDoubleClick(msg: any) {
-  const { el } = resolveTarget(msg)
+  const { el, frame } = resolveTarget(msg)
   if (!el) throw new Error(`Element not found: selector=${msg.selector || ''} text=${msg.text || ''} coords=${msg.x},${msg.y}`)
   el.scrollIntoView({ block: 'center', behavior: 'auto' })
-  if (isFxEnabled()) { await fxSleep(220); await fxToElement(el); const c = elCenter(el); await fxClickAt(c.x, c.y, 'double'); await fxSleep(80) }
+  if (isFxEnabled()) { await fxSleep(220); const c0 = elCenter(el); const p = topViewportPoint(c0.x, c0.y, frame); await fxToElement(el, frame ? p : undefined); await fxClickAt(p.x, p.y, 'double'); await fxSleep(80) }
   const c = elCenter(el)
-  const opts = { bubbles: true, cancelable: true, view: window, clientX: c.x, clientY: c.y } as MouseEventInit
+  const opts = { bubbles: true, cancelable: true, view: ownerWindow(el), clientX: c.x, clientY: c.y } as MouseEventInit
   el.dispatchEvent(new MouseEvent('mousedown', opts))
   el.dispatchEvent(new MouseEvent('mouseup', opts))
   el.dispatchEvent(new MouseEvent('click', { ...opts, detail: 1 }))
@@ -115,12 +130,12 @@ export async function doDoubleClick(msg: any) {
 
 // ── Right click (context menu) ────────────────────────────────────────────────
 export async function doRightClick(msg: any) {
-  const { el } = resolveTarget(msg)
+  const { el, frame } = resolveTarget(msg)
   if (!el) throw new Error(`Element not found: selector=${msg.selector || ''} text=${msg.text || ''} coords=${msg.x},${msg.y}`)
   el.scrollIntoView({ block: 'center', behavior: 'auto' })
-  if (isFxEnabled()) { await fxSleep(220); await fxToElement(el); const c = elCenter(el); await fxClickAt(c.x, c.y, 'right'); await fxSleep(80) }
+  if (isFxEnabled()) { await fxSleep(220); const c0 = elCenter(el); const p = topViewportPoint(c0.x, c0.y, frame); await fxToElement(el, frame ? p : undefined); await fxClickAt(p.x, p.y, 'right'); await fxSleep(80) }
   const c = elCenter(el)
-  const opts = { bubbles: true, cancelable: true, view: window, button: 2, buttons: 2, clientX: c.x, clientY: c.y } as MouseEventInit
+  const opts = { bubbles: true, cancelable: true, view: ownerWindow(el), button: 2, buttons: 2, clientX: c.x, clientY: c.y } as MouseEventInit
   el.dispatchEvent(new MouseEvent('mousedown', opts))
   el.dispatchEvent(new MouseEvent('mouseup', opts))
   el.dispatchEvent(new MouseEvent('contextmenu', opts))
@@ -841,17 +856,23 @@ function setNativeValue(el: HTMLElement, field: FillField) {
     return
   }
 
-  if (el instanceof HTMLSelectElement) {
+  // Tag-name checks instead of instanceof: elements inside a same-origin iframe
+  // are instances of that frame window's constructors, so instanceof against the
+  // top window's HTMLSelectElement/HTMLInputElement is always false for them.
+  const tag = el.tagName
+  if (tag === 'SELECT') {
+    const sel = el as HTMLSelectElement
     const wanted = String(value ?? '')
-    const opt = Array.from(el.options).find(o => o.value === wanted || o.text.trim() === wanted)
+    const opt = Array.from(sel.options).find(o => o.value === wanted || o.text.trim() === wanted)
     if (!opt) throw new Error(`Option not found: ${wanted}`)
-    el.value = opt.value
-  } else if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) {
-    if (action === 'uncheck') el.checked = false
-    else if (action === 'check') el.checked = true
-    else el.checked = Boolean(value)
-  } else if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-    el.value = String(value ?? '')
+    sel.value = opt.value
+  } else if (tag === 'INPUT' && ((el as HTMLInputElement).type === 'checkbox' || (el as HTMLInputElement).type === 'radio')) {
+    const box = el as HTMLInputElement
+    if (action === 'uncheck') box.checked = false
+    else if (action === 'check') box.checked = true
+    else box.checked = Boolean(value)
+  } else if (tag === 'INPUT' || tag === 'TEXTAREA') {
+    (el as HTMLInputElement).value = String(value ?? '')
   } else if (el.isContentEditable) {
     el.textContent = String(value ?? '')
   } else {
@@ -930,12 +951,13 @@ export async function doSelect(msg: any) {
 
   if (msg.value === undefined || msg.value === null || String(msg.value) === '') throw new Error('value is required')
   const value = String(msg.value)
-  if (el instanceof HTMLSelectElement) {
-    const opt = Array.from(el.options).find(o => o.value === value || o.text.trim() === value)
+  if (el.tagName === 'SELECT') {
+    const sel = el as unknown as HTMLSelectElement
+    const opt = Array.from(sel.options).find(o => o.value === value || o.text.trim() === value)
     if (!opt) throw new Error(`Option "${value}" not found in ${msg.selector}`)
-    el.value = opt.value
-    el.dispatchEvent(new Event('input', { bubbles: true }))
-    el.dispatchEvent(new Event('change', { bubbles: true }))
+    sel.value = opt.value
+    sel.dispatchEvent(new Event('input', { bubbles: true }))
+    sel.dispatchEvent(new Event('change', { bubbles: true }))
     return { success: true, selector: msg.selector, selected: opt.text, value: opt.value, mode: 'native' }
   }
 

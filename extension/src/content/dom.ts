@@ -4,14 +4,14 @@
 
 import { FX } from './fx'
 import {
-  FrameContext, buildFramePath, hitTargetAtViewport, isHittableInViewport,
-  isTopmostAtViewport, occluderAtViewport, ownerWindow,
+  FrameContext, buildFramePath, hitTargetAtViewport, isElement, isHittableInViewport,
+  isHTMLElement, isTopmostAtViewport, occluderAtViewport, ownerWindow,
   resolveFrameBySelector, scanRoot, visitAccessibleFrames,
 } from './iframe'
 import { getMarkTarget } from './marks'
 
 export function isVisible(el: Element | null): el is HTMLElement {
-  if (!el || !(el instanceof HTMLElement)) return false
+  if (!el || !isHTMLElement(el)) return false
   if (el.id?.startsWith(FX)) return false
   const s = getComputedStyle(el)
   if (s.display === 'none' || s.visibility === 'hidden' || Number(s.opacity) === 0) return false
@@ -97,7 +97,7 @@ function stableAttrSelector(el: Element): string {
 // the click would then hit something else or "not be found". We now verify the
 // round-trip and keep climbing/anchoring until the selector is unique.
 export function cssPath(el: Element): string {
-  if (!(el instanceof Element)) return ''
+  if (!isElement(el)) return ''
   const attrSel = stableAttrSelector(el)
   if (attrSel) return attrSel
 

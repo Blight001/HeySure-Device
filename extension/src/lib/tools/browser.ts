@@ -412,6 +412,24 @@ function boundedTimeout(value: any, fallback: number, min = 1000, max = 30000) {
   return Math.min(max, Math.max(min, Math.round(n)))
 }
 
+function observeWaitTimeoutMs(args: any): number {
+  return boundedTimeout(
+    args?.observe_timeout_ms ?? args?.wait_timeout_ms ?? args?.max_wait_ms ?? args?.timeout_ms,
+    8000,
+    500,
+    30000,
+  )
+}
+
+function actionWaitTimeoutMs(args: any): number {
+  return boundedTimeout(
+    args?.wait_timeout_ms ?? args?.max_wait_ms ?? args?.settle_timeout,
+    3000,
+    200,
+    8000,
+  )
+}
+
 type ScreenshotFormat = 'png' | 'jpeg' | 'webp'
 
 type ScreenshotClip = {
@@ -995,6 +1013,7 @@ function wantsAutoObserve(args: any): boolean {
 
 async function autoObserveAfterAction(tab: chrome.tabs.Tab, args: any, frameId = 0): Promise<{ observe: any; previousObserve: any | undefined } | null> {
   const tabId = tab.id!
+  const waitTimeoutMs = actionWaitTimeoutMs(args)
   let changed = false
   let navigated = false
 
@@ -1003,7 +1022,7 @@ async function autoObserveAfterAction(tab: chrome.tabs.Tab, args: any, frameId =
     // iframe is invisible to the top frame's observer.
     const settle = await contentMsg(tabId, {
       action: 'await_settle',
-      timeout: args.settle_timeout,
+      timeout: waitTimeoutMs,
       quiet: args.settle_quiet,
       idle_window: args.settle_idle_window,
     }, frameId)
@@ -1026,7 +1045,7 @@ async function autoObserveAfterAction(tab: chrome.tabs.Tab, args: any, frameId =
 
   try {
     const previousObserve = observeCacheByTab.get(tabId)
-    return { observe: await toolObserve(args), previousObserve }
+    return { observe: await toolObserve({ ...args, observe_timeout_ms: args.observe_timeout_ms ?? waitTimeoutMs }), previousObserve }
   } catch {
     return null  // observe is a best-effort enrichment; never fail the action over it
   }
@@ -1151,8 +1170,19 @@ function observeCategoryCounts(items: any[]): Record<string, number> {
 }
 
 async function toolObserve(args: any): Promise<any> {
+  const timeoutMs = observeWaitTimeoutMs(args)
+  return withTimeout(toolObserveWithin(args, timeoutMs), timeoutMs, 'browser_observe')
+}
+
+async function toolObserveWithin(args: any, timeoutMs: number): Promise<any> {
+  const startedAt = Date.now()
+  const remainingMs = () => Math.max(250, timeoutMs - (Date.now() - startedAt))
   const tab = await getActiveTab()
-  const base = await contentMsg(tab.id!, observeMsg(args), 0)
+  const base = await withTimeout(
+    contentMsg(tab.id!, observeMsg(args), 0),
+    remainingMs(),
+    'browser_observe top frame',
+  )
   if (base?.tooMany) return rememberObserveSnapshot(tab.id!, base)
 
   // Cross-origin iframes can't be read from the top frame; observe each one in
@@ -1162,7 +1192,11 @@ async function toolObserve(args: any): Promise<any> {
   const observed = roots.slice(0, MAX_CROSS_ORIGIN_FRAMES)
   const frameResults = await Promise.all(observed.map(async (frame) => {
     try {
-      const res = await contentMsg(tab.id!, observeMsg(args), frame.frameId)
+      const res = await withTimeout(
+        contentMsg(tab.id!, observeMsg(args), frame.frameId),
+        Math.min(3000, remainingMs()),
+        `browser_observe frame ${frame.frameId}`,
+      )
       return { frame, ...tagFrameObserveResult(res, frame) }
     } catch {
       return null  // frame gone, restricted, or no script — skip it

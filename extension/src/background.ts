@@ -54,6 +54,46 @@ function taskTimeoutMs(task: DispatchedTask) {
   return 90000
 }
 
+// ── Task outcome cache ────────────────────────────────────────────────────
+// Completed outcomes are kept so a server re-dispatch of the same taskId gets
+// the cached answer, and so results produced while the socket was down or
+// being replaced can be re-sent on the next connect (see flushUnsentTaskOutcomes).
+const MAX_TASK_OUTCOMES = 100
+
+function rememberTaskOutcome(taskId: string, outcome: any) {
+  taskOutcomes.delete(taskId)
+  taskOutcomes.set(taskId, outcome)
+  for (const key of taskOutcomes.keys()) {
+    if (taskOutcomes.size <= MAX_TASK_OUTCOMES) break
+    if (taskOutcomes.get(key)?.kind === 'running') continue
+    taskOutcomes.delete(key)
+  }
+}
+
+// Send a finished outcome to the server, or mark it unsent when the socket is
+// down — emitting into a disconnected socket's buffer would double-send after
+// reconnect (buffer flush + our own flush), so we bypass the buffer entirely.
+function emitTaskOutcome(taskId: string, outcome: any) {
+  if (!socket?.connected) {
+    outcome.unsent = true
+    return
+  }
+  if (outcome.kind === 'result') socket.emit('task:result', outcome.payload)
+  else if (outcome.kind === 'error') socket.emit('task:error', { taskId, userId: outcome.userId, error: outcome.error })
+  outcome.unsent = false
+}
+
+// Re-deliver outcomes that never reached the server (socket torn down or
+// replaced at completion time). The server keeps the dispatch row and accepts
+// a late reply even after its waiter timed out, so this recovers the result
+// instead of leaving the operator with a bare timeout.
+function flushUnsentTaskOutcomes() {
+  if (!socket?.connected) return
+  for (const [taskId, outcome] of taskOutcomes) {
+    if (outcome?.unsent) emitTaskOutcome(taskId, outcome)
+  }
+}
+
 // ── Activity logging ──────────────────────────────────────────────────────
 function mkEntry(type: string, status: string, message: string, data?: any): ActivityEntry {
   return { id: Math.random().toString(36).slice(2), type, status, message, data, timestamp: Date.now() }
@@ -235,6 +275,9 @@ function attachOperationalListeners(s: Socket, agentName: string) {
     log('system', 'info', '已连接到服务器')
     // Re-register after auto-reconnect with the freshest aiConfigId.
     await register()
+    // Re-deliver any task results that finished while the socket was down —
+    // otherwise the server-side dispatch only ever sees a timeout.
+    flushUnsentTaskOutcomes()
   })
 
   s.on('disconnect', (reason: string) => {
@@ -393,8 +436,7 @@ async function handleTask(task: DispatchedTask) {
 
   const cached = taskOutcomes.get(taskId)
   if (cached) {
-    if (cached.kind === 'result') socket?.emit('task:result', cached.payload)
-    else if (cached.kind === 'error') socket?.emit('task:error', { taskId, error: cached.error })
+    if (cached.kind === 'result' || cached.kind === 'error') emitTaskOutcome(taskId, cached)
     return
   }
 
@@ -418,14 +460,16 @@ async function handleTask(task: DispatchedTask) {
       result:      outcome.result,
       summary:     outcome.summary,
     }
-    taskOutcomes.set(taskId, { kind: 'result', payload })
-    socket?.emit('task:result', payload)
+    const entry = { kind: 'result', payload }
+    rememberTaskOutcome(taskId, entry)
+    emitTaskOutcome(taskId, entry)
     log('task', outcome.success ? 'success' : 'error', `${outcome.success ? '完成' : '失败'}: ${outcome.tool}`, outcome.result)
     broadcast({ type: 'task:result', data: { taskId, tool: outcome.tool, result: outcome.result, success: outcome.success, timestamp: Date.now() } })
   } catch (err: any) {
     const errMsg = err?.message || String(err)
-    taskOutcomes.set(taskId, { kind: 'error', error: errMsg })
-    socket?.emit('task:error', { taskId, userId: task.userId, error: errMsg })
+    const entry = { kind: 'error', error: errMsg, userId: task.userId }
+    rememberTaskOutcome(taskId, entry)
+    emitTaskOutcome(taskId, entry)
     log('task', 'error', `异常: ${tool} — ${errMsg}`)
     broadcast({ type: 'task:result', data: { taskId, tool, result: null, success: false, timestamp: Date.now() } })
   }

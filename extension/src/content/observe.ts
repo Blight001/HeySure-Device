@@ -39,6 +39,7 @@ const INTERACTIVE = [
 
 const MARK_LAYER_ID = '__hs_marks_layer'
 const MARK_STYLE_ID = '__hs_marks_style'
+const MARK_CHANGE_EVENTS = ['scroll', 'resize', 'hashchange', 'popstate', 'pagehide'] as const
 const TEXT_NODE_TAGS_TO_SKIP = new Set(['script', 'style', 'noscript', 'template', 'svg', 'canvas'])
 const MEDIA_SELECTOR = 'img,video,audio'
 const CONTROL = [
@@ -660,8 +661,66 @@ function shouldDropNested(child: HTMLElement, parent: HTMLElement): boolean {
   return true
 }
 
+let markMutationObservers: MutationObserver[] = []
+let markAutoClearTimer: number | null = null
+
+function isOwnMarkNode(node: Node): boolean {
+  const el = node.nodeType === Node.ELEMENT_NODE
+    ? node as Element
+    : node.parentElement
+  return !!el?.closest?.(`#${MARK_LAYER_ID},#${MARK_STYLE_ID}`)
+}
+
+function isPageMutation(records: MutationRecord[]): boolean {
+  return records.some(record => {
+    if (isOwnMarkNode(record.target)) return false
+    return [...record.addedNodes, ...record.removedNodes].some(node => !isOwnMarkNode(node)) ||
+      record.type === 'characterData' ||
+      record.type === 'attributes'
+  })
+}
+
+function stopMarksAutoClear(): void {
+  if (markAutoClearTimer !== null) {
+    window.clearTimeout(markAutoClearTimer)
+    markAutoClearTimer = null
+  }
+  markMutationObservers.forEach(observer => observer.disconnect())
+  markMutationObservers = []
+  MARK_CHANGE_EVENTS.forEach(event => window.removeEventListener(event, clearMarksOverlay, true))
+}
+
 export function clearMarksOverlay(): void {
+  stopMarksAutoClear()
   document.getElementById(MARK_LAYER_ID)?.remove()
+}
+
+function watchDocumentForMarkChanges(doc: Document): void {
+  const root = doc.documentElement || doc.body
+  if (!root) return
+  const observer = new MutationObserver(records => {
+    if (isPageMutation(records)) clearMarksOverlay()
+  })
+  observer.observe(root, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    characterData: true,
+  })
+  markMutationObservers.push(observer)
+}
+
+function startMarksAutoClear(marks: Array<{ frame?: FrameContext }>): void {
+  stopMarksAutoClear()
+  markAutoClearTimer = window.setTimeout(() => {
+    markAutoClearTimer = null
+    const docs = new Set<Document>([document])
+    marks.forEach(mark => {
+      if (mark.frame?.doc) docs.add(mark.frame.doc)
+    })
+    docs.forEach(watchDocumentForMarkChanges)
+    MARK_CHANGE_EVENTS.forEach(event => window.addEventListener(event, clearMarksOverlay, true))
+  }, 150)
 }
 
 // Project one item down to just what the AI needs to understand + act on it.
@@ -731,6 +790,7 @@ function drawMarksOverlay(marks: Array<{ el: Element; status: MarkStatus; frame?
     layer.appendChild(box)
   })
   document.documentElement.appendChild(layer)
+  startMarksAutoClear(marks)
 }
 
 export function doObserve(msg: any) {

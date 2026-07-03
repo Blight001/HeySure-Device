@@ -2,7 +2,7 @@
 # One-click packaging for the HeySure Agent Mac desktop app.
 set -euo pipefail
 
-cd "$(dirname "$0")/mac"
+cd "$(dirname "$0")"
 
 if ! command -v npm >/dev/null 2>&1; then
   echo "[error] npm was not found. Please install Node.js first."

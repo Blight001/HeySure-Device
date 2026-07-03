@@ -2,7 +2,7 @@
 setlocal EnableExtensions
 
 rem One-click launcher for the Windows Tauri desktop app.
-cd /d "%~dp0windows"
+cd /d "%~dp0"
 
 if exist "%USERPROFILE%\.cargo\bin" set "PATH=%USERPROFILE%\.cargo\bin;%PATH%"
 

@@ -87,7 +87,7 @@ Linux 桌面端与 Windows 同源：壳内仅内置 `mcp.manage_dynamic_tool`，
 ### 测试前准备
 
 1. 启动后端 + Web 控制台
-2. 在 **X11** 会话下运行：`device/run-linux.sh` 或本目录 `npm run dev`
+2. 在 **X11** 会话下运行：`device/linux/run.sh` 或本目录 `./run.sh` / `npm run dev`
 3. 首次测试前：`npm run setup:python`（runtime 工具依赖 venv）
 4. 桌面端登录并绑定 AI 成员；仪表盘勾选所需 MCP 工具权限
 

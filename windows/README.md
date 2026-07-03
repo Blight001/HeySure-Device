@@ -46,11 +46,11 @@ Tauri 原型已停止从 device/shared 同步。
 
 ## 命令
 
-从 `device/` 目录双击：
+从 `device/windows/` 目录双击：
 
 ```bat
-run-windows.bat
-build-windows.bat
+run.bat
+build.bat
 ```
 
 手动命令：

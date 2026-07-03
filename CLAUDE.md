@@ -129,14 +129,14 @@ npm run tauri:dev       # 开发模式（无 sync-shared）
 npm run tauri:build     # NSIS 安装包（内部触发 npm run build）
 npm run typecheck       # 仅前端 TS 检查（CI/无 Rust 环境可用）
 
-# 根目录一键入口
-device\build-windows.bat   # Windows Tauri 打包（NSIS 安装包）
-device/build-linux.sh
-device/build-mac.sh
-device/build-extension.bat
-device\run-windows.bat     # Windows Tauri 直接运行（开发用）
-device/run-linux.sh
-device/run-mac.sh
+# 一键入口（位于各平台目录）
+device\windows\run.bat     # Windows Tauri 直接运行（开发用）
+device\windows\build.bat   # Windows Tauri 打包（NSIS 安装包）
+device/linux/run.sh
+device/linux/build.sh
+device/mac/run.sh
+device/mac/build.sh
+device/extension/build.bat
 
 # 浏览器扩展
 cd device/extension

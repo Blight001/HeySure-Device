@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions
 
-cd /d "%~dp0extension"
+cd /d "%~dp0"
 
 where npm >nul 2>nul
 if errorlevel 1 (

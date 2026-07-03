@@ -1,0 +1,29 @@
+[package]
+name = "heysure-device-tauri"
+version = "0.1.0"
+description = "HeySure Agent - Windows Desktop (Tauri 2 prototype)"
+license = "Apache-2.0"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png", "image-ico"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["process", "time", "sync", "io-util", "macros", "rt-multi-thread"] }
+# 远程控制的键鼠注入（robotjs 的 Rust 等价物）。
+enigo = "0.2"
+# 远程控制的原生屏幕捕获（Electron desktopCapturer 的等价物，无「屏幕共享」弹窗）。
+xcap = "0.4"
+# 帧编码：把捕获到的 RgbaImage 压成 JPEG（仅需 jpeg 编码器）。
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
+
+[profile.release]
+# 体积优先：这是本次迁移的核心目标之一。
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

@@ -25,7 +25,9 @@ export function registerAuthIpc(): void {
     store.set('serverUrl', base)
     store.set('agentSocketUrl', agentSocketUrl)
     store.set('authToken', data.access_token)
-    store.set('userAccount', remember ? account : '')
+    // Always keep the account for convenience; the checkbox controls whether
+    // the password is persisted locally.
+    store.set('userAccount', account)
     store.set('userPassword', remember ? password : '')
     store.set('rememberLogin', !!remember)
     store.set('userName', String(data.user?.name || data.user?.nickname || account))

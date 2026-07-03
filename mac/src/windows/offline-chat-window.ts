@@ -1,6 +1,7 @@
 import { BrowserWindow } from 'electron'
 import * as path from 'path'
 import { store } from '../store'
+import { resolveAssetsDir } from '../asset-path'
 
 const DEFAULT_BOUNDS = { width: 760, height: 700 }
 
@@ -13,7 +14,7 @@ export function createOfflineChatWindow(): BrowserWindow {
     return offlineChatWindow
   }
 
-  const iconPath = path.join(__dirname, '../../assets/icon.ico')
+  const iconPath = path.join(resolveAssetsDir(), 'icon.ico')
   offlineChatWindow = new BrowserWindow({
     width: DEFAULT_BOUNDS.width,
     height: DEFAULT_BOUNDS.height,

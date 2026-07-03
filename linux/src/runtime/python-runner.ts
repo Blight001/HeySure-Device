@@ -7,8 +7,11 @@
 // The runner appends a line that serializes ``result`` behind a sentinel, so it
 // can be split back out of stdout reliably.
 //
-// Interpreter resolution order: explicit pythonPath → $HEYSURE_PYTHON → a
-// bundled venv (device_runtime/python/.venv) → python3 / python on PATH.
+// Interpreter resolution order:
+//   explicit pythonPath → $HEYSURE_PYTHON
+//   → bundled portable Python (resources/bundled/python for packaged app, zero-config)
+//   → venv from `npm run setup:python` (dev only)
+//   → python on PATH (last resort, shows clear error if missing).
 
 import * as os from 'os'
 import * as fs from 'fs'
@@ -38,9 +41,8 @@ export interface PythonRunResult extends ProcessRunResult {
 let cachedPython: string | null | undefined
 
 function venvCandidates(): string[] {
-  // device_runtime/python/.venv created by scripts/setup-python.js. Resolved
-  // against a few roots so it works in dev (dist/ alongside the app) and when
-  // packaged (process.resourcesPath / cwd).
+  // device_runtime/python/.venv created by scripts/setup-python.js (dev only).
+  // Resolved against a few roots so it works in dev and when packaged.
   const roots = [
     path.resolve(__dirname, "..", "..", "device_runtime"),
     path.resolve(process.cwd(), "device_runtime"),
@@ -49,6 +51,24 @@ function venvCandidates(): string[] {
   if (resourcesPath) roots.push(path.join(resourcesPath, "device_runtime"))
   const sub = process.platform === "win32" ? ["Scripts", "python.exe"] : ["bin", "python"]
   return roots.map((root) => path.join(root, "python", ".venv", ...sub))
+}
+
+function bundledCandidates(): string[] {
+  // Bundled self-contained Python (embeddable + pip deps) produced by
+  // scripts/prepare-bundled-python.js and shipped via electron-builder
+  // extraResources for zero-config on target machines without Python.
+  // Located at <app>/bundled/python/python.exe in packaged app.
+  const roots: string[] = [
+    path.resolve(__dirname, "..", "..", "bundled"),
+    path.resolve(process.cwd(), "bundled"),
+  ]
+  const resourcesPath = (process as any).resourcesPath
+  if (resourcesPath) {
+    roots.push(path.join(resourcesPath, "bundled"))
+    // When using asar + unpacked native bits sometimes land here
+    roots.push(path.join(resourcesPath, "app.asar.unpacked", "bundled"))
+  }
+  return roots.map((root) => path.join(root, "python", "python.exe"))
 }
 
 function pathCandidates(): string[] {
@@ -62,10 +82,18 @@ export function resolvePython(): string | null {
   if (cachedPython !== undefined) return cachedPython
   const fromEnv = process.env.HEYSURE_PYTHON
   if (fromEnv && fs.existsSync(fromEnv)) { cachedPython = fromEnv; return cachedPython }
+
+  // 1. Bundled portable Python (preferred for packaged / end-user installs)
+  for (const candidate of bundledCandidates()) {
+    if (fs.existsSync(candidate)) { cachedPython = candidate; return cachedPython }
+  }
+
+  // 2. Dev venv created by `npm run setup:python`
   for (const candidate of venvCandidates()) {
     if (fs.existsSync(candidate)) { cachedPython = candidate; return cachedPython }
   }
-  // Fall back to the first PATH name; spawn surfaces ENOENT if truly absent.
+
+  // 3. Fall back to the first PATH name; spawn surfaces ENOENT if truly absent.
   cachedPython = pathCandidates()[0] || null
   return cachedPython
 }
@@ -103,7 +131,7 @@ export async function runPython(options: PythonRunOptions): Promise<PythonRunRes
   if (!python) {
     return {
       available: false, result: null, exitCode: 127, signal: null, stdout: '',
-      stderr: 'Python 不可用（未找到解释器，可设置 HEYSURE_PYTHON）。',
+      stderr: 'Python 不可用（未找到解释器）。打包版本应已内置 Python 运行时；开发环境请运行 `npm run setup:python`。可设置 HEYSURE_PYTHON 环境变量覆盖。',
       timedOut: false, truncated: false, killed: false, durationMs: 0,
     }
   }

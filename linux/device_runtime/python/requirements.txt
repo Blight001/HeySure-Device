@@ -1,6 +1,6 @@
 # HeySure 桌面端 Python 运行时依赖（Linux）。
 # 由 scripts/setup-python.js 安装进 device_runtime/python/.venv，
-# 供服务器下发的 runtime=python 工具调用（见 device/shared/src/runtime/python-runner.ts）。
+# 供服务器下发的 runtime=python 工具调用（见本平台 src/runtime/python-runner.ts）。
 # 这些是本机原生自动化库，无法在 CI/远程环境验证，请在目标机器上安装。
 # Linux 下键鼠/截图依赖 X11 会话；窗口管理仍走 wmctrl/xdotool（系统命令）。
 

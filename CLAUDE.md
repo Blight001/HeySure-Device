@@ -2,7 +2,7 @@
 
 六个端侧客户端（**只是运行在不同端的壳，本身不具备 agent 能力**），连接后端、注册为 endpoint。
 
-**本目录是独立仓库** `HeySure-Device`。共享代码位于 `shared/src`。
+**本目录是独立仓库** `HeySure-Device`。各平台（windows / linux / mac / windows-tauri / extension / android）代码与资产完全独立，不再共享 `shared/`。
 **桌面端已退化为受控运行器**：不再内置固定原生 MCP 工具，能力来自服务器下发的 runtime 工具（python/shell），由服务端编排/推理。
 
 ## 六种形态
@@ -10,6 +10,7 @@
 | 子目录 | 形态 | 作用 |
 | --- | --- | --- |
 | `windows/` | Electron 桌面（Windows） | 受控运行器：shell/PowerShell/python runner + 本机原生桥（截图/鼠标等支持代码） |
+| `windows-tauri/` | Tauri 2 桌面（Windows，**实验线**） | Electron 壳的轻量替代原型：登录/注册 + 动态 MCP + runtime 执行 + 远控（**原生抓屏 xcap→canvas→WebRTC，不走 getDisplayMedia、无屏幕共享弹窗** + enigo 键鼠注入，`src/remote-control.ts` / `src-tauri/src/rc.rs`）；截图 MCP 工具仍未迁移；见 `windows-tauri/README.md` 与 `doc/tauri2-migration-report.md` |
 | `linux/` | Electron 桌面（X11） | 同上（shell 默认 bash；含 STT/git 独有工具） |
 | `mac/` | Electron 桌面（macOS） | 同上（需系统辅助功能 & 屏幕录制权限） |
 | `extension/` | Chrome MV3 扩展 | 浏览器自动化与轻量客户端（固定工具目录） |
@@ -36,7 +37,7 @@ device/windows/src/
     registry.ts              ← 工具路由表（平台分叉）
     dynamic.ts               ← 动态工具管理（平台分叉）
     index.ts                 ← 统一调度入口
-  runtime/                   ← 受控执行底座（来自 device/shared/）
+  runtime/                   ← 受控执行底座（各平台独立 copy）
     shell-runner.ts          ← Shell 脚本执行
     powershell-runner.ts     ← PowerShell 执行（Windows 专用）
     python-runner.ts         ← Python 脚本执行
@@ -63,40 +64,40 @@ device/windows/src/
   → 服务端继续推理
 ```
 
-## win/linux/mac 共享代码（`device/shared/`）
+## 桌面端代码独立（停止共享）
 
-**单一真相源**：`device/shared/src/` 存放三端完全相同的代码，`device/shared/assets/` 存放通用图标。
-构建时由 `device/shared/scripts/sync-shared.js` 自动覆盖拷贝到各壳的 `src/`（副本已 gitignore，**勿就地改**）。
+自 2026-07 起，各桌面壳（windows / linux / mac / windows-tauri）**完全独立**，不再使用 `device/shared/` 作为单一真相源。
 
-**黄金规则**：
-- 改通用逻辑 → 只改 `device/shared/src/`
-- 改通用图标 → 只改 `device/shared/assets/`
-- 改平台差异逻辑 → 改各壳自己的 `src/` 中的平台分叉文件
+- 通用逻辑已复制到各平台自己的 `src/` 下（可自由演化）。
+- 资产（图标等）已复制到各平台 `assets/`。
+- 辅助脚本已复制到各平台 `scripts/`（copy-renderer, setup-python, prepare-bundled-python）。
+- 构建不再调用 sync-shared.js。
+- Tauri 仍为实验原型，其专有适配保留在 `windows-tauri/`。
 
-**平台分叉文件**（仍需各壳分别维护）：
-- `src/device.ts`（设备注册/连接）
-- `src/store.ts`（本地状态缓存）
-- `src/platform.ts`（平台常量）
-- `src/executor/registry.ts`、`src/executor/dynamic.ts`
-- `src/services/device-runtime.ts`
-- `src/tools/{mouse,screen,window,...}.ts`
+**黄金规则**（新）：
+- 改 Windows 逻辑 → 只改 `device/windows/src/`
+- 改 Linux 逻辑 → 只改 `device/linux/src/`
+- 改 macOS 逻辑 → 只改 `device/mac/src/`
+- 改 Tauri 原型 → 只改 `device/windows-tauri/`
+- 图标资源现在是每平台本地 `assets/`（构建配置已更新指向本地）。
+- 平台分叉文件仍然各自维护（device.ts / store.ts / platform.ts 等）。
 
-Linux 独有：`tools/ear.ts`（STT）、`tools/git.ts`。
+Linux 独有：`tools/ear.ts`（STT）、`tools/git.ts`（如存在）。
 
-**平台差异参数化**：通过各壳 `src/platform.ts` 导出的 `platformProfile` 读取，不要在共享代码里写死平台判断。
+**平台差异参数化**：通过各壳 `src/platform.ts` 导出的 `platformProfile` 读取。
 
 ## "改 X 去哪里"
 
 | 需求 | 位置 |
 | --- | --- |
-| 所有三端通用逻辑 | `device/shared/src/`（改后自动同步） |
-| Windows 专有行为 | `device/windows/src/`（平台分叉文件） |
-| Linux 专有行为 | `device/linux/src/`（含 STT/git 工具） |
-| macOS 专有行为 | `device/mac/src/` |
+| Windows 桌面逻辑（含原共享通用部分） | `device/windows/src/` |
+| Linux 桌面逻辑（含原共享通用部分） | `device/linux/src/` |
+| macOS 桌面逻辑（含原共享通用部分） | `device/mac/src/` |
+| Tauri 实验原型 | `device/windows-tauri/`（含部分原 runtime 便携逻辑） |
 | 浏览器自动化 | `device/extension/src/` |
 | Android 本机执行 | `device/android/`（独立 Kotlin 工程） |
 | Android ADB 控制 | `device/android/android-adb/` |
-| 工具执行底座（runner） | `device/shared/src/runtime/` |
+| 工具执行底座（runner） | 各平台 `src/runtime/`（独立） |
 | 服务端工具路由 | `server/main/mcp_runtime/mcp/registry.py` + 设备类型判断 `desktop_device_tools.py` |
 
 ## 常见问题排查
@@ -105,9 +106,9 @@ Linux 独有：`tools/ear.ts`（STT）、`tools/git.ts`。
 | --- | --- | --- |
 | 设备无法注册/上线 | `services/device.ts` 日志；Connector (3002) 是否运行 | Socket.IO 连接失败 / auth token 缺失 |
 | 工具调用无响应 | `executor/index.ts`；`runtime/process-guard.ts` 超时日志 | 工具路由未注册 / 超时配置过短 |
-| Shell/Python 执行失败 | `runtime/shell-runner.ts` / `python-runner.ts` | 可执行文件路径错误 / venv 未配置 |
+| Shell/Python 执行失败 | `runtime/shell-runner.ts` / `python-runner.ts` | 可执行文件路径错误 / 打包版未带 bundled python（重新 npm run package） |
 | 权限被拒 | `runtime/permission-guard.ts` | 服务端 `DevicePermissionPolicy` 未允许该工具 |
-| 共享代码修改不生效 | `sync-shared.js` 是否已运行 | 改了 `device/shared/src/` 但没跑 `npm run dev`/`build` |
+| 代码修改未生效 | 检查是否在目标平台目录下运行 npm 命令 | 各平台现在独立，无 sync 步骤 |
 | macOS 截图/鼠标失败 | 系统偏好 → 安全性与隐私 → 辅助功能/屏幕录制 | 未授予系统权限 |
 | Linux 注入失败 | Wayland 会话检测 | Wayland 下注入受限，需 X11 会话 |
 
@@ -117,9 +118,9 @@ Linux 独有：`tools/ear.ts`（STT）、`tools/git.ts`。
 # 桌面端壳（windows / linux / mac 通用）
 cd device/windows        # 或 linux / mac
 npm install
-npm run dev              # 自动执行 sync-shared.js → 开发模式启动
+npm run dev              # 直接编译运行（已无 sync-shared）
 npm run build            # → dist/（gitignored）
-npm run setup:python     # 可选：配置 Python runtime venv
+npm run setup:python     # 开发时配置 venv；正式打包会自动调用 prepare-bundled-python 内置完整 Python 运行时（用户无需装 Python）
 
 # 根目录一键入口
 device\build-windows.bat
@@ -134,6 +135,13 @@ device/run-mac.sh
 cd device/extension
 npm install
 npm run build            # → dist/（Chrome 加载此目录为未打包扩展）
+
+# Tauri 2 实验壳（需 Rust 工具链 + VS Build Tools）
+cd device/windows-tauri
+npm install
+npm run tauri dev        # 开发模式（无 sync-shared）
+npm run tauri build      # NSIS 安装包（内部触发 npm run build）
+npm run typecheck        # 仅前端 TS 检查（CI/无 Rust 环境可用）
 ```
 
 ## 注意点

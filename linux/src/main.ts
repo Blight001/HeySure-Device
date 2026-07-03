@@ -14,6 +14,7 @@ import {
 import { bindActivityLogTarget } from './services/activity-log'
 import { registerAllIpc } from './ipc'
 import { initializeDynamicMcp } from './executor/dynamic'
+import { initRemoteControlHost } from './remote/remote-control-host'
 import { initArtifactBridge } from './runtime/artifact-bridge'
 import { registerConfirmHandler } from './runtime/permission-guard'
 import { pauseExecution, resumeExecution, isExecutionPaused } from './runtime/process-guard'
@@ -73,6 +74,7 @@ async function bootstrap(): Promise<void> {
   initializeDynamicMcp(() => getAgent()?.refreshRegistration())
 
   registerAllIpc()
+  initRemoteControlHost()
   Menu.setApplicationMenu(null)
 
   const mainWindow = createMainWindow()

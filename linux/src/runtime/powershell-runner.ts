@@ -4,9 +4,7 @@
 // (pwsh). Non-Windows hosts only have PowerShell 7 if it was installed, so the
 // runner reports it as unavailable cleanly instead of throwing ENOENT.
 //
-// Self-contained on purpose (no dependency on the Windows-only
-// tools/shared/powershell.ts) so it can live in device/shared and be synced to
-// both shells.
+// Self-contained on purpose (no dependency on Windows-only helpers).
 
 import { existsSync } from 'fs'
 import { runProcess, type ProcessRunResult } from './process-guard'

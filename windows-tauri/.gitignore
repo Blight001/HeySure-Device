@@ -1,0 +1,7 @@
+node_modules/
+dist/
+bundled/
+device_runtime/python/.venv/
+src-tauri/target/
+src-tauri/gen/
+.env

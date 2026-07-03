@@ -17,8 +17,8 @@ interface Window {
     getSettings: () => Promise<any>
     saveSettings: (s: any) => Promise<any>
     autoCalibrateMouse: () => Promise<any>
-    connect: () => Promise<void>
-    disconnect: () => Promise<void>
+    connect: () => Promise<boolean>
+    disconnect: () => Promise<boolean>
     getStatus: () => Promise<string>
     onStatusChange: (cb: (status: string, reason?: string, aiConfigId?: number | null) => void) => void
     onActivityLog: (cb: (entry: any) => void) => void
@@ -337,6 +337,7 @@ function renderStatus() {
   statusPill.title = '连接状态'
   $('info-status').textContent = STATUS_LABELS[currentStatus] || currentStatus
   $('info-ai').textContent = boundAiConfigId == null ? '未分配' : `#${boundAiConfigId}`
+  updateConnectionButtons()
 }
 function setStatus(status: string, _reason?: string, aiConfigId?: number | null) {
   currentStatus = status
@@ -346,11 +347,24 @@ function setStatus(status: string, _reason?: string, aiConfigId?: number | null)
   if (status !== 'registered' && status !== 'connected') boundAiConfigId = null
   else if (typeof aiConfigId !== 'undefined') boundAiConfigId = aiConfigId
   renderStatus()
+  if (status === 'disconnected' || status === 'error' || status === 'registered') {
+    void loadMcp()
+  }
 }
 function setReconnecting(active: boolean, reason?: string | null) {
   reconnecting = active
   reconnectingReason = active ? (reason || '正在自动重连服务器') : ''
   renderStatus()
+}
+
+function updateConnectionButtons() {
+  const connected = currentStatus === 'connected' || currentStatus === 'registered'
+  const busy = currentStatus === 'connecting' || reconnecting
+  const connectBtn = $('connect-btn') as HTMLButtonElement
+  const disconnectBtn = $('disconnect-btn') as HTMLButtonElement
+  connectBtn.disabled = busy || connected
+  disconnectBtn.disabled = busy || !connected
+  connectBtn.textContent = busy ? '连接中...' : connected ? '已连接' : '连接'
 }
 
 // ── Tool-call stats ──────────────────────────────────────────────────────
@@ -619,8 +633,21 @@ function closeMembers() { $('members-modal').classList.add('hidden') }
 $('status-pill').addEventListener('click', openMembers)
 $('members-modal-close').addEventListener('click', closeMembers)
 $('members-modal').addEventListener('click', e => { if (e.target === $('members-modal')) closeMembers() })
-$('connect-btn').addEventListener('click', () => window.heysureAPI.connect())
-$('disconnect-btn').addEventListener('click', () => window.heysureAPI.disconnect())
+$('connect-btn').addEventListener('click', async () => {
+  clearLoginError()
+  const ok = await window.heysureAPI.connect()
+  if (!ok) {
+    openLoginModal()
+    showLoginError('请先登录账号后再连接 Agent')
+    return
+  }
+  setStatus(await window.heysureAPI.getStatus())
+})
+$('disconnect-btn').addEventListener('click', async () => {
+  await window.heysureAPI.disconnect()
+  setReconnecting(false)
+  setStatus(await window.heysureAPI.getStatus())
+})
 
 // ── Status / task events ──────────────────────────────────────────────────
 window.heysureAPI.onStatusChange(setStatus)
@@ -687,7 +714,6 @@ async function doLogin() {
     await window.heysureAPI.login({ serverUrl, account, password, remember })
     const s = await window.heysureAPI.getSettings()
     if (!remember) {
-      loginAccount.value = ''
       loginPassword.value = ''
     }
     updateUserChip(s); closeLoginModal(); await loadMainSettings()
@@ -700,6 +726,12 @@ async function doLogin() {
 }
 loginBtn.addEventListener('click', doLogin)
 ;[loginAccount, loginPassword].forEach(el => el.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin() }))
+loginRemember.addEventListener('change', async () => {
+  if (loginRemember.checked) return
+  loginPassword.value = ''
+  const s = await window.heysureAPI.getSettings()
+  await window.heysureAPI.saveSettings({ userPassword: '', rememberLogin: false, userAccount: loginAccount.value.trim() || s.userAccount || '' })
+})
 $('login-modal-close').addEventListener('click', closeLoginModal)
 loginModal.addEventListener('click', e => { if (e.target === loginModal) closeLoginModal() })
 

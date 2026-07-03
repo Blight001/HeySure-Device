@@ -4,23 +4,21 @@ An Electron desktop agent that connects to the HeySure server over Socket.IO,
 registers itself as a desktop endpoint, and exposes the same desktop-agent
 feature surface as `device/windows`.
 
-This shell uses the shared desktop implementation from `device/shared/src`.
-The build step runs `scripts/sync-shared.js`, copying shared modules into
-`src/` before TypeScript compiles. Edit shared logic in `device/shared/src`,
-not in the generated copies under this directory.
+This shell now has fully independent code and assets (decoupled from device/shared).
+All modules and UI live directly in this directory's `src/`, `assets/`, `scripts/`.
 
 ## Tools
 
 | Group | Tools | Implementation |
 | --- | --- | --- |
-| Shell | `shell.run` | shared runtime shell runner |
+| Shell | `shell.run` | local runtime shell runner |
 | Keyboard | `keyboard.type` `keyboard.press` | robotjs |
 | Mouse | `mouse.move` `mouse.click` `mouse.double_click` `mouse.right_click` `mouse.scroll` `mouse.drag` | robotjs |
 | Clipboard | `clipboard.get` `clipboard.set` | Electron `clipboard` |
 | Windows | `window.list` `window.focus` `window.close` | server-provided runtime tools / native bridge where available |
 | Speech | `speech.speak` | server-provided runtime tools / native bridge where available |
 | Screen / Vision | `vision.capture` `vision.capture_mouse` | Electron `desktopCapturer` + robotjs coordinates |
-| Input monitor | `hands.start` `hands.stop` `hands.snapshot` `hands.events` `hands.mouse` | shared desktop bridge |
+| Input monitor | `hands.start` `hands.stop` `hands.snapshot` `hands.events` `hands.mouse` | local desktop bridge |
 | Offline chat | local chat window and configured model settings | same UI/IPC flow as Windows |
 
 ## System Requirements
@@ -77,7 +75,7 @@ treat it as a desktop endpoint.
 
 macOS 桌面壳与 win/linux 一致：内置仅 `mcp.manage_dynamic_tool`，业务能力来自服务端
 **runtime 工具**（`server/main/api/services/device_runtime_tools/`）。UI 与
-`mcp.test` 由 `device/shared` 同步。
+`mcp.test` 使用本地 `src/renderer/` 与 runtime。
 
 ### 测试前准备
 

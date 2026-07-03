@@ -1,0 +1,28 @@
+{
+  "name": "heysure-device-win-tauri",
+  "version": "0.1.0",
+  "description": "HeySure Agent - Windows Desktop (Tauri 2 prototype)",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "setup:python": "node ./scripts/setup-python.cjs",
+    "prepare:python": "node ./scripts/prepare-bundled-python.cjs",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "npm run prepare:python && tauri build"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.5.0",
+    "socket.io-client": "^4.7.5"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.5.0",
+    "typescript": "^5.6.3",
+    "vite": "^6.3.5"
+  }
+}

@@ -27,6 +27,7 @@ call npm run build
 if errorlevel 1 goto fail
 
 echo [package] Creating Windows installer...
+echo [package] (will auto-prepare bundled Python runtime - first time downloads ~100MB+ and installs packages)
 call npm run package
 if errorlevel 1 goto fail
 

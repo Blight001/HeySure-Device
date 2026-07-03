@@ -75,3 +75,16 @@ contextBridge.exposeInMainWorld('heysureAPI', {
   // Version
   version: process.env.npm_package_version || '1.0.0',
 })
+
+// Bridge for the hidden remote-control peer window (renderer/remote-control.ts).
+// Kept separate from heysureAPI because only that one window uses it; the main
+// process drives it via the rc:* channels.
+contextBridge.exposeInMainWorld('heysureRC', {
+  onStart: (cb: (data: any) => void) => ipcRenderer.on('rc:start', (_, data) => cb(data)),
+  onAnswer: (cb: (data: any) => void) => ipcRenderer.on('rc:answer', (_, data) => cb(data)),
+  onIce: (cb: (data: any) => void) => ipcRenderer.on('rc:ice', (_, data) => cb(data)),
+  onStop: (cb: (data: any) => void) => ipcRenderer.on('rc:stop', (_, data) => cb(data)),
+  signal: (event: string, payload: any) => ipcRenderer.send('rc:signal', { event, payload }),
+  input: (payload: any) => ipcRenderer.send('rc:input', payload),
+  debug: (status: string, message: string, data?: any) => ipcRenderer.send('rc:debug', { status, message, data }),
+})

@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HeySure Agent</title>
+</head>
+<body class="dark">
+  <div id="app">
+    <header id="header" data-tauri-drag-region>
+      <div class="logo">
+        <img class="app-logo" alt="" />
+        <span>HeySure Agent</span>
+        <span class="logo-sub">Desktop</span>
+      </div>
+      <div class="spacer"></div>
+      <div class="user-chip" id="header-user-chip" title="账号" data-tauri-drag-region="false">
+        <div class="ua" id="header-user-ava"><img id="header-user-ava-img" alt="" /><span class="ua-text" id="header-user-ava-text">·</span></div>
+        <span class="un" id="header-user-name">未登录</span>
+      </div>
+      <div class="status-pill" id="status-chip" title="连接状态" data-tauri-drag-region="false">
+        <div class="status-dot red" id="status-dot"></div>
+        <span id="status-label">未连接</span>
+      </div>
+      <button class="icon-btn" id="settings-btn" title="设置" data-tauri-drag-region="false">⚙</button>
+      <button class="icon-btn local-chat-btn" id="tool-test-open" title="本地对话" data-tauri-drag-region="false">💬</button>
+      <button class="icon-btn" id="theme-toggle" title="切换主题" data-tauri-drag-region="false">🌙</button>
+      <div class="window-btns" aria-label="窗口控制" data-tauri-drag-region="false">
+        <button class="window-btn min" id="window-min-btn" title="最小化" aria-label="最小化"><span class="window-icon"></span></button>
+        <button class="window-btn max" id="window-max-btn" title="最大化" aria-label="最大化"><span class="window-icon"></span></button>
+        <button class="window-btn close" id="window-close-btn" title="关闭" aria-label="关闭"><span class="window-icon"></span></button>
+      </div>
+    </header>
+
+    <div id="content">
+      <div class="pane" id="mcp-list-pane">
+        <div class="pane-header">
+          <span class="pane-title-stack">
+            <span class="pane-title-main">桌面 MCP 工具</span>
+            <span class="pane-title-sub">Desktop MCP Tools</span>
+          </span>
+          <span class="pane-sub" id="tool-count"></span>
+        </div>
+        <div id="tool-list"><div class="empty-note">加载中…</div></div>
+      </div>
+
+      <div id="settings-modal" class="modal hidden">
+        <div class="modal-box">
+          <div class="modal-title-row">
+            <span class="modal-title">设置</span>
+            <button class="modal-close" id="settings-close">×</button>
+          </div>
+
+          <div class="card">
+            <div class="card-title">🖱 模拟鼠标特效</div>
+            <div class="check-row">
+              <input type="checkbox" id="cfg-mouse-fx" />
+              <label for="cfg-mouse-fx">AI 操作时显示虚拟鼠标（点击波纹、滚动拉拽特效）</label>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">🎯 鼠标坐标校准</div>
+            <div class="login-hint">Tauri 轻量版暂未迁移截图与键鼠注入，远控能力将在后续阶段单独验证。</div>
+            <div class="stat-grid">
+              <div class="fg"><label>X 缩放</label><input type="text" id="cfg-mouse-scale-x" value="1" /></div>
+              <div class="fg"><label>Y 缩放</label><input type="text" id="cfg-mouse-scale-y" value="1" /></div>
+            </div>
+            <button class="btn btn-secondary" id="calibrate-mouse-btn">自动校准缩放</button>
+            <div class="save-feedback" id="calibrate-feedback"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">📡 服务器连接地址</div>
+            <div class="fg"><label>服务器 URL</label><input type="url" id="in-server" placeholder="http://127.0.0.1:3000" /></div>
+            <button class="btn btn-primary" id="btn-ping">测试连接</button>
+            <div class="save-feedback" id="login-msg"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">🖥 设备设置</div>
+            <div class="fg"><label>设备名称</label><input id="in-agent-name" type="text" /></div>
+            <div class="fg"><label>分组</label><input id="in-agent-group" type="text" /></div>
+            <div class="fg"><label>工作区目录</label><input id="in-workspace" type="text" placeholder="留空使用 ~/HeySureWorkspace" /></div>
+            <button id="btn-save-settings" class="btn btn-primary">保存并重新注册</button>
+            <div class="save-feedback" id="save-feedback"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">⚙ 运行时能力</div>
+            <div class="kv"><span class="k">Python</span><span class="v" id="rt-python">未探测</span></div>
+            <div class="kv"><span class="k">PowerShell</span><span class="v" id="rt-powershell">未探测</span></div>
+            <div class="kv"><span class="k">Shell</span><span class="v" id="rt-shell">未探测</span></div>
+            <button id="btn-probe" class="btn btn-secondary">重新探测</button>
+          </div>
+
+          <div class="card">
+            <div class="card-title">⏸ 执行控制</div>
+            <button id="btn-pause" class="btn btn-danger">暂停执行</button>
+            <div class="login-hint">暂停会终止运行中的本机工具进程，并阻止新的远程执行。</div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">📊 工具调用统计</div>
+            <div class="stat-grid">
+              <div class="stat-box"><div class="stat-num" id="stat-total">0</div><div class="stat-lbl">总调用</div></div>
+              <div class="stat-box"><div class="stat-num" id="stat-running">0</div><div class="stat-lbl">进行中</div></div>
+              <div class="stat-box"><div class="stat-num" id="stat-success">0</div><div class="stat-lbl">成功</div></div>
+              <div class="stat-box"><div class="stat-num" id="stat-failed">0</div><div class="stat-lbl">失败</div></div>
+            </div>
+          </div>
+
+          <div class="card" id="local-tool-test-card">
+            <div class="card-title">🧪 本地工具测试</div>
+            <div class="fg"><label>工具</label><select id="test-tool"></select></div>
+            <div class="fg"><label>参数（JSON）</label><textarea id="test-args" class="ta code" rows="3" spellcheck="false">{}</textarea></div>
+            <button id="btn-test-run" class="btn btn-primary">执行</button>
+            <pre id="test-result" class="result hidden"></pre>
+          </div>
+
+          <div class="card">
+            <div class="card-title">活动日志 <button id="btn-clear-log" class="btn btn-mini">清空</button></div>
+            <div id="log" class="log"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="members-modal" class="modal hidden">
+        <div class="modal-box">
+          <div class="modal-title-row">
+            <span class="modal-title">连接与 AI 分配</span>
+            <button class="modal-close" id="members-modal-close">×</button>
+          </div>
+          <div class="login-hint">设备登录后自动连接服务器。AI 分配由网页端作坊控制。</div>
+          <div class="card">
+            <div class="kv"><span class="k">连接状态</span><span class="v" id="info-status">未连接</span></div>
+            <div class="kv"><span class="k">已分配 AI</span><span class="v" id="info-ai">未分配</span></div>
+            <div class="kv"><span class="k">服务器</span><span class="v" id="info-server">—</span></div>
+            <div class="kv"><span class="k">工作区</span><span class="v" id="info-workspace">—</span></div>
+          </div>
+          <div class="btn-row">
+            <button id="btn-reconnect" class="btn btn-primary">重新连接</button>
+            <button id="btn-disconnect" class="btn btn-danger">断开</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="login-modal" class="modal hidden">
+        <div class="modal-box">
+          <div class="modal-title-row">
+            <span class="modal-title">软件端账号</span>
+            <button class="modal-close" id="login-modal-close">×</button>
+          </div>
+
+          <div class="card" id="logged-in">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <div class="ua account-avatar" id="account-info-ava"><img id="account-info-ava-img" alt="" /><span id="account-info-ava-text">·</span></div>
+              <div style="flex:1;min-width:0;">
+                <div id="lbl-user" style="font-weight:600;"></div>
+                <div id="lbl-server" style="font-size:11px;color:var(--muted);"></div>
+              </div>
+            </div>
+            <div class="divider"></div>
+            <button class="btn btn-danger" id="btn-logout">退出登录</button>
+          </div>
+
+          <div class="card" id="login-form">
+            <div class="card-title">🔐 登录软件端账号</div>
+            <div class="fg"><label>账号</label><input type="text" id="in-account" placeholder="你的账号" autocomplete="username" /></div>
+            <div class="fg"><label>密码</label><input type="password" id="in-password" placeholder="密码" autocomplete="current-password" /></div>
+            <div class="check-row">
+              <input type="checkbox" id="in-remember" />
+              <label for="in-remember">记住账号和密码</label>
+            </div>
+            <button class="btn btn-primary" id="btn-login">登录</button>
+            <div class="login-hint">服务器地址在「设置 → 服务器连接地址」中配置。</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="tool-test-modal" class="modal hidden">
+        <div class="modal-box modal-chat">
+          <div class="modal-title-row">
+            <span class="modal-title">本地对话</span>
+            <button class="modal-close" id="tool-test-close">×</button>
+          </div>
+          <div class="offline-chat-shell">
+            <div class="offline-chat-header">
+              <div>
+                <div class="offline-title">本地对话</div>
+                <div class="offline-meta" id="offline-model-meta">加载中...</div>
+              </div>
+              <div class="offline-actions">
+                <button class="btn btn-secondary compact" id="offline-model-btn">模型</button>
+                <button class="btn btn-secondary compact" id="offline-prompt-btn">Prompt</button>
+                <button class="btn btn-secondary compact" id="offline-tools-btn">MCP 范围</button>
+                <button class="btn btn-danger compact" id="offline-recall-btn">撤回</button>
+              </div>
+            </div>
+
+            <div class="offline-panel" id="offline-model-panel">
+              <div class="fg"><label>服务商预设</label>
+                <select id="cfg-ai-provider">
+                  <option value="">自定义 / 不修改</option>
+                  <option value="anthropic">Anthropic Claude</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="deepseek">DeepSeek</option>
+                  <option value="openrouter">OpenRouter</option>
+                  <option value="ollama">本地 Ollama</option>
+                </select>
+              </div>
+              <div class="fg"><label>AI Key</label><input type="password" id="cfg-ai-key" placeholder="sk-ant-... 或 sk-..." /></div>
+              <div class="fg"><label>Base URL</label><input type="url" id="cfg-ai-base" placeholder="https://api.anthropic.com" /></div>
+              <div class="fg"><label>模型</label><input type="text" id="cfg-ai-model" placeholder="claude-sonnet-4-5" /></div>
+              <button class="btn btn-primary" id="offline-model-save">保存模型配置</button>
+              <div class="save-feedback" id="offline-model-feedback"></div>
+            </div>
+
+            <div class="offline-panel" id="offline-prompt-panel">
+              <textarea id="offline-prompt-input" class="ta" rows="5" placeholder="设置本次本地对话的 system prompt"></textarea>
+              <button class="btn btn-primary" id="offline-prompt-save">保存 Prompt</button>
+              <div class="save-feedback" id="offline-prompt-feedback"></div>
+            </div>
+
+            <div class="offline-panel" id="offline-tool-panel">
+              <div class="tool-actions">
+                <input id="offline-tool-search" type="text" placeholder="筛选 MCP 工具" />
+                <button class="btn btn-secondary compact" id="offline-tools-all">全选</button>
+                <button class="btn btn-secondary compact" id="offline-tools-none">全不选</button>
+              </div>
+              <div class="login-hint" id="offline-tool-count"></div>
+              <div class="offline-tool-list" id="offline-tool-list"></div>
+            </div>
+
+            <div id="chat-log" class="offline-messages"></div>
+            <div class="offline-token-stats" id="offline-token-stats">本次会话累计 Token：输入 0 / 输出 0 / 总计 0</div>
+            <div class="offline-composer">
+              <textarea id="chat-input" class="ta" rows="3" placeholder="输入一次性对话内容，Enter 发送，Shift+Enter 换行"></textarea>
+              <button id="btn-chat-send" class="btn btn-primary">发送</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="confirm-mask" class="modal hidden">
+        <div class="modal-box">
+          <div class="modal-title-row">
+            <span class="modal-title">权限确认</span>
+          </div>
+          <div class="card">
+            <div id="confirm-text" class="confirm-text"></div>
+            <div class="btn-row">
+              <button id="btn-confirm-ok" class="btn btn-primary">允许本次执行</button>
+              <button id="btn-confirm-no" class="btn btn-danger">拒绝</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

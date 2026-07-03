@@ -36,12 +36,13 @@ let definitions: DynamicMcpDefinition[] = []
 // Locally-authored tools (via mcp.manage_dynamic_tool); persisted to filePath.
 let localDefinitions: DynamicMcpDefinition[] = []
 // Web-authored tools pushed by the server (device:tool-config), scoped by
-// device type; cached in serverFilePath and merged on reload. The server owns
-// them — the manager never edits them.
+// device type; held in memory only (no disk cache). The server owns them —
+// the manager never edits them. Cleared on disconnect so stale tools cannot
+// outlive the server session.
 let serverDefinitions: DynamicMcpDefinition[] = []
 let appliedServerRevision = ''
 let filePath = ''
-let serverFilePath = ''
+let legacyServerCachePath = ''
 let watcher: FSWatcher | null = null
 let changeListener: (() => void) | null = null
 let reloadTimer: NodeJS.Timeout | null = null
@@ -149,7 +150,7 @@ async function runProgram(def: DynamicMcpDefinition, workspaceRoot: string, args
       continue
     }
     if (step.op === 'return') return render(step.value, context)
-    const target = String(step.tool || '').trim()
+    const target = String(render(step.tool || '', context) || '').trim()
     if (target === MANAGER_TOOL) throw new Error('Dynamic MCP code cannot invoke the management tool')
     const builtinTarget = target.startsWith('builtin:') ? target.slice('builtin:'.length) : ''
     const child = definitions.find(item => item.name === target)
@@ -182,7 +183,7 @@ function asTool(def: DynamicMcpDefinition, fromServer = false): ToolDefinition {
       definition: def,
       code_kind: def.code_kind || 'program',
       code: def.code,
-      storage_file: fromServer ? serverFilePath : filePath,
+      storage_file: fromServer ? 'memory:server' : filePath,
       source: fromServer ? 'server' : 'local',
       editable_via: MANAGER_TOOL,
     },
@@ -324,7 +325,15 @@ function inspectTool(name: string, includeSource = true): Record<string, any> {
 
 function ensurePaths(): void {
   if (!filePath) filePath = path.join(app.getPath('userData'), 'dynamic-mcp-tools.json')
-  if (!serverFilePath) serverFilePath = path.join(app.getPath('userData'), 'dynamic-mcp-tools.server.json')
+  if (!legacyServerCachePath) {
+    legacyServerCachePath = path.join(app.getPath('userData'), 'dynamic-mcp-tools.server.json')
+  }
+}
+
+function purgeLegacyServerCache(): void {
+  ensurePaths()
+  if (!legacyServerCachePath || !fs.existsSync(legacyServerCachePath)) return
+  try { fs.unlinkSync(legacyServerCachePath) } catch { /* best-effort */ }
 }
 
 function readToolsFile(target: string): DynamicMcpDefinition[] {
@@ -349,12 +358,7 @@ function persist(next: DynamicMcpDefinition[]): void {
   fs.renameSync(temp, filePath)
 }
 
-export function reloadDynamicMcp(): { tools: number; local: number; server: number; revision: string; file: string } {
-  ensurePaths()
-  localDefinitions = readToolsFile(filePath)
-  serverDefinitions = readToolsFile(serverFilePath)
-  // Merge: server-authored (web) tools win over a locally-authored tool of the
-  // same name, so an operator's edit is authoritative for that device type.
+function mergeAndApply(): { tools: number; local: number; server: number; revision: string; file: string } {
   const serverNames = new Set(serverDefinitions.map(item => item.name))
   const merged = new Map<string, DynamicMcpDefinition>()
   for (const def of localDefinitions) merged.set(def.name, def)
@@ -362,16 +366,37 @@ export function reloadDynamicMcp(): { tools: number; local: number; server: numb
   const next = Array.from(merged.values())
   replaceDynamicTools(next.map(def => asTool(def, serverNames.has(def.name))))
   definitions = next
-  appliedServerRevision = revision(serverDefinitions)
-  return { tools: next.length, local: localDefinitions.length, server: serverDefinitions.length, revision: revision(next), file: filePath }
+  return {
+    tools: next.length,
+    local: localDefinitions.length,
+    server: serverDefinitions.length,
+    revision: revision(next),
+    file: filePath,
+  }
+}
+
+export function reloadDynamicMcp(): { tools: number; local: number; server: number; revision: string; file: string } {
+  ensurePaths()
+  localDefinitions = readToolsFile(filePath)
+  return mergeAndApply()
+}
+
+// Drop server-pushed tools from memory (e.g. on disconnect). Local tools
+// created via mcp.manage_dynamic_tool are untouched.
+export function clearServerDynamicMcp(): { cleared: boolean; tools: number; server: number } {
+  const hadServer = serverDefinitions.length > 0 || !!appliedServerRevision
+  serverDefinitions = []
+  appliedServerRevision = ''
+  const status = mergeAndApply()
+  if (hadServer) changeListener?.()
+  return { cleared: hadServer, tools: status.tools, server: status.server }
 }
 
 // Apply a server-pushed dynamic MCP set (device:tool-config). Returns
-// applied:false without touching disk when the set is unchanged — this guard
-// stops the register→push→apply loop, since applying re-registers and the
-// server re-pushes the same set.
+// applied:false when the set is unchanged — this guard stops the
+// register→push→apply loop, since applying re-registers and the server
+// re-pushes the same set.
 export function applyServerDynamicMcp(payload: any): { applied: boolean; revision: string; tools: number } {
-  ensurePaths()
   const list = Array.isArray(payload) ? payload : payload?.tools
   const tools = Array.isArray(list) ? list.map(validate) : []
   const names = new Set<string>()
@@ -381,11 +406,9 @@ export function applyServerDynamicMcp(payload: any): { applied: boolean; revisio
   }
   const rev = revision(tools)
   if (rev === appliedServerRevision) return { applied: false, revision: rev, tools: tools.length }
-  const temp = `${serverFilePath}.tmp`
-  fs.mkdirSync(path.dirname(serverFilePath), { recursive: true })
-  fs.writeFileSync(temp, JSON.stringify({ version: 1, tools }, null, 2), 'utf8')
-  fs.renameSync(temp, serverFilePath)
-  reloadDynamicMcp()
+  serverDefinitions = tools
+  appliedServerRevision = rev
+  mergeAndApply()
   changeListener?.()
   return { applied: true, revision: rev, tools: tools.length }
 }
@@ -404,6 +427,7 @@ function scheduleReload(): void {
 
 export function initializeDynamicMcp(listener?: () => void): void {
   changeListener = listener || null
+  purgeLegacyServerCache()
   reloadDynamicMcp()
   watcher?.close()
   fs.mkdirSync(path.dirname(filePath), { recursive: true })

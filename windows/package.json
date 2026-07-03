@@ -5,13 +5,14 @@
   "license": "Apache-2.0",
   "main": "dist/main.js",
   "scripts": {
-    "dev": "node ../shared/scripts/sync-shared.js && tsc && node ../shared/scripts/copy-renderer.js && electron dist/main.js",
-    "build": "node ../shared/scripts/sync-shared.js && tsc && node ../shared/scripts/copy-renderer.js",
+    "dev": "tsc && node ./scripts/copy-renderer.js && electron dist/main.js",
+    "build": "tsc && node ./scripts/copy-renderer.js",
     "start": "electron dist/main.js",
-    "setup:python": "node ../shared/scripts/setup-python.js",
+    "setup:python": "node ./scripts/setup-python.js",
+    "prepare:python": "node ./scripts/prepare-bundled-python.js",
     "postinstall": "electron-builder install-app-deps",
     "rebuild": "electron-builder install-app-deps",
-    "package": "electron-builder --win"
+    "package": "npm run prepare:python && electron-builder --win"
   },
   "dependencies": {
     "socket.io-client": "^4.7.5",
@@ -37,7 +38,17 @@
     "files": [
       "dist/**/*",
       "src/**/*",
-      "assets/**/*"
+      { "from": "assets", "to": "assets", "filter": ["**/*"] }
+    ],
+    "extraResources": [
+      {
+        "from": "bundled",
+        "to": "bundled",
+        "filter": ["**/*"]
+      }
+    ],
+    "asarUnpack": [
+      "**/bundled/**"
     ],
     "win": {
       "target": [

@@ -13,6 +13,7 @@ export interface PlatformProfile {
   deviceIdPrefix: string
   // Human label reported to the server / shown in logs, e.g. "Windows Agent".
   agentName: string
-  // Application icon file under assets/, e.g. "icon.ico" / "desktop.png".
+  // Application icon file name under the shell's local assets/ (or equivalent).
+  // Example: "icon.ico" or "desktop.png".
   appIconFile: string
 }

@@ -2,8 +2,9 @@ import { Tray, Menu, app, nativeImage } from 'electron'
 import * as path from 'path'
 import type { DeviceStatus } from '../device'
 import { platformProfile } from '../platform'
+import { resolveAssetsDir } from '../asset-path'
 
-const ASSET_DIR = path.join(__dirname, '../../assets')
+const ASSET_DIR = resolveAssetsDir()
 const APP_ICON_PATH = path.join(ASSET_DIR, platformProfile.appIconFile)
 
 const TRAY_ICON_PATHS: Record<DeviceStatus, string> = {

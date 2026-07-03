@@ -347,6 +347,10 @@ fn main() {
                 if let Ok(icon) = Image::from_bytes(include_bytes!("../../assets/desktop.png")) {
                     let _ = main_window.set_icon(icon);
                 }
+                // Dev builds: open DevTools so WebView load/CSS/console errors are
+                // visible (the WebView is otherwise a black box vs. a browser).
+                #[cfg(debug_assertions)]
+                main_window.open_devtools();
             }
 
             Ok(())

@@ -40,12 +40,34 @@ if not exist "node_modules" (
   if errorlevel 1 goto fail
 )
 
+set "BUNDLE_DIR=%CD%\src-tauri\target\release\bundle"
+set "NSIS_DIR=%BUNDLE_DIR%\nsis"
+
+rem Keep the installer icon in sync with the app logo assets\desktop.png.
+rem tauri icon regenerates src-tauri\icons\icon.ico from the software logo.
+if exist "assets\desktop.png" (
+  echo [icon] Syncing installer icon from app logo assets\desktop.png ...
+  call npx tauri icon "assets\desktop.png" >nul 2>&1
+  if errorlevel 1 (
+    echo   [warn] icon sync failed; keeping existing icon.ico
+  ) else (
+    if exist "src-tauri\icons\android" rmdir /s /q "src-tauri\icons\android" >nul 2>&1
+    if exist "src-tauri\icons\ios" rmdir /s /q "src-tauri\icons\ios" >nul 2>&1
+    if exist "src-tauri\icons\icon.ico" copy /y "src-tauri\icons\icon.ico" "assets\icon.ico" >nul 2>&1
+    echo   - Installer icon updated from app logo
+  )
+)
+
+rem Clean any previous installers so only the current product build remains
+rem (avoids leftover "HeySure Device (Tauri)_..." from earlier product names).
+if exist "%NSIS_DIR%" (
+  del /f /q "%NSIS_DIR%\*setup.exe" >nul 2>&1
+)
+
 echo [build] Creating Windows Tauri installer...
 call npm run tauri:build
 if errorlevel 1 goto fail
 
-set "BUNDLE_DIR=%CD%\src-tauri\target\release\bundle"
-set "NSIS_DIR=%BUNDLE_DIR%\nsis"
 if not exist "%NSIS_DIR%" (
   echo [error] NSIS bundle output was not generated.
   goto fail
@@ -76,7 +98,7 @@ if exist "src-tauri\target\release\nsis" (
 rem 3. Remove the large bundled\ folder (Python runtime is already embedded in the installer)
 if exist "bundled" (
   rmdir /s /q "bundled" >nul 2>&1
-  echo   - Removed bundled\ (embedded into installer)
+  echo   - Removed bundled\ ^(embedded into installer^)
 )
 
 rem 4. Clean copied bundled inside target (if any)
@@ -92,7 +114,7 @@ echo [clean] Done.
 echo.
 echo [done] Windows Tauri installer is ready:
 for %%F in ("%NSIS_DIR%\*setup.exe") do (
-  echo   %%~fF   (%%~zF bytes)
+  echo   %%~fF   ^(%%~zF bytes^)
 )
 echo.
 pause

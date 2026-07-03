@@ -4,6 +4,7 @@
 
 import './catalog' // side-effect: register built-in tools
 import { getTool, listToolIds, listToolDefs, type ToolDef } from './registry'
+import { native } from '../native'
 
 export interface DispatchedTask {
   taskId: string
@@ -68,6 +69,14 @@ export async function executeTask(workspaceRoot: string, task: DispatchedTask): 
           : `Tool not allowed for this task: ${tool}.`,
     }
   }
+
+  // Runtime tools (python/powershell/shell) spawn with workspaceRoot as their
+  // cwd. When the default workspace (~\HeySureWorkspace) was never created via
+  // the settings UI, the spawn fails on Windows with "目录名称无效。(os error
+  // 267)". Create it lazily before any tool runs so cwd is always valid.
+  try {
+    if (workspaceRoot && workspaceRoot.trim()) await native.ensureDir(workspaceRoot)
+  } catch { /* best effort — a runner that doesn't need cwd still works */ }
 
   try {
     const result = await def.handler({ workspaceRoot, args })

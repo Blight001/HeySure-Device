@@ -19,6 +19,8 @@ import {
 import { getPrimaryScreenSource } from './desktop-source'
 import { injectInput, RcInputEvent } from './input-injector'
 import { sendActivityLog } from '../services/activity-log'
+import { store } from '../store'
+import { fetchIceServers, resolveBaseUrl, DEFAULT_ICE_SERVERS, type IceServer } from '../services/server-client'
 
 type SignalSender = (event: string, payload: any) => void
 
@@ -32,6 +34,18 @@ let ipcReady = false
 
 function toRenderer(channel: string, payload: any): void {
   getRemoteControlWindow()?.webContents.send(channel, payload)
+}
+
+/** Resolve the server-configured ICE servers (STUN + optional TURN). Best-effort. */
+async function loadIceServers(): Promise<IceServer[]> {
+  try {
+    const base = resolveBaseUrl(String(store.get('serverUrl') || ''))
+    const token = String(store.get('authToken') || '')
+    if (!base || !token) return DEFAULT_ICE_SERVERS
+    return await fetchIceServers(base, token)
+  } catch {
+    return DEFAULT_ICE_SERVERS
+  }
 }
 
 function endSession(sessionId: string): void {
@@ -85,11 +99,13 @@ export async function handleRemoteControlSignal(
     try {
       const win = await ensureRemoteControlWindow()
       const source = await getPrimaryScreenSource()
+      const iceServers = await loadIceServers()
       win.webContents.send('rc:start', {
         sessionId,
         sourceId: source.sourceId,
         width: source.width,
         height: source.height,
+        iceServers,
       })
       sendActivityLog('remote-control', 'info', `已开始捕获主屏 ${source.width}×${source.height}，等待浏览器应答`)
     } catch (err: any) {

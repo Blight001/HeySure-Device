@@ -16,7 +16,21 @@
 // input stay peer-to-peer. The offscreen document hosts the RTCPeerConnection
 // (offerer); this module bridges socket ⇄ offscreen ⇄ CDP.
 
+import { getSettings, getAuth } from './storage'
+import { getIceServers, DEFAULT_ICE_SERVERS, type IceServer } from './client'
+
 type SignalSender = (event: string, payload: any) => void
+
+/** Best-effort resolve of the server ICE config for the current session. */
+async function resolveIceServers(): Promise<IceServer[]> {
+  try {
+    const [settings, auth] = await Promise.all([getSettings(), getAuth()])
+    if (!settings.serverUrl || !auth.token) return DEFAULT_ICE_SERVERS
+    return await getIceServers(settings.serverUrl, auth.token)
+  } catch {
+    return DEFAULT_ICE_SERVERS
+  }
+}
 
 interface ScreencastMetadata {
   deviceWidth: number
@@ -220,7 +234,8 @@ export async function handleRcSocketSignal(event: string, data: any, send: Signa
       // Start the peer regardless of controllability: even if the active tab is a
       // restricted page, the operator still gets an interactive surface (tab strip
       // + address bar) and can navigate to a normal page, which auto-attaches.
-      toOffscreen('peer-start', { sessionId })
+      const iceServers = await resolveIceServers()
+      toOffscreen('peer-start', { sessionId, iceServers })
       await startCapture(session)
       void broadcastBrowserState(session)
     } catch (err: any) {

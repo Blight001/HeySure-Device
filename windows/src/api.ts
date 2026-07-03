@@ -85,6 +85,37 @@ export async function login(serverUrl: string, account: string, password: string
   }
 }
 
+/** WebRTC ICE server entry (STUN or TURN) as delivered by the server. */
+export interface IceServer {
+  urls: string | string[]
+  username?: string
+  credential?: string
+}
+
+// Historical default so remote control still works if the server is old or
+// unreachable (STUN-only — no relay for symmetric NAT).
+export const DEFAULT_ICE_SERVERS: IceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
+
+/**
+ * Resolve the server-configured ICE servers (STUN + optional TURN) for remote
+ * control. Never throws — falls back to {@link DEFAULT_ICE_SERVERS} so a
+ * signaling hiccup can't block a session.
+ */
+export async function fetchIceServers(serverUrl: string, token: string): Promise<IceServer[]> {
+  try {
+    const base = resolveBaseUrl(serverUrl)
+    if (!base || !token) return DEFAULT_ICE_SERVERS
+    const data = await serverFetch<{ ice_servers?: IceServer[] }>(base, '/api/rtc/ice-servers', {
+      token,
+      failureMessage: '获取 ICE 服务器配置失败',
+    })
+    const list = Array.isArray(data.ice_servers) ? data.ice_servers : []
+    return list.length ? list : DEFAULT_ICE_SERVERS
+  } catch {
+    return DEFAULT_ICE_SERVERS
+  }
+}
+
 // Health-probe used by the "test connection" button. Falls back to the root
 // path if /health is not implemented and returns latency in ms.
 export async function pingServer(rawUrl: string): Promise<{ success: true; status: number; ms: number } | { success: false; error: string }> {

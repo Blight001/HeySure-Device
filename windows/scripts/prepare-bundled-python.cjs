@@ -1,5 +1,5 @@
-// prepare-bundled-python.js
-// Prepares a self-contained Python runtime for packaged Electron app (Windows).
+// prepare-bundled-python.cjs
+// Prepares a self-contained Python runtime for packaged Tauri app (Windows).
 // - Downloads official embeddable Python zip (no system Python needed on target machine).
 // - Configures it for pip/site.
 // - Installs the requirements.txt from device_runtime/python/.
@@ -18,10 +18,17 @@ const { promisify } = require('util')
 
 const pipelineAsync = promisify(pipeline)
 
+const os = require('os')
+
 const root = process.cwd()
 const bundledDir = path.join(root, 'bundled')
 const pythonDir = path.join(bundledDir, 'python')
 const requirementsPath = path.join(root, 'device_runtime', 'python', 'requirements.txt')
+
+// Persistent cache for the downloaded embeddable zip, so rebuilds (which wipe
+// bundled/) do NOT re-download. Survives across builds. Override with env var.
+const cacheDir = process.env.HEYSURE_PYTHON_CACHE ||
+  path.join(process.env.LOCALAPPDATA || os.homedir(), 'heysure', 'python-cache')
 
 // Pinned Python version with good wheel support for the automation libs.
 // 3.10 chosen for maximum compatibility with pyautogui/pywinauto/pynput stack.
@@ -74,6 +81,34 @@ function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true })
 }
 
+// Extract a zip robustly. Prefer tar.exe (bsdtar ships with Win10 1803+ and
+// handles zip), because Expand-Archive is unreliable on some machines (the
+// Microsoft.PowerShell.Archive module can fail to autoload).
+function extractZip(zipPath, destDir) {
+  ensureDir(destDir)
+
+  // Attempt 1: bundled tar.exe — no PowerShell module dependency.
+  const tar = spawnSync('tar', ['-xf', zipPath, '-C', destDir], { stdio: 'inherit', shell: false })
+  if (!tar.error && (tar.status === 0 || tar.status === null)) {
+    return
+  }
+  log('tar extraction unavailable/failed, falling back to Expand-Archive...')
+
+  // Attempt 2: PowerShell Expand-Archive (explicitly import the module first).
+  const ps = spawnSync('powershell.exe', [
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+    `Import-Module Microsoft.PowerShell.Archive; Expand-Archive -LiteralPath "${zipPath.replace(/\\/g, '\\\\')}" -DestinationPath "${destDir.replace(/\\/g, '\\\\')}" -Force`
+  ], { stdio: 'inherit', shell: false })
+  if (!ps.error && (ps.status === 0 || ps.status === null)) {
+    return
+  }
+
+  console.error('[prepare-bundled-python] Failed to extract embeddable Python zip (both tar and Expand-Archive failed).')
+  process.exit(1)
+}
+
 function filesEqual(a, b) {
   try {
     return fs.readFileSync(a, 'utf8') === fs.readFileSync(b, 'utf8')
@@ -111,19 +146,33 @@ async function main() {
   ensureDir(bundledDir)
   ensureDir(pythonDir)
 
-  const zipPath = path.join(bundledDir, PY_ZIP_NAME)
-  await download(PY_URL, zipPath)
+  // Resolve the embeddable zip:
+  //   1. HEYSURE_PYTHON_ZIP env var (explicit local path) — use as-is.
+  //   2. Persistent cache (cacheDir) — reuse if present, else download once.
+  let zipPath = process.env.HEYSURE_PYTHON_ZIP
+  if (zipPath) {
+    if (!fs.existsSync(zipPath)) {
+      console.error(`[prepare-bundled-python] HEYSURE_PYTHON_ZIP points to a missing file: ${zipPath}`)
+      process.exit(1)
+    }
+    log(`Using local embeddable Python zip from HEYSURE_PYTHON_ZIP: ${zipPath}`)
+  } else {
+    ensureDir(cacheDir)
+    zipPath = path.join(cacheDir, PY_ZIP_NAME)
+    // A valid embeddable zip is >5MB; treat truncated/empty files as invalid.
+    const cached = fs.existsSync(zipPath) && fs.statSync(zipPath).size > 5 * 1024 * 1024
+    if (cached) {
+      log(`Reusing cached embeddable Python zip: ${zipPath} (delete it to force re-download)`)
+    } else {
+      const tmp = zipPath + '.part'
+      await download(PY_URL, tmp)
+      fs.renameSync(tmp, zipPath) // atomic swap so a valid cache is never half-written
+      log(`Cached embeddable Python zip at: ${zipPath}`)
+    }
+  }
 
   log('Extracting embeddable Python...')
-  // Use PowerShell (guaranteed on Windows build machines)
-  run('powershell.exe', [
-    '-NoProfile',
-    '-NonInteractive',
-    '-Command',
-    `Expand-Archive -LiteralPath "${zipPath.replace(/\\/g, '\\\\')}" -DestinationPath "${pythonDir.replace(/\\/g, '\\\\')}" -Force`
-  ])
-
-  try { fs.unlinkSync(zipPath) } catch {}
+  extractZip(zipPath, pythonDir)
 
   // Patch the ._pth to enable site + imports (critical for pip + packages)
   const pthName = `python${PY_MAJOR_MINOR}._pth`
@@ -147,9 +196,16 @@ async function main() {
     log('Created fallback pth')
   }
 
-  // Get pip
+  // Get pip (cached alongside the zip so rebuilds don't re-download it)
+  const getPipCache = path.join(cacheDir, 'get-pip.py')
   const getPipPath = path.join(pythonDir, 'get-pip.py')
-  await download(GET_PIP_URL, getPipPath)
+  if (!process.env.HEYSURE_PYTHON_ZIP && fs.existsSync(getPipCache) && fs.statSync(getPipCache).size > 1024) {
+    log(`Reusing cached get-pip.py: ${getPipCache}`)
+    fs.copyFileSync(getPipCache, getPipPath)
+  } else {
+    await download(GET_PIP_URL, getPipPath)
+    try { ensureDir(cacheDir); fs.copyFileSync(getPipPath, getPipCache) } catch {}
+  }
 
   log('Bootstrapping pip...')
   run(pyExe, ['-E', getPipPath, '--no-warn-script-location', '--no-cache-dir', '-q'], { cwd: pythonDir })

@@ -87,6 +87,35 @@ export async function serverFetch<T = any>(
   return readJson(res, opts.failureMessage || `请求失败`, !!opts.token)
 }
 
+/** WebRTC ICE server entry (STUN or TURN) as delivered by the server. */
+export interface IceServer {
+  urls: string | string[]
+  username?: string
+  credential?: string
+}
+
+// Historical default so remote control still works if the server is old or
+// unreachable (STUN-only — no relay for symmetric NAT).
+export const DEFAULT_ICE_SERVERS: IceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
+
+/**
+ * Resolve the server-configured ICE servers (STUN + optional TURN) for remote
+ * control. Never throws — falls back to {@link DEFAULT_ICE_SERVERS} so a
+ * signaling hiccup can't block a session.
+ */
+export async function fetchIceServers(base: string, token: string): Promise<IceServer[]> {
+  try {
+    const data = await serverFetch<{ ice_servers?: IceServer[] }>(base, '/api/rtc/ice-servers', {
+      token,
+      failureMessage: '获取 ICE 服务器配置失败',
+    })
+    const list = Array.isArray(data.ice_servers) ? data.ice_servers : []
+    return list.length ? list : DEFAULT_ICE_SERVERS
+  } catch {
+    return DEFAULT_ICE_SERVERS
+  }
+}
+
 export async function fetchAgentEndpoint(base: string, token: string): Promise<string> {
   const data = await serverFetch<{ agent_socket_url?: string }>(base, '/api/auth/agent-endpoint', {
     token,

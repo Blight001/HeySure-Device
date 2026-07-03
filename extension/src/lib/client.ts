@@ -104,3 +104,32 @@ export async function getAgentEndpoint(serverUrl: string, token: string): Promis
   if (!agentSocketUrl) throw new Error('服务器未返回 Agent 连接地址')
   return agentSocketUrl
 }
+
+/** WebRTC ICE server entry (STUN or TURN) as delivered by the server. */
+export interface IceServer {
+  urls: string | string[]
+  username?: string
+  credential?: string
+}
+
+// Historical default so remote control still works if the server is old or
+// unreachable (STUN-only — no relay for symmetric NAT).
+export const DEFAULT_ICE_SERVERS: IceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
+
+/**
+ * Resolve the server-configured ICE servers (STUN + optional TURN) for remote
+ * control. Never throws — falls back to {@link DEFAULT_ICE_SERVERS}.
+ */
+export async function getIceServers(serverUrl: string, token: string): Promise<IceServer[]> {
+  try {
+    const data = await requestJson<{ ice_servers?: IceServer[] }>(
+      `${trimUrl(serverUrl)}/api/rtc/ice-servers`,
+      { headers: authHeaders(token) },
+      '获取 ICE 服务器配置失败',
+    )
+    const list = Array.isArray(data.ice_servers) ? data.ice_servers : []
+    return list.length ? list : DEFAULT_ICE_SERVERS
+  } catch {
+    return DEFAULT_ICE_SERVERS
+  }
+}

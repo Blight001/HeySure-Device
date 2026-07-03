@@ -2,15 +2,14 @@
 
 六个端侧客户端（**只是运行在不同端的壳，本身不具备 agent 能力**），连接后端、注册为 endpoint。
 
-**本目录是独立仓库** `HeySure-Device`。各平台（windows / linux / mac / windows-tauri / extension / android）代码与资产完全独立，不再共享 `shared/`。
+**本目录是独立仓库** `HeySure-Device`。各平台（windows / linux / mac / extension / android）代码与资产完全独立，不再共享 `shared/`。
 **桌面端已退化为受控运行器**：不再内置固定原生 MCP 工具，能力来自服务器下发的 runtime 工具（python/shell），由服务端编排/推理。
 
 ## 六种形态
 
 | 子目录 | 形态 | 作用 |
 | --- | --- | --- |
-| `windows/` | Electron 桌面（Windows） | 受控运行器：shell/PowerShell/python runner + 本机原生桥（截图/鼠标等支持代码） |
-| `windows-tauri/` | Tauri 2 桌面（Windows，**实验线**） | Electron 壳的轻量替代原型：登录/注册 + 动态 MCP + runtime 执行 + 远控（**原生抓屏 xcap→canvas→WebRTC，不走 getDisplayMedia、无屏幕共享弹窗** + enigo 键鼠注入，`src/remote-control.ts` / `src-tauri/src/rc.rs`）；截图 MCP 工具仍未迁移；见 `windows-tauri/README.md` 与 `doc/tauri2-migration-report.md` |
+| `windows/` | Tauri 2 桌面（Windows） | 受控运行器（**原 Electron 壳已迁移为 Tauri**）：登录/注册 + 动态 MCP + runtime 执行（shell/PowerShell/python）+ 远控（**原生抓屏 xcap→canvas→WebRTC，不走 getDisplayMedia、无屏幕共享弹窗** + enigo 键鼠注入，`src/remote-control.ts` / `src-tauri/src/rc.rs`）；见 `windows/README.md` 与 `doc/tauri2-migration-report.md` |
 | `linux/` | Electron 桌面（X11） | 同上（shell 默认 bash；含 STT/git 独有工具） |
 | `mac/` | Electron 桌面（macOS） | 同上（需系统辅助功能 & 屏幕录制权限） |
 | `extension/` | Chrome MV3 扩展 | 浏览器自动化与轻量客户端（固定工具目录） |
@@ -19,10 +18,12 @@
 
 > 安卓两形态（A 本机 App / B 宿主 ADB）都以 `isAndroid:true` 注册，服务端统一识别为 `android` 类型。
 
-## 桌面端架构（win/linux/mac 一致）
+## 桌面端架构（linux/mac，Electron）
+
+> **注意**：`windows/` 已从 Electron 迁移为 **Tauri 2**，结构与下图不同（`src/agent.ts` `api.ts` `native.ts` `remote-control.ts` `executor/` `runtime/` + `src-tauri/` Rust 壳），详见 `windows/README.md`。下图仅适用于仍为 Electron 的 linux/mac。
 
 ```
-device/windows/src/
+device/linux/src/
   main.ts                    ← Electron 生命周期（窗口/托盘/IPC）
   device.ts                  ← 设备注册与 Socket.IO 连接（平台分叉文件）
   platform.ts                ← 平台抽象层（读取 platformProfile）
@@ -66,19 +67,19 @@ device/windows/src/
 
 ## 桌面端代码独立（停止共享）
 
-自 2026-07 起，各桌面壳（windows / linux / mac / windows-tauri）**完全独立**，不再使用 `device/shared/` 作为单一真相源。
+自 2026-07 起，各桌面壳（windows / linux / mac）**完全独立**，不再使用 `device/shared/` 作为单一真相源。
 
 - 通用逻辑已复制到各平台自己的 `src/` 下（可自由演化）。
 - 资产（图标等）已复制到各平台 `assets/`。
 - 辅助脚本已复制到各平台 `scripts/`（copy-renderer, setup-python, prepare-bundled-python）。
 - 构建不再调用 sync-shared.js。
-- Tauri 仍为实验原型，其专有适配保留在 `windows-tauri/`。
+- Windows 现为 Tauri 壳（Rust + TS），其专有适配在 `windows/src-tauri/`。
 
 **黄金规则**（新）：
 - 改 Windows 逻辑 → 只改 `device/windows/src/`
 - 改 Linux 逻辑 → 只改 `device/linux/src/`
 - 改 macOS 逻辑 → 只改 `device/mac/src/`
-- 改 Tauri 原型 → 只改 `device/windows-tauri/`
+- 改 Windows（Tauri）逻辑 → 只改 `device/windows/`（`src/` 前端 + `src-tauri/` Rust）
 - 图标资源现在是每平台本地 `assets/`（构建配置已更新指向本地）。
 - 平台分叉文件仍然各自维护（device.ts / store.ts / platform.ts 等）。
 
@@ -90,10 +91,9 @@ Linux 独有：`tools/ear.ts`（STT）、`tools/git.ts`（如存在）。
 
 | 需求 | 位置 |
 | --- | --- |
-| Windows 桌面逻辑（含原共享通用部分） | `device/windows/src/` |
+| Windows 桌面逻辑（Tauri 壳） | `device/windows/src/`（前端 TS）+ `device/windows/src-tauri/`（Rust） |
 | Linux 桌面逻辑（含原共享通用部分） | `device/linux/src/` |
 | macOS 桌面逻辑（含原共享通用部分） | `device/mac/src/` |
-| Tauri 实验原型 | `device/windows-tauri/`（含部分原 runtime 便携逻辑） |
 | 浏览器自动化 | `device/extension/src/` |
 | Android 本机执行 | `device/android/`（独立 Kotlin 工程） |
 | Android ADB 控制 | `device/android/android-adb/` |
@@ -115,19 +115,26 @@ Linux 独有：`tools/ear.ts`（STT）、`tools/git.ts`（如存在）。
 ## 命令
 
 ```bash
-# 桌面端壳（windows / linux / mac 通用）
-cd device/windows        # 或 linux / mac
+# 桌面端壳（linux / mac：Electron）
+cd device/linux         # 或 mac
 npm install
-npm run dev              # 直接编译运行（已无 sync-shared）
-npm run build            # → dist/（gitignored）
-npm run setup:python     # 开发时配置 venv；正式打包会自动调用 prepare-bundled-python 内置完整 Python 运行时（用户无需装 Python）
+npm run dev             # 直接编译运行（已无 sync-shared）
+npm run build           # → dist/（gitignored）
+npm run setup:python    # 开发时配置 venv；正式打包会自动调用 prepare-bundled-python 内置完整 Python 运行时（用户无需装 Python）
+
+# Windows 桌面壳（Tauri 2，需 Rust 工具链 + VS Build Tools）
+cd device/windows
+npm install
+npm run tauri:dev       # 开发模式（无 sync-shared）
+npm run tauri:build     # NSIS 安装包（内部触发 npm run build）
+npm run typecheck       # 仅前端 TS 检查（CI/无 Rust 环境可用）
 
 # 根目录一键入口
-device\build-windows.bat
+device\build-windows.bat   # Windows Tauri 打包（NSIS 安装包）
 device/build-linux.sh
 device/build-mac.sh
 device/build-extension.bat
-device\run-windows.bat   # 直接运行（开发用）
+device\run-windows.bat     # Windows Tauri 直接运行（开发用）
 device/run-linux.sh
 device/run-mac.sh
 
@@ -135,13 +142,6 @@ device/run-mac.sh
 cd device/extension
 npm install
 npm run build            # → dist/（Chrome 加载此目录为未打包扩展）
-
-# Tauri 2 实验壳（需 Rust 工具链 + VS Build Tools）
-cd device/windows-tauri
-npm install
-npm run tauri dev        # 开发模式（无 sync-shared）
-npm run tauri build      # NSIS 安装包（内部触发 npm run build）
-npm run typecheck        # 仅前端 TS 检查（CI/无 Rust 环境可用）
 ```
 
 ## 注意点

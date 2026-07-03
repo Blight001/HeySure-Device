@@ -1,72 +1,30 @@
 {
-  "name": "heysure-device-win",
-  "version": "1.0.0",
-  "description": "HeySure Agent - Windows Desktop Edition",
+  "name": "heysure-device-win-tauri",
+  "version": "0.1.0",
+  "description": "HeySure Agent - Windows Desktop (Tauri 2 prototype)",
   "license": "Apache-2.0",
-  "main": "dist/main.js",
+  "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "tsc && node ./scripts/copy-renderer.js && electron dist/main.js",
-    "build": "tsc && node ./scripts/copy-renderer.js",
-    "start": "electron dist/main.js",
-    "setup:python": "node ./scripts/setup-python.js",
-    "prepare:python": "node ./scripts/prepare-bundled-python.js",
-    "postinstall": "electron-builder install-app-deps",
-    "rebuild": "electron-builder install-app-deps",
-    "package": "npm run prepare:python && electron-builder --win"
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "setup:python": "node ./scripts/setup-python.cjs",
+    "prepare:python": "node ./scripts/prepare-bundled-python.cjs",
+    "ensure:bundled": "node ./scripts/ensure-bundled.cjs",
+    "tauri": "tauri",
+    "pretauri:dev": "node ./scripts/ensure-bundled.cjs",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "npm run prepare:python && tauri build"
   },
   "dependencies": {
-    "socket.io-client": "^4.7.5",
-    "dotenv": "^16.4.5",
-    "pngjs": "^7.0.0",
-    "robotjs": "npm:@jitsi/robotjs@^0.6.22",
-    "electron-store": "^8.1.0",
-    "uuid": "^9.0.1"
+    "@tauri-apps/api": "^2.5.0",
+    "socket.io-client": "^4.7.5"
   },
   "devDependencies": {
-    "@types/pngjs": "^6.0.5",
-    "electron": "^28.3.3",
-    "electron-builder": "^24.9.1",
-    "typescript": "^5.4.5",
-    "@types/node": "^20.12.0"
-  },
-  "build": {
-    "appId": "com.heysure.device.win",
-    "productName": "HeySure Device",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist/**/*",
-      "src/**/*",
-      { "from": "assets", "to": "assets", "filter": ["**/*"] }
-    ],
-    "extraResources": [
-      {
-        "from": "bundled",
-        "to": "bundled",
-        "filter": ["**/*"]
-      }
-    ],
-    "asarUnpack": [
-      "**/bundled/**"
-    ],
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "assets/icon.ico"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
-    }
-  },
-  "__npminstall_done": false
+    "@tauri-apps/cli": "^2.5.0",
+    "typescript": "^5.6.3",
+    "vite": "^6.3.5"
+  }
 }

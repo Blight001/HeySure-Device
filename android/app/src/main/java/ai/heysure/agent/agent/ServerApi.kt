@@ -1,5 +1,6 @@
 package ai.heysure.agent.agent
 
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.net.HttpURLConnection
@@ -45,6 +46,59 @@ object ServerApi {
             userName = user?.optString("name").orEmpty().ifBlank { account },
             userAvatar = user?.optString("avatar").orEmpty(),
         )
+    }
+
+    /** One ICE server descriptor (STUN or TURN) as delivered by the server. */
+    data class IceServerConfig(
+        val urls: String,
+        val username: String?,
+        val credential: String?,
+    )
+
+    /**
+     * Resolve the server-configured ICE servers (STUN + optional TURN) for
+     * remote control. Never throws — returns an empty list on any failure so the
+     * caller can fall back to its built-in STUN default.
+     */
+    fun getIceServers(serverUrl: String, token: String): List<IceServerConfig> {
+        return try {
+            val base = normalizeBaseUrl(serverUrl)
+            val json = getJson("$base/api/rtc/ice-servers", token)
+            val arr = json.optJSONArray("ice_servers") ?: JSONArray()
+            (0 until arr.length()).mapNotNull { i ->
+                val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                val urls = when {
+                    o.opt("urls") is JSONArray -> o.getJSONArray("urls").optString(0)
+                    else -> o.optString("urls")
+                }
+                if (urls.isNullOrBlank()) null
+                else IceServerConfig(
+                    urls = urls,
+                    username = o.optString("username").ifBlank { null },
+                    credential = o.optString("credential").ifBlank { null },
+                )
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    private fun getJson(urlStr: String, token: String?): JSONObject {
+        val conn = (URL(urlStr).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 10_000
+            readTimeout = 15_000
+            token?.let { setRequestProperty("Authorization", "Bearer $it") }
+        }
+        try {
+            val ok = conn.responseCode in 200..299
+            val stream = if (ok) conn.inputStream else conn.errorStream
+            val text = stream?.bufferedReader()?.use(BufferedReader::readText).orEmpty()
+            if (!ok) throw IllegalStateException("请求失败 (${conn.responseCode})")
+            return if (text.isBlank()) JSONObject() else JSONObject(text)
+        } finally {
+            conn.disconnect()
+        }
     }
 
     private fun postJson(urlStr: String, body: JSONObject, token: String?): JSONObject {

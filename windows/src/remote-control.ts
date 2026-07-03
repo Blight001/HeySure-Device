@@ -19,11 +19,16 @@
 // the robotjs equivalent). Both Rust commands live in src-tauri/src/rc.rs.
 
 import { native } from './native'
+import { fetchIceServers } from './api'
 
 type SignalSender = (event: string, payload: any) => void
 type RcLogger = (level: 'info' | 'warn' | 'error', message: string, data?: any) => void
 
-const RC_ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
+// Fallback when the server config can't be resolved (STUN-only — no relay).
+const RC_ICE_SERVERS_FALLBACK: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
+// Server connection used to fetch the ICE config; set on each inbound signal.
+let rcServerUrl = ''
+let rcToken = ''
 
 // Native screen-capture pacing. The frame path is capture(GDI)+JPEG-encode in
 // Rust → raw-bytes IPC → createImageBitmap+draw in the WebView. Moving off the
@@ -213,7 +218,10 @@ async function rcStartSession(sessionId: string): Promise<void> {
   scheduleCapture()
   log('info', `已捕获主屏 ${width}×${height}（原生捕获，无屏幕共享），建立 WebRTC 连接中…`)
 
-  const connection = new RTCPeerConnection({ iceServers: RC_ICE_SERVERS })
+  const iceServers = (rcServerUrl && rcToken
+    ? (await fetchIceServers(rcServerUrl, rcToken)) as RTCIceServer[]
+    : RC_ICE_SERVERS_FALLBACK)
+  const connection = new RTCPeerConnection({ iceServers })
   rcPc = connection
   connection.onicecandidate = (event) => {
     if (event.candidate) signal('rc:ice', { sessionId: rcSessionId, candidate: event.candidate.toJSON() })
@@ -263,11 +271,14 @@ export async function handleRemoteControlSignal(
   data: any,
   send: SignalSender,
   logger?: RcLogger,
+  conn?: { serverUrl?: string; token?: string },
 ): Promise<void> {
   const sessionId = String(data?.sessionId || '')
   if (!sessionId) return
   rcSend = send
   if (logger) rcLog = logger
+  if (conn?.serverUrl) rcServerUrl = conn.serverUrl
+  if (conn?.token) rcToken = conn.token
 
   if (event === 'rc:start') {
     await rcStartSession(sessionId)

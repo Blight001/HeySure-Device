@@ -1,11 +1,13 @@
 package ai.heysure.agent.remote
 
+import ai.heysure.agent.agent.ServerApi
 import ai.heysure.agent.capture.ScreenCaptureManager
 import android.content.Context
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 import org.webrtc.DefaultVideoEncoderFactory
 import org.webrtc.DefaultVideoDecoderFactory
@@ -29,6 +31,10 @@ class RemoteControlManager(
     private val capture: ScreenCaptureManager,
     private val sendSignal: (event: String, payload: JSONObject) -> Unit,
     private val onLog: (String) -> Unit,
+    // Server connection used to resolve the ICE (STUN/TURN) config; both read
+    // lazily so they reflect the current login.
+    private val serverUrl: () -> String = { "" },
+    private val authToken: () -> String = { "" },
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val sessions = mutableMapOf<String, RemoteControlSession>()
@@ -36,9 +42,36 @@ class RemoteControlManager(
     private var eglBase: EglBase? = null
     private var factory: PeerConnectionFactory? = null
 
-    private val iceServers: List<PeerConnection.IceServer> = listOf(
+    // Built-in STUN fallback (no relay). Replaced by [refreshIceServers] with the
+    // server-configured STUN + optional TURN so control survives symmetric NAT.
+    private val fallbackIceServers: List<PeerConnection.IceServer> = listOf(
         PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
     )
+
+    @Volatile
+    private var iceServers: List<PeerConnection.IceServer> = fallbackIceServers
+
+    init {
+        refreshIceServers()
+    }
+
+    /** Fetch the server-configured ICE servers off-thread and cache them for the
+     *  next session. Best-effort: on any failure the STUN fallback is kept. */
+    fun refreshIceServers() {
+        val base = serverUrl()
+        val token = authToken()
+        if (base.isBlank() || token.isBlank()) return
+        scope.launch {
+            val configs = ServerApi.getIceServers(base, token)
+            if (configs.isEmpty()) return@launch
+            iceServers = configs.map { c ->
+                PeerConnection.IceServer.builder(c.urls).apply {
+                    c.username?.let { setUsername(it) }
+                    c.credential?.let { setPassword(it) }
+                }.createIceServer()
+            }
+        }
+    }
 
     @Synchronized
     private fun ensureFactory(): PeerConnectionFactory {

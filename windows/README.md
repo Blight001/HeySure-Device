@@ -1,226 +1,131 @@
-# HeySure Agent — Windows Desktop Edition
+# HeySure Device — Tauri 2 原型（Windows）
 
-Electron desktop shell that connects to the HeySure server over Socket.IO,
-registers as a **desktop** endpoint, and runs MCP tools pushed from the server.
+`doc/tauri2-migration-report.md` **第一阶段**的落地实现：用 Tauri 2 替换 Electron 桌面壳，
+只验证核心链路 —— 打开 UI、保存设置、登录并连接服务端、接收/注册动态 MCP、执行
+PowerShell / shell / Python 工具。**远控已迁移**：原生抓屏（`xcap`，无屏幕共享弹窗）+ WebRTC 画面
++ enigo 键鼠注入，实现「直接远控」（见下文「远程控制」）；**截图 MCP 工具、离线聊天头像缓存仍未迁移**。
 
-The shell itself is a **controlled runner**: it only ships one built-in MCP tool
-(`mcp.manage_dynamic_tool`, the dynamic-tool bootstrap). Everything else —
-`shell.run`, `keyboard.*`, `mouse.*`, `vision.*`, `window.*`, `fs.*`, and so
-on — is a **server-pushed runtime tool** (python / powershell / shell) whose
-definitions live under `server/main/api/services/device_runtime_tools/` and are
-seeded into the user workspace at `device_tools/desktop/` on first connect.
+> **本目录已成为 Windows 桌面壳的正式实现**：原 Electron 版 `device/windows/` 已被本 Tauri 实现取代并改名为 `device/windows/`（下文「Electron 版」均指已退役的旧实现，仅作架构对照）。
 
-Desktop code and assets are now fully independent (no device/shared).
-All logic lives directly under this platform's `src/`, `assets/`, and `scripts/`.
+## 架构对照
 
-## Architecture
+| Electron 版 | Tauri 版 | 说明 |
+| --- | --- | --- |
+| main process（Node） | `src-tauri/src/main.rs` | 只保留原生职责：托盘、窗口、设置持久化、临时脚本 |
+| `runtime/process-guard.ts` | `src-tauri/src/guard.rs` | 超时 / 并发上限 4 / 输出截断 1MB / 一键暂停，语义一致 |
+| `device.ts`（Socket.IO 协议） | `src/agent.ts` | **逐行移植**，协议不变；socket.io-client 直接跑在 WebView |
+| `executor/dynamic.ts`（动态 MCP） | `src/executor/dynamic.ts` | program / js / runtime 三种 code_kind 全保留 |
+| `runtime/*-runner.ts` | `src/runtime/*-runner.ts` | 拼装逻辑在 TS，spawn 走 Rust `run_process` 命令 |
+| `permission-guard.ts` + 主进程弹窗 | `src/runtime/permission-guard.ts` + 页面内弹窗 | 策略逻辑原样，confirm 改为页内模态 |
+| electron-store | `settings.json`（app config 目录，Rust 读写） | |
+| ipc/* + preload | （不存在） | 协议就在 WebView 里，无需 IPC 桥 |
+| `remote/remote-control-host.ts` + 隐藏 renderer + renderer/remote-control | `src/remote-control.ts` | **合二为一**：WebView 原生有 WebRTC，无需隐藏 peer renderer |
+| `remote/desktop-source.ts` + `desktopCapturer`（静默截屏） | `src-tauri/src/rc.rs`（xcap 原生捕获）→ canvas → `captureStream()` | **不走 `getDisplayMedia`**，无「屏幕共享」弹窗/提示；Rust 抓主屏 JPEG，前端画到 canvas 再转 WebRTC 视频轨 |
+| `remote/input-injector.ts`（robotjs） | `src-tauri/src/rc.rs`（enigo） | 归一化 [0,1] 坐标 → 主屏像素，键鼠注入语义一致（含 CJK `text()`） |
 
-```
-HeySure Server ──socket.io──▶ main.ts / agent-runtime
-                                    │
-                    ┌───────────────┼───────────────┐
-                    ▼               ▼               ▼
-              executor/         runtime/         renderer/
-         (mcp.manage_dynamic)  (python/shell/   (login, MCP UI,
-                               powershell)      mcp.test)
-```
+之所以能把协议层留在 WebView：服务端 Gateway 与 Socket.IO 均放开了 CORS
+（`allow_origins=["*"]` / `cors_allowed_origins='*'`），WebView 里的 fetch 和
+websocket 可直连服务端。
 
-| Layer | Role |
-| --- | --- |
-| `src/main.ts` | Electron lifecycle, tray, window |
-| `src/device.ts` | Socket registration, task dispatch |
-| `src/executor/` | Built-in tool registry (`catalog.ts` → dynamic manager only) |
-| `src/runtime/` | Controlled execution (process guard, python/shell runners) |
-| `src/renderer/` | Desktop UI (local copy) |
-| `src/tools/` | Platform bridges still used by runtime python bodies (robot, screen, …) |
+## 独立资产与代码
 
-Default runtime tool bodies: `server/main/api/services/device_runtime_tools/bodies/`.
-Metadata: `definitions.json` in the same folder.
+Tauri 原型已停止从 device/shared 同步。
 
-## System requirements
+可移植的少量文件（constants.ts、server-url.ts、executor/catalog.ts、runtime/permission-guard.ts）已作为独立副本保留在本地 src/。
 
-- Windows 10/11
-- **Packaged installer** (the `.exe` from `npm run package` or `device\build-windows.bat`): **No Python needed on the target computer**. A self-contained Python runtime (embeddable + all required packages like pyautogui, pywinauto, pillow, pynput, mss, psutil...) is bundled during packaging and shipped inside the app.
-- **Development** (running from source / `npm run dev`): Node.js 18+ and a local Python 3 installation. Use the command below to prepare the dev venv.
-- Native module `robotjs` (rebuilt against Electron via `npm run rebuild`)
-- Optional: PowerShell / pwsh for `shell.run` with `shell: "powershell"`
+所有修改直接在 `windows/src/` 及 `src-tauri/` 中进行。
 
-During development (or if you want to test local Python changes):
+图标现从本地 `assets/` 读取（tauri.conf + include_bytes 已更新）。
 
-  ```bash
-  npm run setup:python   # creates device_runtime/python/.venv (dev only)
-  ```
+## 环境要求
 
-## Run (development)
+- Node.js ≥ 18（前端构建）
+- **Rust 工具链**（[rustup](https://rustup.rs/)，stable-msvc）
+- **Visual Studio Build Tools**（含"使用 C++ 的桌面开发"工作负载，MSVC 链接器）
+- WebView2 Runtime（Windows 11 自带；旧系统由 NSIS 安装器自动引导安装）
 
-From repo root:
+## 命令
+
+从 `device/` 目录双击：
 
 ```bat
-device\run-windows.bat
+run-windows.bat
+build-windows.bat
 ```
 
-Or manually:
+手动命令：
 
 ```bash
-cp .env.example .env    # set SERVER_URL, WORKSPACE_ROOT, etc.
+cd device/windows
 npm install
-npm run rebuild
-npm run dev
+npm run tauri:dev      # 开发模式（前端热更新 + Rust 调试构建）
+npm run tauri:build    # 产出 NSIS 安装包（src-tauri/target/release/bundle/nsis/）
+npm run typecheck      # 仅前端 TS 类型检查（无需 Rust 工具链）
 ```
 
-## Package
+## 验证清单（对应报告的判断标准）
 
-```bash
-npm run package         # → release/HeySure Device Setup *.exe
+- [ ] 打开 UI、保存设置、托盘常驻
+- [ ] 登录 → `device:register` → `device:registered`（作坊分配 AI）
+- [ ] 服务器 `device:tool-config` 下发动态 MCP 并出现在工具列表
+- [ ] 本地工具测试页执行 shell / powershell / python runtime 工具
+- [ ] 权限确认弹窗（confirm 级权限标签）、一键暂停
+- [ ] 远程控制：Web 控制台发起 → 看到实时主屏 → 鼠标/键盘/滚轮/中文输入生效
+- [ ] 安装包体积对比 Electron 版（预期 ~10MB vs ~100MB+，待实测）
+
+## 已知取舍（第一阶段范围内）
+
+- **Python 分发**：不再内置 bundled Python（体积问题正是迁移动机，报告第三阶段再定方案）。
+  解释器解析顺序：`HEYSURE_PYTHON` 环境变量 → PATH 上的 `python`/`python3`/`py`。
+- **`mcp.manage_dynamic_tool` 的 `get_source`/源码检视不可用**：应用源码以打包产物分发，
+  没有可读的 `src/**.ts`；`inspect` 仍返回注册定义与 handler 源码。
+- **本地动态工具 JSON 无文件监听热加载**（Electron 版有 fs.watch）；改用 `action=reload`。
+- **与 Electron 版同时运行会冲突**：默认 deviceId 都是 `agent-<hostname>`，
+  同时连接会互相顶替；如需并行测试，改 `%APPDATA%/com.heysure.device.win.tauri/settings.json`
+  里的 `deviceId`。
+- **远程控制的屏幕捕获走原生路径，不用 `getDisplayMedia`**：WebView2 无 Electron 的
+  `desktopCapturer`，而 `getDisplayMedia` 会弹「屏幕共享」选择框/常驻提示条——不符合「直接远控」。
+  改为 Rust 端 `xcap` 抓主屏 → JPEG（`image`）→ **原始字节**（`tauri::ipc::Response`，前端收到
+  `ArrayBuffer`，不再 base64）→ 前端 `createImageBitmap` 解码后画到 `<canvas>` →
+  `canvas.captureStream()` 作为 WebRTC 视频轨。清晰度/帧率调优（均在 `src/remote-control.ts` 顶部）：
+  `JPEG_QUALITY=82`（源帧清晰度）、`CAPTURE_FPS=20`、`MAX_VIDEO_BITRATE`（抬高 VP8 码率上限）；
+  视频轨设 `contentHint='detail'` + `degradationPreference='maintain-resolution'`，让 WebRTC
+  在压力下优先掉帧而非降分辨率（避免文字发糊）。**代价**：帧路径仍是「原生抓屏+JPEG 编码+IPC」，
+  纯 Rust JPEG 编码偏慢；若仍不够可换 `turbojpeg`/DXGI Desktop Duplication，或对静止帧做差分跳过。
+  引入 `xcap`+`image` 会增大安装包体积（与本迁移的「体积优先」目标有取舍）。
+- 仍未迁移：截图 MCP 工具、离线聊天头像缓存。
+
+## 目录结构
+
+```
+windows/
+  index.html / src/         前端（Vite + 原生 TS，无框架）
+    agent.ts                设备协议（Socket.IO 注册/任务分发/工具下发）
+    api.ts settings.ts      REST 登录、设置持久化
+    executor/               工具注册表 + 动态 MCP 引擎（program/js/runtime）
+    runtime/                运行器底座（权限守卫 + 三个 runner + 探测）
+    remote-control.ts       远控 WebRTC peer（原生抓屏→canvas→captureStream + 控制通道 + 信令）
+    native.ts               与 Rust 的唯一边界（invoke 封装）
+  src-tauri/
+    src/main.rs             命令 + 托盘 + 持久化
+    src/guard.rs            进程守护（超时/并发/截断/暂停）
+    src/rc.rs               远控原生抓屏（xcap→JPEG）+ 键鼠注入（enigo）
 ```
 
-Or from repo root: `device\build-windows.bat`
+## 远程控制
 
-## How it registers
+链路与 Electron 版一致（信令 `rc:*` 经 `connector_runtime/dispatch/remote_control.py`
+中继，媒体与输入走点对点 WebRTC）。桌面是 **offerer**。
 
-On login the agent emits `device:register` with
-`platform: "win-desktop (<hostname>)"` and `isWindowsDesktop: true`. The server
-treats it as a desktop endpoint and syncs runtime tool definitions from the
-user workspace to the device.
+**屏幕画面（直接远控，无屏幕共享）**：不使用 `getDisplayMedia`（那会弹「屏幕共享」框/提示条）。
+改为 Rust `rc_capture_frame` 用 `xcap` 静默抓主屏 → JPEG → 原始字节（`ArrayBuffer`，非 base64）；
+前端 `createImageBitmap` 解码后把每帧画到一个离屏 `<canvas>`，用 `canvas.captureStream()` 得到
+MediaStream 作为 WebRTC 视频轨。抓帧循环自节流（`setTimeout` 递归，避免慢帧堆叠），首帧确定画布尺寸
+与视频分辨率。清晰/流畅度调优见 `src/remote-control.ts` 顶部常量与 `tuneVideoEncoder`。
 
-## Directory layout
+**输入**：`control` DataChannel 收浏览器下发的归一化鼠标/键盘事件，经 Rust `rc_inject_input`
+（enigo）注入本机（含滚轮、修饰键、CJK `text()`）。抓屏走 `spawn_blocking`，与输入注入互不阻塞，
+远控手感保持跟手。
 
-```
-device/windows/
-├── .env.example
-├── package.json
-├── src/
-│   ├── main.ts           # Electron entry
-│   ├── device.ts         # Socket + task handling (platform-specific)
-│   ├── platform.ts       # win-desktop profile + capability hints
-│   ├── executor/         # Built-in MCP catalog (dynamic manager only)
-│   ├── runtime/          # Local: shell/python runners (independent)
-│   ├── ipc/              # Main ↔ renderer IPC
-│   ├── renderer/         # Synced UI (MCP list + mcp.test)
-│   ├── tools/            # Windows-native bridges (mouse, screen, window, …)
-│   └── windows/          # Main window + tray
-├── device_runtime/python/          # requirements.txt (dev venv goes here)
-└── bundled/                        # generated by prepare-bundled-python.js at package time (gitignored)
-```
-
-## 联调测试
-
-桌面端能力来自**服务端下发的 runtime 工具**（首次连接会种子化到工作区
-`device_tools/desktop/`）。打包版本已内置 Python；开发时请先执行 `npm run setup:python` 准备 dev venv。
-
-### 测试前准备
-
-1. 启动后端四进程 + Web 控制台（`server\run.bat`、`web\run.bat`）
-2. 启动本机 Windows 壳：`device\run-windows.bat`
-3. 桌面端登录账号，确认 Socket 已连接、已绑定待测 AI 成员
-4. 仪表盘 → 该 AI 成员 → 绑定 **Windows 桌面** 设备，MCP 权限勾选需要的 runtime 工具
-5. 系统全能设置里「单次运行最多步骤」完整回归建议 ≥ 60
-
-出厂默认工具清单位于
-`server/main/api/services/device_runtime_tools/definitions.json`（`shell.run`、
-`fs.*`、`vision.*`、`mouse.*`、`window.*` 等）。
-
-### 方式一：桌面端 UI 单工具冒烟（mcp.test）
-
-适合改完 runtime 执行链或平台桥接后快速验证。
-
-1. 打开 HeySure Device 主窗口 → **MCP 工具** 页
-2. 选中工具 → 展开 **测试调用 (mcp.test)**
-3. 填入 JSON → **测试** → 查看原始返回
-
-常用安全示例（优先在工作区内操作）：
-
-```json
-{ "command": "echo HeySure smoke test", "shell": "powershell" }
-```
-
-```json
-{ "path": ".", "limit": 20 }
-```
-
-```json
-{ "path": "smoke-test.txt", "content": "hello from mcp.test" }
-```
-
-```json
-{ "path": "smoke-test.txt" }
-```
-
-```json
-{}
-```
-
-```json
-{ "text": "HeySure clipboard test" }
-```
-
-```json
-{}
-```
-
-键鼠类工具（`mouse.*`、`keyboard.*`）会真实操作系统，冒烟阶段建议跳过或仅在
-记事本等安全窗口、经你确认后测试。
-
-### 方式二：Web 控制台知识库继承测试
-
-1. Web 控制台 → **知识库** → 打开某 AI 的继承技能
-2. 在 **设备工具** 列表中找到在线 Windows 设备上的工具
-3. 点击 **开始测试** → 选模型 → 发起单工具模型联调
-
-适合验证「服务端 schema → 设备执行 → 模型理解参数」整条链路。
-
-### 方式三：AI 成员完整回归（推荐）
-
-将以下指令发给**已绑定 Windows 桌面设备**的 AI 成员。所有文件操作限定在
-工作区（`WORKSPACE_ROOT`），不要操作系统敏感目录。
-
-```text
-请对 HeySure Windows 桌面端做一次完整联调测试，并输出结构化报告。
-
-【环境】
-- 使用当前已连接的 Windows 桌面设备
-- 文件类工具仅在工作区内读写（如 smoke-test.txt）
-- 键鼠类工具若可能影响桌面，先询问我是否继续
-
-【测试要求】
-按顺序执行，每项记录：入参、返回摘要、通过/失败/跳过；失败最多重试 1 次。
-
-1) shell.run：powershell 执行 echo HeySure-win-test
-2) fs.list：列出工作区根目录
-3) fs.write + fs.read：写入并读回 smoke-test.txt
-4) screen.info：读取屏幕信息
-5) vision.capture 或 screen.capture：截图（只读）
-6) window.list：列出窗口
-7) clipboard.set + clipboard.get：剪贴板往返
-8) process.list：列出进程（只读）
-9) ui.inspect：Inspect 当前前台窗口（若可用）
-10) 可选：keyboard.type / mouse.move（需我确认后继续）
-
-【报告格式】
-# Windows 桌面端联调报告
-- 测试时间 / 设备在线状态 / 工作区路径
-## 总览（通过/失败/跳过）
-## 逐项结果表
-## 失败与风险项
-## 结论
-```
-
-### 通过标准（摘要）
-
-- `shell.run` 返回退出码 0 且含预期输出
-- `fs.write` → `fs.read` 内容一致
-- 截图类工具返回 image/path 且无权限错误
-- `window.list` / `process.list` 返回非空结构
-
-### 常见问题
-
-| 现象 | 排查 |
-| --- | --- |
-| 工具列表为空 | 设备未连接；或工作区尚未种子化，重登或检查服务端 |
-| Python 工具失败 | 打包安装包应自带 Python；开发环境运行 `npm run setup:python`；检查 `.venv` 或 `bundled/python` |
-| 键鼠无响应 | robotjs 未 rebuild；杀毒软件拦截；目标窗口未聚焦 |
-| mcp.test 报权限 | 设置里该工具未「向软件端开放」 |
-| 修改默认工具无生效 | 改的是工作区 `device_tools/desktop/` 副本，不是 bodies 种子源 |
-
-直接在本目录执行 `npm run dev` 或 `npm run build`（已停止共享同步）；
-修改平台分叉文件（`src/device.ts`、`src/tools/*`）后同样需重启桌面端验证。
+`agent.ts` 注册时宣告 `remote_control` capability，服务端据此放行；未宣告则回
+「该设备版本不支持远程控制」。

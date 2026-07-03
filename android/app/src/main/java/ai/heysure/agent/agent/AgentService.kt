@@ -185,6 +185,8 @@ class AgentService : Service() {
             capture = capture,
             sendSignal = { event, payload -> agent?.emitSignal(event, payload) },
             onLog = { msg -> logListener?.invoke(msg) },
+            serverUrl = { settings.serverUrl },
+            authToken = { settings.authToken },
         )
         remoteControl = rc
         agent = SocketAgent(

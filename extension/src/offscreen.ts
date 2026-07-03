@@ -24,7 +24,8 @@ ping()
 setInterval(ping, PING_INTERVAL_MS)
 
 // ── 2. Remote-control WebRTC peer ──────────────────────────────────────────────
-const RC_ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
+// Fallback when the background didn't supply server config (STUN-only — no relay).
+const RC_ICE_SERVERS_FALLBACK: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
 
 let pc: RTCPeerConnection | null = null
 let channel: RTCDataChannel | null = null
@@ -65,7 +66,7 @@ function rcCleanup(): void {
   sessionId = ''
 }
 
-async function startPeer(sid: string): Promise<void> {
+async function startPeer(sid: string, iceServers?: RTCIceServer[]): Promise<void> {
   if (pc) rcCleanup()
   sessionId = sid
 
@@ -75,7 +76,7 @@ async function startPeer(sid: string): Promise<void> {
   ctx = canvas.getContext('2d')
   const stream = canvas.captureStream(30)
 
-  const connection = new RTCPeerConnection({ iceServers: RC_ICE_SERVERS })
+  const connection = new RTCPeerConnection({ iceServers: iceServers?.length ? iceServers : RC_ICE_SERVERS_FALLBACK })
   pc = connection
   connection.onicecandidate = (e) => { if (e.candidate) toBg('ice', { candidate: e.candidate.toJSON() }) }
   connection.onconnectionstatechange = () => {
@@ -135,7 +136,7 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (!msg?.rc || msg.dir !== 'to-offscreen') return
   switch (msg.event) {
     case 'peer-start':
-      void startPeer(String(msg.sessionId || ''))
+      void startPeer(String(msg.sessionId || ''), Array.isArray(msg.iceServers) ? msg.iceServers : undefined)
       break
     case 'answer':
       if (pc && msg.sessionId === sessionId) {

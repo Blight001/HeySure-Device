@@ -10,7 +10,7 @@
 // NOTE: this is a plain <script> (module: commonjs would emit `exports` and
 // crash in the browser), so it uses no import/export — matching offline-chat.ts.
 
-type RcStartPayload = { sessionId: string; sourceId: string; width: number; height: number }
+type RcStartPayload = { sessionId: string; sourceId: string; width: number; height: number; iceServers?: RTCIceServer[] }
 type RcSdpPayload = { sessionId: string; sdp: string }
 type RcIcePayload = { sessionId: string; candidate: RTCIceCandidateInit }
 
@@ -26,7 +26,8 @@ const rc = (window as any).heysureRC as {
 
 let inputSeen = false
 
-const RC_ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
+// Fallback when the main process couldn't resolve the server config (STUN-only).
+const RC_ICE_SERVERS_FALLBACK: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
 
 let rcPc: RTCPeerConnection | null = null
 let rcStream: MediaStream | null = null
@@ -76,7 +77,8 @@ async function rcStart(data: RcStartPayload): Promise<void> {
   }
   rc.debug('info', '已捕获屏幕，建立 WebRTC 连接中…')
 
-  const connection = new RTCPeerConnection({ iceServers: RC_ICE_SERVERS })
+  const iceServers = data.iceServers?.length ? data.iceServers : RC_ICE_SERVERS_FALLBACK
+  const connection = new RTCPeerConnection({ iceServers })
   rcPc = connection
   connection.onicecandidate = (event) => {
     if (event.candidate) rc.signal('rc:ice', { sessionId: rcSessionId, candidate: event.candidate.toJSON() })

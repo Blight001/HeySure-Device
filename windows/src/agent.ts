@@ -150,8 +150,9 @@ export class HeySureAgent {
     // screen + input ride a peer-to-peer link, so only these few SDP/ICE
     // messages cross the socket. The WebView owns the WebRTC peer (remote-control.ts).
     const rcSend = (event: string, payload: any) => { this.socket?.emit(event, payload) }
+    const rcConn = { serverUrl: this.settings.serverUrl, token: this.settings.authToken }
     for (const ev of ['rc:start', 'rc:answer', 'rc:ice', 'rc:stop']) {
-      this.socket.on(ev, (data: any) => { void handleRemoteControlSignal(ev, data, rcSend, this.events.onLog) })
+      this.socket.on(ev, (data: any) => { void handleRemoteControlSignal(ev, data, rcSend, this.events.onLog, rcConn) })
     }
 
     // Web-authored dynamic MCP tools for this device type, pushed by the server

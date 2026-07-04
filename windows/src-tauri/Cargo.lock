@@ -1320,6 +1320,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tokio",
+ "windows 0.56.0",
  "xcap",
 ]
 

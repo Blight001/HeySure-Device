@@ -17,6 +17,9 @@ tokio = { version = "1", features = ["process", "time", "sync", "io-util", "macr
 enigo = "0.2"
 # 远程控制的原生屏幕捕获（Electron desktopCapturer 的等价物，无「屏幕共享」弹窗）。
 xcap = "0.4"
+# 远程控制：把系统光标绘制进捕获帧（GetCursorInfo/GetIconInfo/DrawIconEx），
+# xcap 的 GDI BitBlt 捕获本身不含硬件光标层。
+windows = { version = "0.56", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging"] }
 # 帧编码：把捕获到的 RgbaImage 压成 JPEG（仅需 jpeg 编码器）。
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 

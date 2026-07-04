@@ -78,3 +78,18 @@ export async function loadSettings(): Promise<AgentSettings> {
 export async function saveSettings(settings: AgentSettings): Promise<void> {
   await native.saveJsonFile(SETTINGS_FILE, settings)
 }
+
+// A stable per-install id is what lets the server tell two physically
+// different machines apart in the Workshop panel. Falling back to the
+// hostname (as this used to) collides whenever two machines share one (cloned
+// images, factory default names), so generate a random id once and persist it
+// — subsequent boots reuse the saved value instead of regenerating it.
+export async function ensureDeviceId(settings: AgentSettings): Promise<string> {
+  if (settings.deviceId) return settings.deviceId
+  const id = 'win-' + (typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`)
+  settings.deviceId = id
+  await saveSettings(settings)
+  return id
+}

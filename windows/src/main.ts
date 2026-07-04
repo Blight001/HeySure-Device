@@ -14,7 +14,7 @@ import { registerConfirmHandler, type ConfirmRequest } from './runtime/permissio
 import { probeRuntimes, type RuntimeReport } from './runtime/runtime-probe'
 import { pauseExecution, resumeExecution, executionState } from './runtime/process'
 import { native, type HostInfo } from './native'
-import { loadSettings, saveSettings, defaults, type AgentSettings } from './settings'
+import { loadSettings, saveSettings, ensureDeviceId, defaults, type AgentSettings } from './settings'
 
 // Asset import via Vite so the logo is properly resolved in both dev and production
 // without duplicating files from assets/ (single source of truth also used by Rust side).
@@ -1406,6 +1406,7 @@ async function setupWindowControls() {
 async function boot() {
   host = await native.hostInfo()
   settings = await loadSettings()
+  await ensureDeviceId(settings)
   document.body.classList.toggle('light', settings.theme === 'light')
   document.documentElement.classList.toggle('light', settings.theme === 'light')
   // No toolEnabled provider (MCP checkboxes removed; server issues all tools)

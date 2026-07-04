@@ -4,7 +4,7 @@
 
 import { app, Menu, dialog } from 'electron'
 import * as path from 'path'
-import { store } from './store'
+import { store, ensureDeviceId } from './store'
 import { initCapture } from './capture-bridge'
 import { createMainWindow, getMainWindow } from './windows/main-window'
 import { createTray, updateTray } from './windows/tray'
@@ -69,6 +69,7 @@ async function bootstrap(): Promise<void> {
   initCapture()
 
   clearAiSelectionIfLoggedOut()
+  ensureDeviceId()
   initAgent(store.store)
   initRuntimeBase()
   initializeDynamicMcp(() => getAgent()?.refreshRegistration())

@@ -1,4 +1,5 @@
 import Store from 'electron-store'
+import * as crypto from 'crypto'
 
 interface AgentSettings {
   serverUrl: string
@@ -93,3 +94,16 @@ const defaults: AgentSettings = {
 
 export const store = new Store<AgentSettings>({ defaults })
 export type { AgentSettings }
+
+// A stable per-install id is what lets the server tell two physically
+// different machines apart in the Workshop panel. Falling back to the
+// hostname (as this used to) collides whenever two machines share one (cloned
+// images, factory default names), so generate a random id once and persist it
+// — subsequent boots reuse the saved value instead of regenerating it.
+export function ensureDeviceId(): string {
+  const existing = store.get('deviceId')
+  if (existing) return existing
+  const id = 'linux-' + crypto.randomUUID()
+  store.set('deviceId', id)
+  return id
+}

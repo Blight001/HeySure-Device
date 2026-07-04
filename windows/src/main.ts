@@ -9,7 +9,7 @@ import { listen } from '@tauri-apps/api/event'
 import { HeySureAgent, type DeviceStatus } from './agent'
 import { login, pingServer, getMe } from './api'
 import { initializeDynamicMcp } from './executor/dynamic'
-import { getAllToolDefs, setToolEnabledProvider } from './executor'
+import { getAllToolDefs } from './executor'
 import { registerConfirmHandler, type ConfirmRequest } from './runtime/permission-guard'
 import { probeRuntimes, type RuntimeReport } from './runtime/runtime-probe'
 import { pauseExecution, resumeExecution, executionState } from './runtime/process'
@@ -285,17 +285,6 @@ function renderTools() {
     const item = document.createElement('div')
     item.className = 'tool-item'
 
-    const toggle = document.createElement('input')
-    toggle.type = 'checkbox'
-    toggle.checked = settings.toolEnabled[def.name] !== false
-    toggle.title = '在本机启用/禁用该工具'
-    toggle.addEventListener('change', () => {
-      settings.toolEnabled = { ...settings.toolEnabled, [def.name]: toggle.checked }
-      void saveSettings(settings)
-      agent?.refreshRegistration()
-      appendLog('info', `${toggle.checked ? '已启用' : '已禁用'}工具 ${def.name}`)
-    })
-
     const title = document.createElement('div')
     title.className = 'tool-title'
 
@@ -321,7 +310,7 @@ function renderTools() {
     const top = document.createElement('div')
     top.className = 'tool-item-top'
     title.append(name, sub)
-    top.append(toggle, title, src)
+    top.append(title, src)
     item.append(top, desc)
       body.appendChild(item)
 
@@ -982,7 +971,7 @@ function renderOfflineTools() {
   const defs = getAllToolDefs()
   const keyword = ($<HTMLInputElement>('offline-tool-search')?.value || '').trim().toLowerCase()
   if (!offlineAllowedToolsInitialized && offlineAllowedTools.size === 0 && defs.length) {
-    offlineAllowedTools = new Set(defs.filter(def => settings.toolEnabled[def.name] !== false).map(def => def.name))
+    offlineAllowedTools = new Set(defs.map(def => def.name))
     offlineAllowedToolsInitialized = true
   }
   $('offline-tool-count').textContent = `本次对话可用 ${offlineAllowedTools.size}/${defs.length} 个 MCP 工具`
@@ -1012,7 +1001,6 @@ function renderOfflineTools() {
 function renderRuntimes(report: RuntimeReport | null) {
   const fmt = (info: { available: boolean; version: string } | undefined) =>
     !info ? '未探测' : info.available ? (info.version || '可用') : '不可用'
-  $('rt-python').textContent = fmt(report?.python)
   $('rt-powershell').textContent = fmt(report?.powershell)
   $('rt-shell').textContent = fmt(report?.shell)
 }
@@ -1420,7 +1408,7 @@ async function boot() {
   settings = await loadSettings()
   document.body.classList.toggle('light', settings.theme === 'light')
   document.documentElement.classList.toggle('light', settings.theme === 'light')
-  setToolEnabledProvider(() => settings.toolEnabled || {})
+  // No toolEnabled provider (MCP checkboxes removed; server issues all tools)
 
   // Set the header logo from the imported asset (avoids duplication with assets/ used by Rust).
   const logoEl = document.querySelector<HTMLImageElement>('.app-logo')
@@ -1459,11 +1447,12 @@ async function boot() {
     appendLog('error', `本地动态 MCP 加载失败: ${err?.message || err}`)
   }
 
-  // Initialize default allowed tools for 本地对话 (MCP scope). Do this only once after tools are ready.
+  // Initialize default allowed tools for 本地对话 (MCP scope). All tools by default
+  // (no global toolEnabled; offline scope is per-conversation selection only).
   if (!offlineAllowedToolsInitialized && offlineAllowedTools.size === 0) {
     const defs = getAllToolDefs()
     if (defs.length > 0) {
-      offlineAllowedTools = new Set(defs.filter(def => settings.toolEnabled[def.name] !== false).map(def => def.name))
+      offlineAllowedTools = new Set(defs.map(def => def.name))
       offlineAllowedToolsInitialized = true
     }
   }

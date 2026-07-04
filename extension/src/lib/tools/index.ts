@@ -9,13 +9,13 @@
 
 export {
   BROWSER_TOOLS, BROWSER_CAPABILITIES, BROWSER_TOOL_CATEGORIES,
-  BROWSER_TOOL_KIND_LABELS, browserToolCategory, browserToolKind, isToolEnabledByDefault,
+  BROWSER_TOOL_KIND_LABELS, browserToolCategory, browserToolKind,
 } from './definitions'
 export type { BrowserToolCategory, BrowserToolKind } from './definitions'
 export { executeBrowserOnly } from './browser'
 export { executeBrowserTool } from './router'
 export { executeTask } from './executor'
-export { allToolDefs, effectiveToolDefs, resolveToolEnabledMap, enabledToolNames } from './overrides'
+export { allToolDefs, effectiveToolDefs, enabledToolNames } from './overrides'
 export {
   BROWSER_DYNAMIC_MCP_MANAGER_NAME, DYNAMIC_MCP_MANAGER_NAME,
   DYNAMIC_MCP_STORAGE_KEY, DYNAMIC_MCP_SERVER_SESSION_KEY,

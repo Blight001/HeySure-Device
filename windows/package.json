@@ -10,13 +10,9 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "setup:python": "node ./scripts/setup-python.cjs",
-    "prepare:python": "node ./scripts/prepare-bundled-python.cjs",
-    "ensure:bundled": "node ./scripts/ensure-bundled.cjs",
     "tauri": "tauri",
-    "pretauri:dev": "node ./scripts/ensure-bundled.cjs",
     "tauri:dev": "tauri dev",
-    "tauri:build": "npm run prepare:python && tauri build"
+    "tauri:build": "tauri build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.5.0",

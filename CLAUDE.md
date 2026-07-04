@@ -3,13 +3,13 @@
 六个端侧客户端（**只是运行在不同端的壳，本身不具备 agent 能力**），连接后端、注册为 endpoint。
 
 **本目录是独立仓库** `HeySure-Device`。各平台（windows / linux / mac / extension / android）代码与资产完全独立，不再共享 `shared/`。
-**桌面端已退化为受控运行器**：不再内置固定原生 MCP 工具，能力来自服务器下发的 runtime 工具（python/shell），由服务端编排/推理。
+**桌面端已退化为受控运行器**：不再内置固定原生 MCP 工具，能力来自服务器下发的 runtime 工具（Windows 仅支持 powershell/shell），由服务端编排/推理。
 
 ## 六种形态
 
 | 子目录 | 形态 | 作用 |
 | --- | --- | --- |
-| `windows/` | Tauri 2 桌面（Windows） | 受控运行器（**原 Electron 壳已迁移为 Tauri**）：登录/注册 + 动态 MCP + runtime 执行（shell/PowerShell/python）+ 远控（**原生抓屏 xcap→canvas→WebRTC，不走 getDisplayMedia、无屏幕共享弹窗** + enigo 键鼠注入，`src/remote-control.ts` / `src-tauri/src/rc.rs`）；见 `windows/README.md` 与 `doc/tauri2-migration-report.md` |
+| `windows/` | Tauri 2 桌面（Windows） | 受控运行器（**原 Electron 壳已迁移为 Tauri**）：登录/注册 + 动态 MCP + runtime 执行（**仅 powershell / shell**）+ 远控（**原生抓屏 xcap→canvas→WebRTC，不走 getDisplayMedia、无屏幕共享弹窗** + enigo 键鼠注入，`src/remote-control.ts` / `src-tauri/src/rc.rs`）；见 `windows/README.md` 与 `doc/tauri2-migration-report.md` |
 | `linux/` | Electron 桌面（X11） | 同上（shell 默认 bash；含 STT/git 独有工具） |
 | `mac/` | Electron 桌面（macOS） | 同上（需系统辅助功能 & 屏幕录制权限） |
 | `extension/` | Chrome MV3 扩展 | 浏览器自动化与轻量客户端（固定工具目录） |
@@ -41,7 +41,7 @@ device/linux/src/
   runtime/                   ← 受控执行底座（各平台独立 copy）
     shell-runner.ts          ← Shell 脚本执行
     powershell-runner.ts     ← PowerShell 执行（Windows 专用）
-    python-runner.ts         ← Python 脚本执行
+    shell-runner.ts          ← Shell 命令执行
     process-guard.ts         ← 超时/并发/输出管控
     permission-guard.ts      ← 权限标签校验
     artifact-bridge.ts       ← 工件目录与文件管理
@@ -60,7 +60,7 @@ device/linux/src/
   → Connector Runtime (3002) 经 Socket.IO 下发到端侧
   → device/services/agent-runtime.ts 接收消息
   → executor/index.ts 路由到对应 handler
-  → runtime/shell-runner.ts 或 python-runner.ts 执行
+  → runtime/*-runner.ts（PowerShell/shell） 执行
   → 结果经 Socket.IO 返回服务端
   → 服务端继续推理
 ```
@@ -71,7 +71,7 @@ device/linux/src/
 
 - 通用逻辑已复制到各平台自己的 `src/` 下（可自由演化）。
 - 资产（图标等）已复制到各平台 `assets/`。
-- 辅助脚本已复制到各平台 `scripts/`（copy-renderer, setup-python, prepare-bundled-python）。
+- 辅助脚本已复制到各平台 `scripts/`（copy-renderer 对所有；setup-python / prepare-bundled-python 仅 linux/mac 仍有效，用于其 Python 运行时；Windows 已完全移除 python-runner 及 Python 支持）。
 - 构建不再调用 sync-shared.js。
 - Windows 现为 Tauri 壳（Rust + TS），其专有适配在 `windows/src-tauri/`。
 
@@ -106,7 +106,8 @@ Linux 独有：`tools/ear.ts`（STT）、`tools/git.ts`（如存在）。
 | --- | --- | --- |
 | 设备无法注册/上线 | `services/device.ts` 日志；Connector (3002) 是否运行 | Socket.IO 连接失败 / auth token 缺失 |
 | 工具调用无响应 | `executor/index.ts`；`runtime/process-guard.ts` 超时日志 | 工具路由未注册 / 超时配置过短 |
-| Shell/Python 执行失败 | `runtime/shell-runner.ts` / `python-runner.ts` | 可执行文件路径错误 / 打包版未带 bundled python（重新 npm run package） |
+| Shell 执行失败 | `runtime/shell-runner.ts` | 可执行文件路径错误 |
+| PowerShell 执行失败 | `runtime/powershell-runner.ts` | 解释器不可用或脚本错误 |
 | 权限被拒 | `runtime/permission-guard.ts` | 服务端 `DevicePermissionPolicy` 未允许该工具 |
 | 代码修改未生效 | 检查是否在目标平台目录下运行 npm 命令 | 各平台现在独立，无 sync 步骤 |
 | macOS 截图/鼠标失败 | 系统偏好 → 安全性与隐私 → 辅助功能/屏幕录制 | 未授予系统权限 |
@@ -120,7 +121,7 @@ cd device/linux         # 或 mac
 npm install
 npm run dev             # 直接编译运行（已无 sync-shared）
 npm run build           # → dist/（gitignored）
-npm run setup:python    # 开发时配置 venv；正式打包会自动调用 prepare-bundled-python 内置完整 Python 运行时（用户无需装 Python）
+npm run setup:python    # （仅 linux/mac）开发时配置 venv；正式打包会自动调用 prepare-bundled-python（Windows 已完全移除 python 支持）。
 
 # Windows 桌面壳（Tauri 2，需 Rust 工具链 + VS Build Tools）
 cd device/windows

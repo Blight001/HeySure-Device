@@ -1,10 +1,22 @@
-// powershell-runner — port of device/shared/src/runtime/powershell-runner.ts.
-// Windows resolves Windows PowerShell (powershell.exe) first, then pwsh.
+// powershell-runner — the primary runtime driving server-pushed MCP tools on
+// Windows (Windows PowerShell 5.1 first, then pwsh).
+//
+// Contract for the supplied script:
+//   - an object ``$toolArgs`` is pre-populated from the call arguments
+//     (JSON via the HEYSURE_TOOL_ARGS env var);
+//   - assign the tool's output to a variable ``$result`` (any JSON value);
+//   - anything else printed is captured as stdout.
+// Legacy template-only scripts (no ``$result``) keep working: their stdout is
+// returned unchanged and ``result`` stays null.
 
 import { native } from '../native'
 import { runProcess, type ProcessRunResult } from './process'
+import { POWERSHELL_TIMEOUT_MS } from '../constants'
+
+const RESULT_SENTINEL = '__HEYSURE_RESULT__='
 
 export interface PowerShellRunOptions {
+  args?: Record<string, any>
   cwd?: string
   env?: Record<string, string | undefined>
   timeoutMs?: number
@@ -50,6 +62,35 @@ export async function resolvePowerShell(): Promise<string | null> {
 
 export interface PowerShellRunResult extends ProcessRunResult {
   available: boolean
+  /** Parsed value of the script's ``$result`` variable, when present. */
+  result: any
+}
+
+// Wrap the tool body with the $toolArgs / $result contract. ConvertFrom-Json
+// (no -AsHashtable) keeps the script Windows PowerShell 5.1 compatible.
+function buildScript(code: string): string {
+  return [
+    '$toolArgs = $null',
+    'if ($env:HEYSURE_TOOL_ARGS) { try { $toolArgs = ConvertFrom-Json -InputObject $env:HEYSURE_TOOL_ARGS } catch { $toolArgs = $null } }',
+    'if ($null -eq $toolArgs) { $toolArgs = New-Object PSObject }',
+    '$result = $null',
+    '',
+    code,
+    '',
+    `Write-Output ('${RESULT_SENTINEL}' + $(if ($null -eq $result) { 'null' } else { ConvertTo-Json -InputObject $result -Depth 10 -Compress }))`,
+  ].join('\n')
+}
+
+function splitResult(stdout: string): { stdout: string; result: any } {
+  const idx = stdout.lastIndexOf(RESULT_SENTINEL)
+  if (idx < 0) return { stdout, result: null }
+  const before = stdout.slice(0, idx).replace(/\r?\n$/, '')
+  const json = stdout.slice(idx + RESULT_SENTINEL.length).trim()
+  try {
+    return { stdout: before, result: JSON.parse(json) }
+  } catch {
+    return { stdout, result: null }
+  }
 }
 
 export async function runPowerShell(
@@ -59,18 +100,19 @@ export async function runPowerShell(
   const command = await resolvePowerShell()
   if (!command) {
     return {
-      available: false, exitCode: 127, signal: null, stdout: '',
+      available: false, result: null, exitCode: 127, signal: null, stdout: '',
       stderr: 'PowerShell 不可用（未找到 powershell.exe / pwsh）。',
       timedOut: false, truncated: false, killed: false, durationMs: 0,
     }
   }
   const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-    '-EncodedCommand', encodePowerShellScript(script)]
-  const result = await runProcess(command, args, {
+    '-EncodedCommand', encodePowerShellScript(buildScript(script))]
+  const run = await runProcess(command, args, {
     cwd: options.cwd,
-    env: options.env,
-    timeoutMs: options.timeoutMs,
+    env: { ...options.env, HEYSURE_TOOL_ARGS: JSON.stringify(options.args || {}) },
+    timeoutMs: options.timeoutMs ?? POWERSHELL_TIMEOUT_MS,
     maxOutputBytes: options.maxOutputBytes,
   })
-  return { available: true, ...result }
+  const split = splitResult(run.stdout)
+  return { available: true, result: split.result, ...run, stdout: split.stdout }
 }

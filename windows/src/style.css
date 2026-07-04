@@ -219,7 +219,7 @@ html, body {
 .tool-item:hover { background:var(--surface-h); }
 .tool-item.disabled { opacity:.58; }
 .tool-item-top { display:flex; align-items:flex-start; gap:8px; }
-.tool-enabled { width:15px; height:15px; margin-top:1px; accent-color:var(--accent); flex-shrink:0; cursor:pointer; }
+/* (tool-enabled checkbox styles removed with the allow-call toggles) */
 .tool-title { display:flex; flex-direction:column; gap:1px; flex:1; min-width:0; }
 .tool-name { font-size:12px; font-weight:700; line-height:1.2; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-family:'Cascadia Code',Consolas,monospace; }
 .tool-name-sub { font-size:10px; color:var(--muted); line-height:1.2; letter-spacing:.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-transform:uppercase; }

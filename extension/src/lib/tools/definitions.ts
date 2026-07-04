@@ -398,7 +398,4 @@ export function browserToolKind(name: string): BrowserToolKind {
   return 'basic'
 }
 
-/** 工具的默认开启状态：全部默认开启。 */
-export function isToolEnabledByDefault(_name: string): boolean {
-  return true
-}
+// (isToolEnabledByDefault removed — no local per-MCP enable toggles anymore)

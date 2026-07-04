@@ -33,8 +33,7 @@ export interface AgentSettings {
   // Local per-tool description edits, merged onto getToolDefs() before they are
   // reported to the server via device:register -> toolDefs. Keyed by tool id.
   toolDescOverrides: Record<string, { description?: string; parameters?: Record<string, string> }>
-  // Local MCP exposure switches. Missing = enabled for backward compatibility.
-  toolEnabled: Record<string, boolean>
+  // (toolEnabled removed: MCPs are server-issued; no local allow-call checkboxes)
 }
 
 const SETTINGS_FILE = 'settings.json'
@@ -64,7 +63,6 @@ export const defaults: AgentSettings = {
   authToken: '',
   userId: null,
   toolDescOverrides: {},
-  toolEnabled: {},
 }
 
 export async function loadSettings(): Promise<AgentSettings> {

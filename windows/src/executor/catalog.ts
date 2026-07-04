@@ -3,7 +3,7 @@
 // loads server-pushed tools and therefore cannot itself be dynamic.
 //
 // EVERYTHING else — keyboard / mouse / screen / window / … and even shell.run —
-// is a server-pushed runtime tool (python / powershell / shell) executed by the
+// is a server-pushed runtime tool (powershell / shell) executed by the
 // runtime base. See 设备端MCP代码下放长期方案 阶段三/四.
 
 import { registerTools } from './registry'

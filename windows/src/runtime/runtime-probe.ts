@@ -1,8 +1,7 @@
-// runtime-probe — port of device/shared/src/runtime/runtime-probe.ts. The
-// device reports at register time which runtimes it can actually execute.
+// runtime-probe: reports at register time which runtimes this device can execute.
+// Only powershell and shell are supported on Windows after Python removal.
 
 import { runProcess } from './process'
-import { resolvePython } from './python-runner'
 import { resolvePowerShell } from './powershell-runner'
 
 export interface RuntimeInfo {
@@ -11,7 +10,6 @@ export interface RuntimeInfo {
 }
 
 export interface RuntimeReport {
-  python: RuntimeInfo
   powershell: RuntimeInfo
   shell: RuntimeInfo
 }
@@ -32,14 +30,11 @@ async function probeCommand(command: string | null, args: string[]): Promise<Run
 /** Probe (and cache) the runtimes this device can execute. */
 export async function probeRuntimes(force = false): Promise<RuntimeReport> {
   if (cached && !force) return cached
-  const [python, powershell] = await Promise.all([
-    resolvePython().then(cmd => probeCommand(cmd, ['--version'])),
-    resolvePowerShell().then(cmd =>
-      probeCommand(cmd, ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.ToString()'])),
-  ])
+  const powershell = await resolvePowerShell().then(cmd =>
+    probeCommand(cmd, ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.ToString()']))
   // cmd always exists on Windows; shell tools are always runnable.
   const shell: RuntimeInfo = { available: true, version: 'cmd' }
-  cached = { python, powershell, shell }
+  cached = { powershell, shell }
   return cached
 }
 

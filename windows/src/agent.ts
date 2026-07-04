@@ -306,7 +306,8 @@ export class HeySureAgent {
     return executeTask(this.workspaceRoot, task)
   }
 
-  // getToolDefs() with the user's local description edits merged in.
+  // getToolDefs() (all server-issued + dynamic) with local description edits merged in.
+  // No per-tool enable filter (checkboxes removed).
   effectiveToolDefs() {
     const overrides = this.settings.toolDescOverrides || {}
     return getToolDefs().map(def => {

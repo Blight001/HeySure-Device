@@ -176,9 +176,8 @@ async function emitRegisterOn(s: Socket): Promise<void> {
   // operator assigns a server-side AI to this device from the web Workshop
   // ("作坊") panel. The server re-applies that binding on every register, so we
   // always send aiConfigId: null.
-  // Only the tools the user has enabled in the popup are reported. Capabilities
-  // are derived from the same enabled toolDefs so the two never drift — disabled
-  // (e.g. unchecked 特殊类) tools are withheld from the server entirely.
+  // All MCP tools (server-issued via dynamic + local dynamic) are reported.
+  // No local per-tool enable checkboxes; server governs availability.
   const toolDefs = await effectiveToolDefs()
   s.emit('device:register', {
     id,
@@ -536,8 +535,7 @@ async function runChat(messages: ChatMessage[]): Promise<{ text: string; toolsUs
   const toolEvents: ChatToolEvent[] = []
   let iter = 0
   const MAX = 12
-  // Offline chat also respects the popup's tool selection: only enabled tools
-  // (with local description edits applied) are offered to the model.
+  // Offline chat uses the full set of available MCP tools (server-issued).
   const chatTools = await effectiveToolDefs()
 
   while (iter < MAX) {
@@ -614,9 +612,7 @@ async function runOfflineChat(
   const allowed = new Set((allowedTools || []).map(t => String(t || '').trim()).filter(Boolean))
   const allTools = await effectiveToolDefs()
   // `allowedTools` carries the per-conversation MCP scope chosen in the 本地对话
-  // window. undefined → no scoping (all enabled tools); an array → exactly those,
-  // so deselecting everything genuinely disables MCP instead of silently
-  // re-enabling every tool.
+  // window. undefined → no scoping (all tools); an array → exactly those.
   const chatTools = Array.isArray(allowedTools)
     ? allTools.filter(t => allowed.has(t.name))
     : allTools

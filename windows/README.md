@@ -68,15 +68,15 @@ npm run typecheck      # 仅前端 TS 类型检查（无需 Rust 工具链）
 - [ ] 打开 UI、保存设置、托盘常驻
 - [ ] 登录 → `device:register` → `device:registered`（作坊分配 AI）
 - [ ] 服务器 `device:tool-config` 下发动态 MCP 并出现在工具列表
-- [ ] 本地工具测试页执行 shell / powershell / python runtime 工具
+- [ ] 本地工具测试页执行 shell / powershell runtime 工具
 - [ ] 权限确认弹窗（confirm 级权限标签）、一键暂停
 - [ ] 远程控制：Web 控制台发起 → 看到实时主屏 → 鼠标/键盘/滚轮/中文输入生效
 - [ ] 安装包体积对比 Electron 版（预期 ~10MB vs ~100MB+，待实测）
 
 ## 已知取舍（第一阶段范围内）
 
-- **Python 分发**：不再内置 bundled Python（体积问题正是迁移动机，报告第三阶段再定方案）。
-  解释器解析顺序：`HEYSURE_PYTHON` 环境变量 → PATH 上的 `python`/`python3`/`py`。
+- **MCP 工具驱动**：出厂默认桌面工具集已全部迁移到 PowerShell 驱动（Windows PowerShell 5.1 优先）。仅支持 `powershell` 和 `shell` 运行时；Python runtime 已完全移除（不再支持用户自建 `runtime=python` 工具）。
+- **不再支持 Python**：`mcp.manage_dynamic_tool` 中的 runtime 枚举已移除 `python`。如需 Python 能力，请使用其他平台或将逻辑迁移到 PowerShell/shell。
 - **`mcp.manage_dynamic_tool` 的 `get_source`/源码检视不可用**：应用源码以打包产物分发，
   没有可读的 `src/**.ts`；`inspect` 仍返回注册定义与 handler 源码。
 - **本地动态工具 JSON 无文件监听热加载**（Electron 版有 fs.watch）；改用 `action=reload`。

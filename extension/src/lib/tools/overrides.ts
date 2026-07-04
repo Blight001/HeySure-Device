@@ -1,19 +1,14 @@
 // tools/overrides.ts — build the MCP catalog the extension reports to the server.
 //
-// 纯服务器驱动（对齐 Windows 桌面端）：广告给服务器的工具目录 = 动态工具集：
-//   1. browser_mcp.manage_dynamic_tool 引导器——唯一的本地内置项，负责加载服务器下发的工具；
-//   2. 服务器经 device:tool-config 下发的浏览器工具（program 包装器，memory-only）；
-//   3. 本地经 manager 创作的动态工具（chrome.storage）。
-// 硬编码的 BROWSER_TOOLS 不再作为上报目录——所有浏览器工具的 schema 一律以服务器
-// 工作区 device_tools/browser/ 下发为准。BROWSER_TOOLS 仅保留在 browser.ts 里作为
-// builtin:* 的端侧执行实现（服务器下发的 program 包装器通过 builtin:browser_* 调用）。
-//
-// 工具启停仍存 chrome.storage（桌面端在 store 里有等价物）。服务器托管工具不套用
-// 本地描述改写——请在服务器 / Web 控制台修改。
+// 纯服务器驱动：广告给服务器的工具目录 = 动态工具集：
+//   1. browser_mcp.manage_dynamic_tool 引导器——唯一的本地内置项；
+//   2. 服务器经 device:tool-config 下发的浏览器工具；
+//   3. 本地经 manager 创作的动态工具。
+// 所有 MCP 由服务器发放，本地不再有复选框控制是否允许调用。
+// 服务器托管工具不套用本地描述改写——请在服务器 / Web 控制台修改。
 
-import { isToolEnabledByDefault } from './definitions'
 import { AIToolDef } from '../types'
-import { getToolDescOverrides, getToolEnabledMap } from '../storage'
+import { getToolDescOverrides } from '../storage'
 import { dynamicMcpToolDefs, isServerManagedToolDef } from './dynamic'
 
 export async function allToolDefs(): Promise<AIToolDef[]> {
@@ -22,26 +17,14 @@ export async function allToolDefs(): Promise<AIToolDef[]> {
   return await dynamicMcpToolDefs()
 }
 
-/** Resolve every browser tool's effective on/off state (explicit choice ?? default). */
-export async function resolveToolEnabledMap(): Promise<Record<string, boolean>> {
-  const explicit = await getToolEnabledMap()
-  const out: Record<string, boolean> = {}
-  for (const tool of await allToolDefs()) {
-    out[tool.name] = tool.name in explicit ? !!explicit[tool.name] : isToolEnabledByDefault(tool.name)
-  }
-  return out
-}
-
-/** Names of the currently enabled tools. */
+/** Names of all tools (本地 enable/disable 已移除，所有服务器下发 MCP 默认可用)。 */
 export async function enabledToolNames(): Promise<string[]> {
-  const enabled = await resolveToolEnabledMap()
-  return (await allToolDefs()).filter(t => enabled[t.name]).map(t => t.name)
+  return (await allToolDefs()).map(t => t.name)
 }
 
 export async function effectiveToolDefs(): Promise<AIToolDef[]> {
   const overrides = await getToolDescOverrides()
-  const enabled = await resolveToolEnabledMap()
-  return (await allToolDefs()).filter(tool => enabled[tool.name]).map(tool => {
+  return (await allToolDefs()).map(tool => {
     if (isServerManagedToolDef(tool)) return tool
     const o = overrides[tool.name]
     if (!o) return tool

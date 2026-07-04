@@ -95,20 +95,6 @@ if exist "src-tauri\target\release\nsis" (
   echo   - Removed temp nsis scripts
 )
 
-rem 3. Remove the large bundled\ folder (Python runtime is already embedded in the installer)
-if exist "bundled" (
-  rmdir /s /q "bundled" >nul 2>&1
-  echo   - Removed bundled\ ^(embedded into installer^)
-)
-
-rem 4. Clean copied bundled inside target (if any)
-if exist "src-tauri\target\release\_up_\bundled" (
-  rmdir /s /q "src-tauri\target\release\_up_\bundled" >nul 2>&1
-)
-if exist "src-tauri\target\debug\_up_\bundled" (
-  rmdir /s /q "src-tauri\target\debug\_up_\bundled" >nul 2>&1
-)
-
 echo [clean] Done.
 
 echo.

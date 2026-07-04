@@ -143,34 +143,6 @@ export async function clearToolDescOverrides(names: string[]): Promise<void> {
   if (changed) await chrome.storage.local.set({ [TOOL_DESC_KEY]: all })
 }
 
-// ── MCP tool enable/disable selection ────────────────────────────────────────
-// Each browser tool can be toggled on/off in the popup's MCP page. Only enabled
-// tools are reported to the server (capabilities + toolDefs), so unchecked tools
-// become invisible to the server and the AI. This map stores the user's explicit
-// choices keyed by tool name; tools absent from the map fall back to the global
-// default enabled state.
-const TOOL_ENABLED_KEY = '_tool_enabled'
-
-export async function getToolEnabledMap(): Promise<Record<string, boolean>> {
-  const r = await chrome.storage.local.get(TOOL_ENABLED_KEY)
-  const v = (r as any)[TOOL_ENABLED_KEY]
-  return v && typeof v === 'object' ? v as Record<string, boolean> : {}
-}
-
-export async function setToolEnabled(tool: string, enabled: boolean): Promise<void> {
-  const all = await getToolEnabledMap()
-  const name = String(tool || '').trim()
-  if (!name) return
-  all[name] = !!enabled
-  await chrome.storage.local.set({ [TOOL_ENABLED_KEY]: all })
-}
-
-export async function setManyToolEnabled(tools: string[], enabled: boolean): Promise<void> {
-  const all = await getToolEnabledMap()
-  for (const t of tools) {
-    const name = String(t || '').trim()
-    if (name) all[name] = !!enabled
-  }
-  await chrome.storage.local.set({ [TOOL_ENABLED_KEY]: all })
-}
+// MCP tool enable/disable has been removed: all server-issued MCPs are
+// controlled from the server (device:tool-config). No local toggles.
 

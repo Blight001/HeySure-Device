@@ -19,7 +19,7 @@ export interface DynamicMcpDefinition {
   input_schema: Record<string, any>
   // 'program' → run the call/set/return DSL in ``code``.
   // 'js'      → run ``js`` (a function body) with (args, cap, ctx) in scope.
-  // 'runtime' → run ``source`` via a device runtime (python/powershell/shell).
+  // 'runtime' → run ``source`` via a device runtime (powershell/shell).
   code_kind?: 'program' | 'js' | 'runtime'
   code: DynamicInstruction[]
   js?: string
@@ -384,8 +384,8 @@ export const DYNAMIC_MCP_MANAGER_DEFINITION: ToolDefinition = {
               save_as: { type: 'string', description: '把 call 结果保存到 vars.<name>。' },
             }, required: ['op'] },
           },
-          runtime: { type: 'string', enum: ['python', 'powershell', 'shell'], description: '运行时类型；设置后改用 source 提供源码（程序/JS 工具留空）。' },
-          source: { type: 'string', description: 'runtime 工具源码：python 脚本（用 args 取参、result 返回）/ powershell 脚本 / shell 命令，支持 ${args.x} 模板。' },
+          runtime: { type: 'string', enum: ['powershell', 'shell'], description: '运行时类型；设置后改用 source 提供源码（程序/JS 工具留空）。' },
+          source: { type: 'string', description: 'runtime 工具源码：powershell 脚本（用 $toolArgs 取参、$result 返回，默认运行时）/ shell 命令；shell/powershell 另支持 ${args.x} 模板。' },
           permissions: { type: 'array', items: { type: 'string' }, description: 'runtime 工具声明的权限标签，本机按策略 allow/confirm/deny。' },
         }, required: ['name', 'description', 'input_schema'],
       },

@@ -5,10 +5,10 @@ export const SCREENSHOT_TIMEOUT_MS   = 15_000
 export const TASK_OUTCOME_CACHE_SIZE = 500
 
 // Controlled-executor base (runtime/*). These bound any server-authored code
-// the device runs via the python / powershell / shell runners.
+// the device runs via the powershell / shell runners.
 export const PROCESS_TIMEOUT_MS       = 60_000          // default hard timeout
 export const PROCESS_KILL_GRACE_MS    = 2_000           // SIGTERM → SIGKILL grace
 export const MAX_CONCURRENT_PROCESSES = 4               // process-guard concurrency cap
 export const PROCESS_OUTPUT_MAX_BYTES = 1 * 1024 * 1024 // per-stream stdout/stderr cap
-export const PYTHON_TIMEOUT_MS        = 120_000         // python tends to run longer
+export const POWERSHELL_TIMEOUT_MS    = 120_000         // powershell drives the MCP tools; allow longer runs
 export const ARTIFACT_MAX_BYTES       = 16 * 1024 * 1024

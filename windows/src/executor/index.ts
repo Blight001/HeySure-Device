@@ -24,18 +24,11 @@ export interface TaskResult {
   summary: string
 }
 
-let toolEnabledProvider: () => Record<string, boolean> = () => ({})
-
-export function setToolEnabledProvider(provider: () => Record<string, boolean>): void {
-  toolEnabledProvider = provider
-}
-
-export function isToolEnabled(tool: string): boolean {
-  return toolEnabledProvider()[tool] !== false
-}
+// toolEnabled / local checkboxes removed — all server-issued MCPs are available.
+// Execution gating for per-task allowedTools (from server) is still supported below.
 
 function enabledToolIds(): string[] {
-  return listToolIds().filter(isToolEnabled)
+  return listToolIds()
 }
 
 // A dispatch without an explicit tool falls back to running the raw
@@ -57,20 +50,18 @@ export async function executeTask(workspaceRoot: string, task: DispatchedTask): 
     ? new Set(task.allowedTools.map(t => String(t || '').trim()).filter(Boolean))
     : null
   const def = getTool(tool)
-  if (!def || !isToolEnabled(tool) || (allowed && !allowed.has(tool))) {
+  if (!def || (allowed && !allowed.has(tool))) {
     return {
       success: false,
       tool,
       result: null,
       summary: !def
         ? `Unknown tool: ${tool}. Use one of: ${getAvailableTools().join(', ')}`
-        : !isToolEnabled(tool)
-          ? `Tool disabled locally: ${tool}. Enable it in the desktop MCP tools page first.`
-          : `Tool not allowed for this task: ${tool}.`,
+        : `Tool not allowed for this task: ${tool}.`,
     }
   }
 
-  // Runtime tools (python/powershell/shell) spawn with workspaceRoot as their
+  // Runtime tools (powershell/shell) spawn with workspaceRoot as their
   // cwd. When the default workspace (~\HeySureWorkspace) was never created via
   // the settings UI, the spawn fails on Windows with "目录名称无效。(os error
   // 267)". Create it lazily before any tool runs so cwd is always valid.
@@ -91,7 +82,7 @@ export function getAvailableTools(): string[] {
 }
 
 export function getToolDefs(): ToolDef[] {
-  return listToolDefs().filter(def => isToolEnabled(def.name))
+  return listToolDefs()
 }
 
 export function getAllToolDefs(): ToolDef[] {

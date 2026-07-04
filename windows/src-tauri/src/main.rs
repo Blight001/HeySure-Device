@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 #[tauri::command]
@@ -300,7 +300,7 @@ fn setup_tray<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
     let menu = build_tray_menu(app.handle(), "disconnected", false)?;
     let mut tray = TrayIconBuilder::with_id("main-tray")
         .menu(&menu)
-        .show_menu_on_left_click(false)
+        .show_menu_on_left_click(true)
         .tooltip("HeySure Agent — 未连接")
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open-panel" => show_main_window(app),
@@ -322,12 +322,8 @@ fn setup_tray<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click {
-                button: MouseButton::Left,
-                button_state: MouseButtonState::Up,
-                ..
-            } = event
-            {
+            // Double-click tray icon to open the full panel (single left-click shows the menu)
+            if let TrayIconEvent::DoubleClick { button: MouseButton::Left, .. } = event {
                 show_main_window(&tray.app_handle());
             }
         });
@@ -347,8 +343,11 @@ fn main() {
                 if let Ok(icon) = Image::from_bytes(include_bytes!("../../assets/desktop.png")) {
                     let _ = main_window.set_icon(icon);
                 }
-                // Dev builds: open DevTools so WebView load/CSS/console errors are
-                // visible (the WebView is otherwise a black box vs. a browser).
+                // Start hidden: only the tray icon is shown by default.
+                // Users open the panel via tray menu ("打开面板") or double-click.
+                let _ = main_window.hide();
+
+                // Dev builds: open DevTools (may surface the window in dev).
                 #[cfg(debug_assertions)]
                 main_window.open_devtools();
             }

@@ -1,0 +1,59 @@
+# ==========================================
+# .gitignore for cookie-capture-extension
+# ==========================================
+
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# Editor / IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+
+# Logs and debug
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Dependencies
+node_modules/
+jspm_packages/
+
+# Sensitive / exported user data (do NOT commit real cookies or credentials)
+*.export.json
+*cookies*.json
+*credentials*.json
+*card*.json
+temp-email*.json
+export-*.json
+cookie-*.json
+
+# Temporary and stray files
+$null
+*.tmp
+*.temp
+*.bak
+
+# Build / distribution
+dist/
+build/
+*.zip
+*.crx
+*.xpi
+
+# NOTE: vendor/socket.io.js is a committed build artifact (no build step for this
+# plain-JS extension); do NOT ignore it.
+
+# Misc
+.env
+.env.local
+.env.*.local

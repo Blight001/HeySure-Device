@@ -1,0 +1,13 @@
+importScripts(
+    'vendor/socket.io.js',
+    'background/00_core.js',
+    'background/01_state.js',
+    'background/02_sidebar_page.js',
+    'background/03_formatting.js',
+    'background/04_cache.js',
+    'background/05_temp_email_flow.js',
+    'background/06_registration_run.js',
+    'background/07_events.js',
+    'background/08_agent_auth.js',
+    'background/09_agent_socket.js'
+);

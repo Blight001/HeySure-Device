@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>注册插件</title>
+  <link rel="icon" href="icon16.png">
+  <link rel="stylesheet" href="popup.css">
+  <style>
+    /* ── 服务器同步：状态条 / 账号 / 连接 / AI 分配（登录后自动连接服务器）── */
+    .agent-sync-bar { display:flex; align-items:center; gap:8px; margin-top:10px; }
+    .agent-spacer { flex:1; }
+    .agent-status-pill {
+      display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px;
+      background:var(--panel); border:1px solid var(--border); font-size:11px; color:var(--muted);
+      box-shadow:var(--shadow);
+    }
+    .agent-status-dot { width:8px; height:8px; border-radius:50%; background:#9aa4b2; flex-shrink:0; }
+    .agent-status-dot.is-green  { background:var(--success); box-shadow:0 0 0 3px rgba(21,128,61,.14); }
+    .agent-status-dot.is-yellow { background:#d97706; box-shadow:0 0 0 3px rgba(217,119,6,.14); }
+    .agent-status-dot.is-red    { background:var(--error); box-shadow:0 0 0 3px rgba(185,28,28,.12); }
+    .agent-chip {
+      display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px;
+      background:var(--panel); border:1px solid var(--border); font-size:11px; color:var(--text);
+      cursor:pointer; max-width:150px; box-shadow:var(--shadow);
+    }
+    .agent-chip:hover { background:var(--panel-strong); }
+    .agent-chip-ava {
+      width:16px; height:16px; border-radius:50%; flex-shrink:0; overflow:hidden;
+      display:flex; align-items:center; justify-content:center; color:#fff; font-size:9px;
+      background:linear-gradient(135deg,var(--primary),var(--success));
+    }
+    .agent-chip-ava img { width:100%; height:100%; object-fit:cover; }
+    .agent-chip span:last-child { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+    .agent-modal { position:fixed; inset:0; z-index:80; display:flex; align-items:center; justify-content:center; padding:14px; background:rgba(15,23,42,.4); }
+    .agent-modal.is-hidden { display:none; }
+    .agent-modal-box {
+      width:min(360px,100%); max-height:min(90vh,600px); overflow:auto; display:flex; flex-direction:column; gap:12px;
+      background:var(--panel-strong); border:1px solid var(--border); border-radius:14px; padding:16px; box-shadow:var(--shadow);
+    }
+    .agent-modal-head { display:flex; align-items:center; justify-content:space-between; }
+    .agent-modal-title { font-size:14px; font-weight:700; color:var(--text); }
+    .agent-modal-close { border:none; background:none; font-size:20px; line-height:1; color:var(--muted); cursor:pointer; padding:0 4px; }
+    .agent-card { border:1px solid var(--border); border-radius:10px; padding:12px; background:var(--panel); display:flex; flex-direction:column; gap:8px; }
+    .agent-card-title { font-size:11px; font-weight:700; letter-spacing:.4px; color:var(--muted); text-transform:uppercase; }
+    .agent-field { display:flex; flex-direction:column; gap:4px; }
+    .agent-field label { font-size:11px; color:var(--muted); font-weight:600; }
+    .agent-field input[type=text], .agent-field input[type=url], .agent-field input[type=password] {
+      width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:8px; font-size:12px;
+      background:var(--panel-strong); color:var(--text); outline:none;
+    }
+    .agent-field input:focus { border-color:var(--primary); }
+    .agent-check { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--muted); }
+    .agent-kv { display:flex; justify-content:space-between; gap:8px; font-size:12px; }
+    .agent-kv .k { color:var(--muted); }
+    .agent-kv .v { color:var(--text); text-align:right; word-break:break-word; }
+    .agent-btn { display:inline-flex; align-items:center; justify-content:center; gap:5px; width:100%; padding:8px 12px; border-radius:8px; border:none; font-size:12px; font-weight:600; cursor:pointer; }
+    .agent-btn-primary { background:var(--primary-strong); color:#fff; }
+    .agent-btn-primary:hover { background:var(--primary); }
+    .agent-btn-danger { background:rgba(185,28,28,.1); color:var(--error); border:1px solid rgba(185,28,28,.2); }
+    .agent-btn-ghost { background:var(--panel-strong); color:var(--text); border:1px solid var(--border); }
+    .agent-btn-row { display:flex; gap:8px; }
+    .agent-btn-row .agent-btn { flex:1; }
+    .agent-hint { font-size:11px; color:var(--muted); line-height:1.5; }
+    .agent-feedback { font-size:11px; min-height:14px; }
+    .agent-feedback.is-ok { color:var(--success); }
+    .agent-feedback.is-err { color:var(--error); }
+    .is-hidden { display:none !important; }
+  </style>
+</head>
+  <body>
+  <div class="wrap">
+    <div class="hero">
+      <div class="hero-top">
+        <img class="app-logo" src="icon.ico" alt="">
+        <h1 class="title">注册插件</h1>
+        <button id="hero-tutorial" class="button-secondary hero-tutorial" type="button">教程</button>
+        <div class="badge">本地执行</div>
+      </div>
+      <div class="agent-sync-bar">
+        <div class="agent-status-pill" id="agent-status-pill" title="服务器连接状态">
+          <span class="agent-status-dot is-red" id="agent-status-dot"></span>
+          <span id="agent-status-label">未连接</span>
+        </div>
+        <div class="agent-spacer"></div>
+        <button class="agent-chip" id="agent-account-chip" type="button" title="登录 / 连接服务器 / 查看 AI 分配">
+          <span class="agent-chip-ava" id="agent-account-ava">·</span>
+          <span id="agent-account-name">未登录</span>
+        </button>
+      </div>
+    </div>
+
+    <div id="main-tabs" class="main-tabs" role="tablist" aria-label="主区域切换">
+      <button id="main-tab-register" class="main-tab is-active" type="button" data-main-tab="register">注册卡片</button>
+      <button id="main-tab-cookie" class="main-tab" type="button" data-main-tab="cookie">Cookie 抓取</button>
+    </div>
+
+    <div id="toast-stack" class="toast-stack" aria-live="polite" aria-atomic="true"></div>
+
+    <div id="sidebar-editor-shell" class="sidebar-editor-shell">
+      <div class="sidebar-editor-topbar">
+        <div class="sidebar-editor-title">
+          <h2>注册卡片编辑</h2>
+          <div id="sidebar-editor-meta" class="sidebar-editor-meta">
+            <span class="sidebar-editor-meta__chip">未载入卡片</span>
+          </div>
+        </div>
+        <div class="sidebar-editor-actions">
+          <button id="sidebar-tutorial" class="button-secondary" type="button">教程</button>
+          <button id="sidebar-load-card" class="button-secondary" type="button">载入缓存</button>
+          <button id="sidebar-save-card" class="button-secondary" type="button">保存卡片</button>
+          <button id="sidebar-export-card" class="button-secondary" type="button">导出卡片</button>
+          <button id="sidebar-loop-register-card" class="button-secondary" type="button">循环注册</button>
+        </div>
+      </div>
+
+      <div class="sidebar-editor-grid">
+        <div class="sidebar-column">
+          <section class="sidebar-section">
+            <h3 class="sidebar-section__title">基础信息</h3>
+            <div class="sidebar-field-grid">
+              <div class="full">
+                <label for="sidebar-card-name">卡片名称</label>
+                <input id="sidebar-card-name" type="text">
+              </div>
+              <div class="full">
+                <label for="sidebar-card-website">注册网址</label>
+                <input id="sidebar-card-website" type="text">
+              </div>
+              <div class="full">
+                <label for="sidebar-card-description">卡片说明</label>
+                <textarea id="sidebar-card-description" rows="4"></textarea>
+              </div>
+              <div>
+                <label for="sidebar-card-password">固定密码</label>
+                <input id="sidebar-card-password" type="text">
+              </div>
+              <div>
+                <label for="sidebar-card-points">积分</label>
+                <input id="sidebar-card-points" type="number" min="0" step="1">
+              </div>
+              <div>
+                <label for="sidebar-card-random-length">随机密码长度</label>
+                <input id="sidebar-card-random-length" type="number" min="4" step="1">
+              </div>
+              <div>
+                <label for="sidebar-card-random-type">随机密码类型</label>
+                <select id="sidebar-card-random-type">
+                  <option value="lowercase">lowercase</option>
+                  <option value="uppercase">uppercase</option>
+                  <option value="numeric">numeric</option>
+                  <option value="alphanumeric">alphanumeric</option>
+                  <option value="mixed">mixed</option>
+                </select>
+              </div>
+              <div class="full">
+                <label for="sidebar-card-popups">弹窗规则</label>
+                <textarea id="sidebar-card-popups" rows="6"></textarea>
+              </div>
+            </div>
+          </section>
+
+          <section class="sidebar-section">
+            <h3 class="sidebar-section__title">附加信息</h3>
+            <div class="sidebar-field-grid">
+              <div class="full">
+                <label for="sidebar-card-upload-server-url">上传服务器地址</label>
+                <input id="sidebar-card-upload-server-url" type="text">
+              </div>
+              <div class="full">
+                <label for="sidebar-card-upload-card-key">上传卡片密钥</label>
+                <input id="sidebar-card-upload-card-key" type="text">
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="sidebar-column sidebar-column--main">
+          <section class="sidebar-section">
+            <h3 class="sidebar-section__title">注册步骤</h3>
+            <div class="sidebar-step-toolbar">
+              <select id="sidebar-step-template">
+                <option value="navigate">访问网页</option>
+                <option value="click">点击元素</option>
+                <option value="type">输入内容</option>
+                <option value="wait">等待条件</option>
+                <option value="wait_verification_code">等待验证码</option>
+                <option value="get_credits">获取积分</option>
+                <option value="save_cookies">获取Cookie</option>
+                <option value="clear_current_page_cache">清理当前页缓存</option>
+                <option value="external_script">执行脚本</option>
+                <option value="screenshot">截图</option>
+              </select>
+              <button id="sidebar-add-step" class="button-secondary" type="button">添加步骤</button>
+              <button id="sidebar-refresh-card" class="button-secondary" type="button">刷新显示</button>
+            </div>
+            <div id="sidebar-step-list" class="sidebar-step-list">
+              <div class="sidebar-step-empty">暂无步骤</div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <div class="stack">
+      <section id="register-card-section" class="card card--accent" data-main-panel="register">
+        <div class="card-title-row">
+          <h2 class="card-title">注册卡片</h2>
+        </div>
+        <div class="field">
+          <input id="register-card-file" type="file" accept=".json,application/json" multiple hidden>
+          <div class="field-actions field-actions--left register-card-toolbar">
+            <button id="pick-register-card-file" class="button-secondary" type="button">导入卡片</button>
+            <button id="export-register-card" class="button-secondary" type="button">导出卡片</button>
+            <button id="delete-register-card" class="button-secondary" type="button">删除选中卡片</button>
+          </div>
+          <div class="field-actions field-actions--left register-card-toolbar">
+            <button id="import-register-card">开始注册</button>
+            <button id="loop-register-card" class="button-secondary" type="button">循环注册</button>
+            <button id="open-card-sidebar" class="button-secondary" type="button">打开侧边栏</button>
+          </div>
+          <div id="card-cache-list" class="card-cache-list" aria-label="注册卡片缓存列表"></div>
+        </div>
+      </section>
+
+      <section id="cookie-capture-card" class="card" data-main-panel="cookie">
+        <div class="card-title-row">
+          <h2 class="card-title">Cookie 抓取</h2>
+          <div class="card-title-actions">
+            <div id="cookie-credential-count" class="chip">0 条</div>
+            <button id="copy-account-password" class="button-secondary" type="button">复制账号密码</button>
+          </div>
+        </div>
+        <div id="cookie-credential-edit-panel" class="cookie-credential-edit-panel" aria-label="编辑 Cookie 记录" role="dialog" aria-modal="true" tabindex="-1">
+          <div class="cookie-credential-edit-panel__dialog">
+            <div class="cookie-credential-edit-panel__head">
+              <div>
+                <h3 class="cookie-credential-edit-panel__title">编辑记录</h3>
+                <div id="cookie-credential-edit-panel-subtitle" class="cookie-credential-edit-panel__subtitle">请选择一条记录开始编辑</div>
+              </div>
+              <button id="cancel-cookie-edit" class="button-secondary" type="button">取消编辑</button>
+            </div>
+            <div class="cookie-credential-edit-grid">
+              <div class="field">
+                <label for="edit-account">账号</label>
+                <input id="edit-account" type="text" autocomplete="off" placeholder="账号">
+              </div>
+              <div class="field">
+                <label for="edit-password">密码</label>
+                <input id="edit-password" type="text" autocomplete="off" placeholder="密码">
+              </div>
+              <div class="field">
+                <label for="edit-note">备注</label>
+                <input id="edit-note" type="text" autocomplete="off" placeholder="备注">
+              </div>
+              <div class="field">
+                <label for="edit-card-key">卡密</label>
+                <input id="edit-card-key" type="text" autocomplete="off" placeholder="卡密">
+              </div>
+            </div>
+            <div class="actions">
+              <button id="save-cookie-credential-edit" class="button-secondary" type="button">保存修改</button>
+            </div>
+          </div>
+        </div>
+        <div class="cookie-credential-grid">
+          <div class="field">
+            <label for="account">账号</label>
+            <div class="field-input-row">
+              <input id="account" type="text" autocomplete="off" placeholder="账号">
+              <button id="copy-cookie-account" class="button-secondary cookie-copy-btn" type="button">复制</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="password">密码</label>
+            <div class="field-input-row">
+              <input id="password" type="text" autocomplete="off" placeholder="密码">
+              <button id="copy-cookie-password" class="button-secondary cookie-copy-btn" type="button">复制</button>
+              <button id="generate-cookie-password" class="button-secondary" type="button">随机</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="cookie-note">备注</label>
+            <input id="cookie-note" type="text" autocomplete="off" placeholder="备注">
+          </div>
+          <div class="field">
+            <label for="cookie-card-key">卡密</label>
+            <input id="cookie-card-key" type="text" autocomplete="off" placeholder="卡密">
+          </div>
+        </div>
+        <div class="actions cookie-capture-actions">
+          <div class="cookie-capture-actions__row">
+            <button id="capture">获取Cookie</button>
+            <input id="cookie-import-file" type="file" accept=".json,.txt,.cookie,text/plain,application/json" hidden>
+            <button id="import-cookie" class="button-secondary" type="button">导入Cookie</button>
+            <button id="clear-current-page-cache" class="button-secondary" type="button">清理当前页缓存</button>
+          </div>
+          <div class="cookie-capture-actions__row">
+            <button id="save-cookie-credentials" class="button-secondary" type="button">保存信息</button>
+          </div>
+          <div class="cookie-capture-actions__row cookie-capture-actions__row--status">
+          <div id="status" class="status"></div>
+          </div>
+        </div>
+        <div class="cookie-credential-toolbar" aria-label="Cookie 记录筛选">
+          <div class="cookie-credential-toolbar__row">
+            <div class="field cookie-credential-filter">
+              <label for="cookie-credential-date-filter">日期</label>
+              <select id="cookie-credential-date-filter">
+                <option value="today">今天</option>
+                <option value="all">全部日期</option>
+              </select>
+            </div>
+            <div class="field cookie-credential-filter cookie-credential-filter--search">
+              <label for="cookie-credential-search">搜索</label>
+              <input id="cookie-credential-search" type="text" autocomplete="off" placeholder="按 QQ、卡密、备注或密码搜索">
+            </div>
+          </div>
+        </div>
+        <div id="cookie-credential-list" class="cookie-credential-list" aria-label="Cookie 保存记录"></div>
+      </section>
+
+    </div>
+
+    <div id="debug-progress-panel" class="debug-progress-panel" aria-live="polite" aria-atomic="true">
+      <div class="debug-progress-head">
+        <div>
+          <div class="debug-progress-title">调试进度</div>
+          <div id="debug-progress-text" class="debug-progress-text">等待开始</div>
+        </div>
+        <div id="debug-progress-percent" class="debug-progress-percent">0%</div>
+      </div>
+      <div class="debug-progress-track">
+        <div id="debug-progress-fill" class="debug-progress-fill"></div>
+      </div>
+      <div id="debug-progress-meta" class="debug-progress-meta"></div>
+      <div id="debug-progress-error" class="debug-progress-error"></div>
+      <div class="run-control-bar">
+        <div class="debug-control-label">当前：正常注册</div>
+        <div class="debug-control-actions">
+          <button id="run-control-stop" class="button-secondary debug-control-btn" type="button">停止</button>
+        </div>
+      </div>
+      <div class="debug-control-bar">
+        <div id="debug-control-mode" class="debug-control-label">当前：逐步运行</div>
+        <div class="debug-control-actions">
+          <button id="debug-control-step" class="button-secondary debug-control-btn" type="button">逐步运行</button>
+          <button id="debug-control-loop" class="button-secondary debug-control-btn" type="button">循环运行</button>
+          <button id="debug-control-pause" class="button-secondary debug-control-btn" type="button">暂停</button>
+          <button id="debug-control-stop" class="button-secondary debug-control-btn" type="button">停止</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="agent-modal" class="agent-modal is-hidden" role="dialog" aria-modal="true">
+      <div class="agent-modal-box">
+        <div class="agent-modal-head">
+          <span class="agent-modal-title">服务器同步</span>
+          <button id="agent-modal-close" class="agent-modal-close" type="button" aria-label="关闭">×</button>
+        </div>
+
+        <div class="agent-card">
+          <div class="agent-kv"><span class="k">连接状态</span><span class="v" id="agent-conn-status">未连接</span></div>
+          <div class="agent-kv"><span class="k">AI 分配</span><span class="v" id="agent-ai-status">未分配</span></div>
+          <div class="agent-hint">登录后自动连接服务器，本设备会出现在网页端「作坊」栏目里等待管理员为它分配 AI；分配后 AI 可远程调度本插件的注册卡片与 Cookie 抓取工具。</div>
+        </div>
+
+        <div class="agent-card" id="agent-login-card">
+          <div class="agent-card-title">🔐 登录软件端账号</div>
+          <div class="agent-field"><label for="agent-server-url">服务器地址</label><input id="agent-server-url" type="url" placeholder="http://127.0.0.1:3000" autocomplete="off"></div>
+          <div class="agent-field"><label for="agent-account">账号</label><input id="agent-account" type="text" placeholder="你的账号" autocomplete="username"></div>
+          <div class="agent-field"><label for="agent-password">密码</label><input id="agent-password" type="password" placeholder="密码" autocomplete="current-password"></div>
+          <label class="agent-check"><input id="agent-remember" type="checkbox"> 记住账号和密码</label>
+          <button id="agent-login-btn" class="agent-btn agent-btn-primary" type="button">登录并连接</button>
+          <div id="agent-login-feedback" class="agent-feedback"></div>
+        </div>
+
+        <div class="agent-card is-hidden" id="agent-account-card">
+          <div class="agent-card-title">👤 已登录</div>
+          <div class="agent-kv"><span class="k">账号</span><span class="v" id="agent-current-account">-</span></div>
+          <div class="agent-btn-row">
+            <button id="agent-connect-btn" class="agent-btn agent-btn-ghost" type="button">重新连接</button>
+            <button id="agent-disconnect-btn" class="agent-btn agent-btn-ghost" type="button">断开</button>
+          </div>
+          <button id="agent-logout-btn" class="agent-btn agent-btn-danger" type="button">退出登录</button>
+        </div>
+
+        <div class="agent-card">
+          <div class="agent-card-title">⚙ 选项</div>
+          <label class="agent-check"><input id="agent-mousefx" type="checkbox"> AI 操作时在页面显示动效（手型光标、点击涟漪、输入高亮）</label>
+          <div class="agent-field"><label for="agent-name">设备名称（显示在作坊里）</label><input id="agent-name" type="text" placeholder="注册浏览器" autocomplete="off"></div>
+          <button id="agent-save-options" class="agent-btn agent-btn-ghost" type="button">保存选项</button>
+          <div id="agent-options-feedback" class="agent-feedback"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="popup.js" defer></script>
+</body>
+</html>

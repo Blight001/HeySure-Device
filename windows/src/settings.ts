@@ -34,6 +34,8 @@ export interface AgentSettings {
   // reported to the server via device:register -> toolDefs. Keyed by tool id.
   toolDescOverrides: Record<string, { description?: string; parameters?: Record<string, string> }>
   // (toolEnabled removed: MCPs are server-issued; no local allow-call checkboxes)
+  // 开机自启：默认 true，在应用启动时自动启用（通过 Tauri autostart 插件写入注册表）。
+  autoStart: boolean
 }
 
 const SETTINGS_FILE = 'settings.json'
@@ -63,6 +65,7 @@ export const defaults: AgentSettings = {
   authToken: '',
   userId: null,
   toolDescOverrides: {},
+  autoStart: true,
 }
 
 export async function loadSettings(): Promise<AgentSettings> {

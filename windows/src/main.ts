@@ -6,6 +6,7 @@
 import './style.css'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { listen } from '@tauri-apps/api/event'
+import { enable as enableAutostart, disable as disableAutostart, isEnabled as isAutostartEnabled } from '@tauri-apps/plugin-autostart'
 import { HeySureAgent, type DeviceStatus } from './agent'
 import { login, pingServer, getMe } from './api'
 import { initializeDynamicMcp } from './executor/dynamic'
@@ -1009,6 +1010,23 @@ async function probe(force: boolean) {
   renderRuntimes(await probeRuntimes(force))
 }
 
+// ---------- autostart (开机自启) ----------
+
+async function applyAutoStart(shouldEnable: boolean) {
+  try {
+    const currentlyEnabled = await isAutostartEnabled().catch(() => false)
+    if (shouldEnable && !currentlyEnabled) {
+      await enableAutostart()
+      appendLog('info', '已启用开机自启')
+    } else if (!shouldEnable && currentlyEnabled) {
+      await disableAutostart()
+      appendLog('info', '已禁用开机自启')
+    }
+  } catch (err: any) {
+    appendLog('error', `设置开机自启失败: ${err?.message || err}`)
+  }
+}
+
 // ---------- agent lifecycle ----------
 
 function buildAgent(): HeySureAgent {
@@ -1178,6 +1196,7 @@ async function doSaveSettings() {
   settings.mouseFx = $<HTMLInputElement>('cfg-mouse-fx').checked
   settings.mouseCoordinateScaleX = Number($<HTMLInputElement>('cfg-mouse-scale-x').value) || 1
   settings.mouseCoordinateScaleY = Number($<HTMLInputElement>('cfg-mouse-scale-y').value) || 1
+  settings.autoStart = $<HTMLInputElement>('cfg-autostart').checked
   if (settings.workspaceRoot) {
     try { await native.ensureDir(settings.workspaceRoot) } catch (err: any) {
       appendLog('error', `工作目录不可用: ${err?.message || err}`)
@@ -1185,6 +1204,7 @@ async function doSaveSettings() {
     }
   }
   await saveSettings(settings)
+  await applyAutoStart(settings.autoStart)
   const fb = $('save-feedback')
   fb.className = 'save-feedback ok'
   fb.textContent = '已保存 ✓'
@@ -1351,6 +1371,14 @@ function setupShellUi() {
     renderOfflineTools()
   })
 
+  // Live toggle for 开机自启 (immediate apply + persist)
+  const autostartCb = $<HTMLInputElement>('cfg-autostart')
+  autostartCb.addEventListener('change', async () => {
+    settings.autoStart = autostartCb.checked
+    await saveSettings(settings)
+    await applyAutoStart(settings.autoStart)
+  })
+
   // Also ensure that if tools are loaded async via callback, we re-render the offline list
   // (the init logic inside renderOfflineTools will handle first population if needed)
 }
@@ -1407,6 +1435,8 @@ async function boot() {
   host = await native.hostInfo()
   settings = await loadSettings()
   await ensureDeviceId(settings)
+  // 应用开机自启设置（默认 true）
+  await applyAutoStart(settings.autoStart ?? true)
   document.body.classList.toggle('light', settings.theme === 'light')
   document.documentElement.classList.toggle('light', settings.theme === 'light')
   // No toolEnabled provider (MCP checkboxes removed; server issues all tools)
@@ -1469,6 +1499,7 @@ async function boot() {
   $<HTMLInputElement>('cfg-mouse-fx').checked = settings.mouseFx
   $<HTMLInputElement>('cfg-mouse-scale-x').value = String(settings.mouseCoordinateScaleX || 1)
   $<HTMLInputElement>('cfg-mouse-scale-y').value = String(settings.mouseCoordinateScaleY || 1)
+  $<HTMLInputElement>('cfg-autostart').checked = settings.autoStart ?? true
   $('theme-toggle').textContent = settings.theme === 'light' ? '☀' : '🌙'
   $<HTMLInputElement>('cfg-ai-key').value = settings.aiKey || ''
   $<HTMLInputElement>('cfg-ai-base').value = settings.aiBaseUrl || ''

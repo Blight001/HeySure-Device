@@ -62,7 +62,7 @@ const defaults: AgentSettings = {
   agentName: process.env.AGENT_NAME || 'Linux Agent',
   agentGroup: process.env.AGENT_GROUP || '',
   workspaceRoot: process.env.WORKSPACE_ROOT || '',
-  autoStart: false,
+  autoStart: true,
   theme: 'dark',
   windowBounds: null,
   aiKey: process.env.AI_KEY || '',

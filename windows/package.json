@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2.5.0",
+    "@tauri-apps/plugin-autostart": "^2",
     "socket.io-client": "^4.7.5"
   },
   "devDependencies": {

@@ -22,6 +22,8 @@ xcap = "0.4"
 windows = { version = "0.56", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging"] }
 # 帧编码：把捕获到的 RgbaImage 压成 JPEG（仅需 jpeg 编码器）。
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
+# 开机自启支持（写入注册表实现 Windows 开机启动，默认启用）。
+tauri-plugin-autostart = "2"
 
 [profile.release]
 # 体积优先：这是本次迁移的核心目标之一。

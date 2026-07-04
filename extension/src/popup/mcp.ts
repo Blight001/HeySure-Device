@@ -5,7 +5,7 @@
 import {
   BROWSER_TOOL_CATEGORIES, BROWSER_TOOL_KIND_LABELS,
   BrowserToolCategory, BrowserToolKind, allToolDefs, browserToolKind,
-  resolveToolEnabledMap, isServerManagedToolDef,
+  resolveToolEnabledMap, isServerManagedToolDef, DYNAMIC_MCP_SERVER_SESSION_KEY,
 } from '../lib/tools'
 import { AIToolDef } from '../lib/types'
 import {
@@ -133,6 +133,9 @@ export async function renderMcpList() {
     const cats = currentCategories.filter(c => c.kind === kind)
     if (!cats.length) continue
     const kindTools = cats.flatMap(c => c.tools).filter(n => byName.has(n))
+    // 纯服务器驱动下，未连接/服务器未下发前某些分类可能一个工具都没有——
+    // 跳过空栏目，避免渲染出 0/0 的空「基础类」。
+    if (!kindTools.length) continue
     const kindOn = kindTools.filter(n => enabledMap[n]).length
     const allOn = kindOn === kindTools.length
     const expanded = expandedKinds.has(kind)
@@ -363,4 +366,13 @@ export function resolveTest(requestId: string, r: { ok: boolean; result?: any; e
 
 export function wireMcp() {
   dom.mcpBack.addEventListener('click', () => void renderMcpList())
+  // Server-pushed tools arrive asynchronously in the background and are shared
+  // via chrome.storage.session. Re-render when they change so a popup opened
+  // before/during the server push still fills in — but not while the user is
+  // reading a tool's detail (that would kick them back to the list).
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'session' && changes[DYNAMIC_MCP_SERVER_SESSION_KEY] && state.openToolName === null) {
+      void renderMcpList()
+    }
+  })
 }

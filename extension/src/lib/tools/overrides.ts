@@ -1,35 +1,25 @@
 // tools/overrides.ts — build the MCP catalog the extension reports to the server.
 //
-// Schema source of truth matches the Windows desktop model:
-//   1. Server-pushed tools (device:tool-config, memory-only) win on name conflicts.
-//   2. Locally-authored dynamic tools (chrome.storage) are merged next.
-//   3. Hardcoded BROWSER_TOOLS schemas are a connect-time fallback only, until the
-//      server seeds/pushes workspace files under device_tools/browser/.
+// 纯服务器驱动（对齐 Windows 桌面端）：广告给服务器的工具目录 = 动态工具集：
+//   1. browser_mcp.manage_dynamic_tool 引导器——唯一的本地内置项，负责加载服务器下发的工具；
+//   2. 服务器经 device:tool-config 下发的浏览器工具（program 包装器，memory-only）；
+//   3. 本地经 manager 创作的动态工具（chrome.storage）。
+// 硬编码的 BROWSER_TOOLS 不再作为上报目录——所有浏览器工具的 schema 一律以服务器
+// 工作区 device_tools/browser/ 下发为准。BROWSER_TOOLS 仅保留在 browser.ts 里作为
+// builtin:* 的端侧执行实现（服务器下发的 program 包装器通过 builtin:browser_* 调用）。
 //
-// Execution still uses the packaged browser.ts handlers; server program wrappers
-// forward to builtin:*. Tool enable/disable stays in chrome.storage (desktop
-// keeps an equivalent in Electron store). Description overrides are NOT applied
-// to server-managed tools — edit those on the server / web console instead.
+// 工具启停仍存 chrome.storage（桌面端在 store 里有等价物）。服务器托管工具不套用
+// 本地描述改写——请在服务器 / Web 控制台修改。
 
-import { BROWSER_TOOLS, isToolEnabledByDefault } from './definitions'
+import { isToolEnabledByDefault } from './definitions'
 import { AIToolDef } from '../types'
 import { getToolDescOverrides, getToolEnabledMap } from '../storage'
 import { dynamicMcpToolDefs, isServerManagedToolDef } from './dynamic'
 
-const BUILTIN_IMPL = {
-  kind: 'builtin' as const,
-  source_files: ['src/lib/tools/definitions.ts', 'src/lib/tools/browser.ts', 'src/lib/tools/router.ts', 'dist/background.js'],
-  editable_via: 'browser_mcp.manage_dynamic_tool',
-}
-
 export async function allToolDefs(): Promise<AIToolDef[]> {
-  const merged = new Map<string, AIToolDef>()
-  for (const tool of await dynamicMcpToolDefs()) merged.set(tool.name, tool)
-  for (const tool of BROWSER_TOOLS) {
-    if (merged.has(tool.name)) continue
-    merged.set(tool.name, { ...tool, implementation: BUILTIN_IMPL })
-  }
-  return Array.from(merged.values())
+  // 上报目录 = 动态工具集（manager 引导器 + 服务器下发 + 本地创作），不再合并硬编码
+  // BROWSER_TOOLS。首次连接、服务器尚未下发前，这里只有 manager 引导器（与桌面端一致）。
+  return await dynamicMcpToolDefs()
 }
 
 /** Resolve every browser tool's effective on/off state (explicit choice ?? default). */

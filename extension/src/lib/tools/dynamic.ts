@@ -10,12 +10,18 @@ export interface DynamicMcpDefinition {
 type DynamicInstruction = { op: 'call' | 'set' | 'return'; tool?: string; args?: any; name?: string; value?: any; save_as?: string }
 
 export const DYNAMIC_MCP_STORAGE_KEY = '_dynamic_mcp_tools'
-// Legacy key — server tools are memory-only now; kept for one-time cleanup.
+// Legacy key — server tools used to be cached in chrome.storage.local; purge once.
 export const DYNAMIC_MCP_SERVER_STORAGE_KEY = '_dynamic_mcp_server_tools'
-// Web-authored tools pushed by the server (device:tool-config), held in memory
-// only and cleared on disconnect.
-let serverDefinitions: DynamicMcpDefinition[] = []
-let appliedServerRevision = ''
+// Server-pushed tools (device:tool-config) live in chrome.storage.session, NOT a
+// module variable: the popup runs in a SEPARATE JS context from the background
+// service worker, so a module var would only ever be populated in the worker that
+// owns the socket — the popup's MCP list would then show nothing. storage.session
+// is shared across all extension contexts and is in-memory (never written to disk,
+// cleared when the browser closes), matching the "server tools never persist"
+// intent. It also survives MV3 worker teardown, so the reported catalog no longer
+// briefly collapses to the bootstrap when the worker is recycled.
+// Shape: { revision: string, tools: DynamicMcpDefinition[] }.
+export const DYNAMIC_MCP_SERVER_SESSION_KEY = '_dynamic_mcp_server_session'
 export const DYNAMIC_MCP_MANAGER_NAME = 'mcp.manage_dynamic_tool'
 export const BROWSER_DYNAMIC_MCP_MANAGER_NAME = 'browser_mcp.manage_dynamic_tool'
 const NAME_RE = /^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)*$/
@@ -66,8 +72,19 @@ async function saveDynamicMcpDefinitions(tools: DynamicMcpDefinition[]): Promise
   await chrome.storage.local.set({ [DYNAMIC_MCP_STORAGE_KEY]: { version: 1, tools } })
 }
 
+async function readServerSession(): Promise<{ revision: string; tools: DynamicMcpDefinition[] }> {
+  try {
+    const stored = (await chrome.storage.session.get(DYNAMIC_MCP_SERVER_SESSION_KEY))[DYNAMIC_MCP_SERVER_SESSION_KEY]
+    const tools = Array.isArray(stored?.tools) ? (stored.tools as DynamicMcpDefinition[]) : []
+    const rev = typeof stored?.revision === 'string' ? stored.revision : ''
+    return { revision: rev, tools }
+  } catch {
+    return { revision: '', tools: [] }
+  }
+}
+
 export async function getServerDynamicMcpDefinitions(): Promise<DynamicMcpDefinition[]> {
-  return [...serverDefinitions]
+  return (await readServerSession()).tools
 }
 
 async function purgeLegacyServerCache(): Promise<void> {
@@ -75,9 +92,9 @@ async function purgeLegacyServerCache(): Promise<void> {
 }
 
 export async function clearServerDynamicMcp(): Promise<{ cleared: boolean; tools: number; server: number }> {
-  const hadServer = serverDefinitions.length > 0 || !!appliedServerRevision
-  serverDefinitions = []
-  appliedServerRevision = ''
+  const current = await readServerSession()
+  const hadServer = current.tools.length > 0 || !!current.revision
+  await chrome.storage.session.remove(DYNAMIC_MCP_SERVER_SESSION_KEY)
   const { merged } = await getMergedDynamicMcpDefinitions()
   return { cleared: hadServer, tools: merged.length, server: 0 }
 }
@@ -104,9 +121,9 @@ export async function applyServerDynamicMcp(payload: any): Promise<{ applied: bo
   const tools = Array.isArray(list) ? list.map(validate) : []
   if (new Set(tools.map(item => item.name)).size !== tools.length) throw new Error('Duplicate dynamic MCP name')
   const rev = revision(tools)
-  if (rev === appliedServerRevision) return { applied: false, revision: rev, tools: tools.length }
-  serverDefinitions = tools
-  appliedServerRevision = rev
+  const current = await readServerSession()
+  if (rev === current.revision) return { applied: false, revision: rev, tools: tools.length }
+  await chrome.storage.session.set({ [DYNAMIC_MCP_SERVER_SESSION_KEY]: { revision: rev, tools } })
   return { applied: true, revision: rev, tools: tools.length }
 }
 

@@ -2,9 +2,14 @@
 // No runtime dependencies; safe to import from any module.
 //
 // 描述规范（中文为主 + 英文术语）：每个工具的 description 说明「用途 + 典型使用
-// 场景」，每个参数的 description 说明「含义 + 取值/默认」。在线时 schema 以服务器
-// 工作区 device_tools/browser/ 经 device:tool-config 下发为准（与 Windows 桌面一致）；
-// 本文件中的 BROWSER_TOOLS 仅作连接前兜底与端侧执行实现，不再作为持久 schema 缓存。
+// 场景」，每个参数的 description 说明「含义 + 取值/默认」。
+//
+// 纯服务器驱动（对齐 Windows 桌面端）：上报给服务器的工具 schema 一律以服务器工作区
+// device_tools/browser/ 经 device:tool-config 下发为准；本文件中的 BROWSER_TOOLS
+// 不再作为上报目录（连接前也不再兜底上报），仅保留为：
+//   1. browser.ts 的端侧执行实现所对应的 schema（服务器 program 包装器经 builtin:* 调用）；
+//   2. popup 分类展示（BROWSER_TOOL_CATEGORIES）与 manager 的 inspect / 本地 AI 循环参考。
+// 服务端的出厂默认目录见 server device_browser_runtime_tools/catalog.json（应与此保持一致）。
 //
 // 分类：工具按 BROWSER_TOOL_CATEGORIES 归到 5 个大类（导航/观察/交互/数据/状态）。
 // 这是分组的唯一来源——popup、服务器、Web 端都应按它归类，不要再各写一份名单。

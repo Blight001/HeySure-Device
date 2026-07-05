@@ -3,7 +3,7 @@
 六个端侧客户端（**只是运行在不同端的壳，本身不具备 agent 能力**），连接后端、注册为 endpoint。
 
 **本目录是独立仓库** `HeySure-Device`。各平台（windows / linux / mac / extension / android）代码与资产完全独立，不再共享 `shared/`。
-**桌面端已退化为受控运行器**：不再内置固定原生 MCP 工具，能力来自服务器下发的 runtime 工具（Windows 仅支持 powershell/shell），由服务端编排/推理。
+**桌面端已退化为受控运行器**：不再内置固定原生 MCP 工具，也没有任何设备本地的动态工具授权/管理入口——能力全部来自服务器下发的动态 MCP（`device:tool-config`，含 runtime 工具，Windows 仅支持 powershell/shell），由服务端编排/推理。静态自描述（`toolDefs`）与服务器下发动态 MCP 的边界见 [`read.md`](read.md) 第 5、6 节。
 
 ## 六种形态
 
@@ -34,9 +34,9 @@ device/linux/src/
     auth-state.ts            ← 认证状态机
     offline-ai.ts            ← 离线推理备用
   executor/
-    catalog.ts               ← 仅注册 mcp.manage_dynamic_tool（动态工具引导器）
+    catalog.ts               ← 无内置工具（曾经的本地动态工具管理器 mcp.manage_dynamic_tool 已删除）
     registry.ts              ← 工具路由表（平台分叉）
-    dynamic.ts               ← 动态工具管理（平台分叉）
+    dynamic.ts               ← 接收并执行服务器下发的动态 MCP（device:tool-config），无本地授权/管理（平台分叉）
     index.ts                 ← 统一调度入口
   runtime/                   ← 受控执行底座（各平台独立 copy）
     shell-runner.ts          ← Shell 脚本执行

@@ -245,21 +245,13 @@ function renderTools() {
     list.innerHTML = '<div class="empty-note">尚未加载 MCP 工具</div>'
   }
 
+  // The device has no built-in or local tools anymore — everything runnable
+  // is a dynamic MCP tool pushed by the server (device:tool-config).
   const groups = [
     {
       zh: '服务器动态工具',
       en: 'Server Dynamic Tools',
-      defs: defs.filter(def => (def.implementation as any)?.source === 'server'),
-    },
-    {
-      zh: '本地动态工具',
-      en: 'Local Dynamic Tools',
-      defs: defs.filter(def => (def.implementation as any)?.source !== 'server' && (def.implementation as any)?.kind === 'dynamic'),
-    },
-    {
-      zh: '内置工具',
-      en: 'Built-in Tools',
-      defs: defs.filter(def => (def.implementation as any)?.source !== 'server' && (def.implementation as any)?.kind !== 'dynamic'),
+      defs,
     },
   ].filter(group => group.defs.length > 0)
 
@@ -295,8 +287,7 @@ function renderTools() {
 
     const sub = document.createElement('span')
     sub.className = 'tool-name-sub'
-    sub.textContent = (def.implementation as any)?.source === 'server' ? 'Server Dynamic Tool'
-      : (def.implementation as any)?.kind === 'dynamic' ? 'Local Dynamic Tool' : 'Built-in Tool'
+    sub.textContent = 'Server Dynamic Tool'
 
     const desc = document.createElement('span')
     desc.className = 'tool-desc'
@@ -305,8 +296,7 @@ function renderTools() {
 
     const src = document.createElement('span')
     src.className = 'tool-src'
-    src.textContent = (def.implementation as any)?.source === 'server' ? '服务器'
-      : (def.implementation as any)?.kind === 'dynamic' ? '本地动态' : '内置'
+    src.textContent = '服务器'
 
     const top = document.createElement('div')
     top.className = 'tool-item-top'
@@ -1469,14 +1459,10 @@ async function boot() {
     } catch {}
   })
 
-  try {
-    await initializeDynamicMcp(() => {
-      renderTools()
-      agent?.refreshRegistration()
-    })
-  } catch (err: any) {
-    appendLog('error', `本地动态 MCP 加载失败: ${err?.message || err}`)
-  }
+  initializeDynamicMcp(() => {
+    renderTools()
+    agent?.refreshRegistration()
+  })
 
   // Initialize default allowed tools for 本地对话 (MCP scope). All tools by default
   // (no global toolEnabled; offline scope is per-conversation selection only).

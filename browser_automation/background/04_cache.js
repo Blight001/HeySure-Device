@@ -267,7 +267,7 @@ function extractVerificationCodeFromText(text = '') {
     }
 
     const codeKeywords = [
-        /(?:验证码|验证代码|校验码|确认码|激活码|注册码|安全码|动态码|一次性密码|临时码|临时验证码)/i,
+        /(?:验证码|验证代码|校验码|确认码|激活码|安全码|动态码|一次性密码|临时码|临时验证码)/i,
         /(?:verification\s+code|verify\s+code|auth\s+code|security\s+code|access\s+code|otp|pin|token|passcode|code)/i
     ];
 

@@ -9,5 +9,6 @@ importScripts(
     'background/06_automation_run.js',
     'background/07_events.js',
     'background/08_agent_auth.js',
-    'background/09_agent_socket.js'
+    'background/09_agent_socket.js',
+    'background/10_browser_tools.js'
 );

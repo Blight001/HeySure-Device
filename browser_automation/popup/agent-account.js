@@ -54,7 +54,7 @@
         disconnected: '未连接',
         connecting: '连接中',
         connected: '已连接',
-        registered: '已连接',
+        enrolled: '已连接',
         error: '连接错误'
     };
 
@@ -65,7 +65,7 @@
         let cls = 'is-red';
         let label = STATUS_LABELS[status] || '未连接';
 
-        if (status === 'registered' || status === 'connected') {
+        if (status === 'enrolled' || status === 'connected') {
             cls = hasAi ? 'is-green' : 'is-yellow';
             label = hasAi ? '已连接 · 已分配AI' : '已连接 · 未分配AI';
         } else if (status === 'connecting') {
@@ -76,7 +76,7 @@
         statusLabel.textContent = label;
 
         if (connStatus) {
-            connStatus.textContent = status === 'registered'
+            connStatus.textContent = status === 'enrolled'
                 ? '已连接到服务器'
                 : status === 'connected'
                     ? '已连接（同步中）'

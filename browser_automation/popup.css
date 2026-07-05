@@ -1314,10 +1314,83 @@
       .cookie-credential-edit-grid {
         grid-template-columns: 1fr;
       }
+
+      .cookie-manager-dialog {
+        width: 100%;
+      }
     }
 
     .cookie-credential-edit-grid .field {
       margin-bottom: 0;
+    }
+
+    .cookie-manager-dialog {
+      width: min(100%, 640px);
+    }
+
+    .cookie-manager-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .cookie-manager-toolbar__actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .cookie-manager-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+      max-height: 46vh;
+      overflow: auto;
+    }
+
+    .cookie-manager-item {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+    }
+
+    .cookie-manager-item__main {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+
+    .cookie-manager-item__title {
+      font-size: 13px;
+      font-weight: 800;
+      color: var(--text);
+      word-break: break-all;
+    }
+
+    .cookie-manager-item__meta {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      word-break: break-word;
+    }
+
+    .cookie-manager-item__value {
+      color: var(--text);
+      font-size: 12px;
+      line-height: 1.4;
+      word-break: break-all;
+      white-space: pre-wrap;
     }
 
     button {

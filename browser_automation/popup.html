@@ -264,6 +264,26 @@
             </div>
           </div>
         </div>
+        <div id="cookie-manager-panel" class="cookie-credential-edit-panel" aria-label="Cookie 管理" role="dialog" aria-modal="true" tabindex="-1">
+          <div class="cookie-credential-edit-panel__dialog cookie-manager-dialog">
+            <div class="cookie-credential-edit-panel__head">
+              <div>
+                <h3 class="cookie-credential-edit-panel__title">Cookie 管理</h3>
+                <div id="cookie-manager-subtitle" class="cookie-credential-edit-panel__subtitle">正在读取当前页面 Cookie...</div>
+              </div>
+              <button id="close-cookie-manager" class="button-secondary" type="button">关闭</button>
+            </div>
+            <div class="cookie-manager-toolbar">
+              <div id="cookie-manager-count" class="chip">0 条</div>
+              <div class="cookie-manager-toolbar__actions">
+                <button id="refresh-cookie-manager" class="button-secondary" type="button">刷新</button>
+                <button id="download-cookie-manager" class="button-secondary" type="button">下载为文件</button>
+                <button id="clear-all-cookie-manager" class="button-secondary cookie-credential-delete-btn" type="button">清除全部</button>
+              </div>
+            </div>
+            <div id="cookie-manager-list" class="cookie-manager-list" aria-label="当前页面 Cookie 列表"></div>
+          </div>
+        </div>
         <div class="cookie-credential-grid">
           <div class="field">
             <label for="account">账号</label>
@@ -291,7 +311,7 @@
         </div>
         <div class="actions cookie-capture-actions">
           <div class="cookie-capture-actions__row">
-            <button id="capture">获取Cookie</button>
+            <button id="capture">Cookie 管理</button>
             <input id="cookie-import-file" type="file" accept=".json,.txt,.cookie,text/plain,application/json" hidden>
             <button id="import-cookie" class="button-secondary" type="button">导入Cookie</button>
             <button id="clear-current-page-cache" class="button-secondary" type="button">清理当前页缓存</button>

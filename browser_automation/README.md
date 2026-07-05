@@ -43,7 +43,7 @@
 
 ## 服务器同步（登录 + AI 分配）
 
-本扩展登录后作为 HeySure 端侧 agent，经 **Socket.IO** 连接服务器并注册为一个浏览器设备。与 `device/extension`（HeySure Agent）的登录/AI 分配链路一致。
+本扩展登录后作为 HeySure 端侧 agent，经 **Socket.IO** 连接服务器并登记为一个浏览器设备。与 `device/extension`（HeySure Agent）的登录/AI 分配链路一致。
 
 ### 使用步骤
 
@@ -57,14 +57,26 @@
 
 ### 暴露给 AI 的工具
 
-| 工具            | 功能说明 |
-|-----------------|----------|
-| `get_status`    | 列出所有已保存的自动化卡片（id、名称、步骤数、保存时间等） |
-| `write_card`    | 创建新卡片、覆盖已有卡片或删除卡片 |
-| `run_card`      | 在当前活动标签页执行自动化卡片流程（可指定账号/邮箱，耗时操作） |
-| `save_cookies`  | 抓取当前页面的 Cookie + localStorage + sessionStorage，可选上传到指定服务器 |
+| 分类 | 工具 | 功能说明 |
+|------|------|----------|
+| 自动化卡片 | `get_status`    | 列出所有已保存的自动化卡片（id、名称、步骤数、保存时间等） |
+| 自动化卡片 | `write_card`    | 创建新卡片、覆盖已有卡片或删除卡片 |
+| 自动化卡片 | `run_card`      | 在当前活动标签页执行自动化卡片流程（可指定账号/邮箱，耗时操作） |
+| 自动化卡片 | `save_cookies`  | 抓取当前页面的 Cookie + localStorage + sessionStorage，可选上传到指定服务器 |
+| 导航与搜索 | `browser_tab`   | 标签页管理与导航：list / switch / replace / navigate / close / back / forward |
+| 页面观察   | `browser_observe`    | 感知当前视口的可交互元素与可见文本，返回带 id 的 items 列表供 `browser_action` 用 `ref` 精确点击 |
+| 页面观察   | `browser_screenshot` | 对当前标签页可视区域截图，返回 base64 dataUrl |
+| 页面交互   | `browser_action`     | 点击 / 双击 / 右键 / 滚动 / 输入文本 / 键盘按键的聚合工具 |
+| 页面交互   | `browser_wait`       | 等待某个 CSS selector 出现，或固定等待一段时间 |
+| 页面交互   | `browser_drag`       | 从源元素/点拖拽到目标元素/点并放下 |
 
-工具 schema 在设备注册时上报给服务器，由服务器在 `mcp.list_tools` / `describe_tool` 中呈现，无需服务端硬编码。
+工具 schema 在设备登记时上报给服务器，由服务器在 `mcp.list_tools` / `describe_tool` 中呈现，无需服务端硬编码。
+
+> `browser_tab`/`browser_observe`/`browser_screenshot`/`browser_action`/`browser_wait`/`browser_drag`
+> 简化移植自 `device/extension` 的同名 MCP 工具：本插件没有 `debugger`/CDP 权限，因此点击/输入/
+> 按键都是合成事件（非 CDP trusted 事件），`browser_observe` 只扫描主文档（不含跨域 iframe，也
+> 不识别 img/video/audio），`browser_screenshot` 只支持可视区域截图（无整页/精确元素裁剪）。
+> 执行逻辑见 `background/10_browser_tools.js` + `content/observe.js`。
 
 ## 项目结构
 
@@ -81,9 +93,11 @@ browser_automation/
 │   ├── 06_automation_run.js
 │   ├── 07_events.js
 │   ├── 08_agent_auth.js        # 软件端账号登录 / 认证 HTTP 客户端
-│   └── 09_agent_socket.js      # Socket.IO 连接 / 注册 / task 调度 / AI 分配
+│   ├── 09_agent_socket.js      # Socket.IO 连接 / 设备登记 / task 调度 / AI 分配
+│   └── 10_browser_tools.js     # browser_tab/observe/screenshot/action/wait/drag 工具封装
 ├── content/
-│   └── fx.js                   # 页面操作动效（手型光标 / 点击涟漪 / 输入高亮）
+│   ├── fx.js                   # 页面操作动效（手型光标 / 点击涟漪 / 输入高亮）
+│   └── observe.js              # 页面观察与交互底座（window.__hsObserve，供 10_browser_tools.js 调用）
 ├── cursors/
 │   └── hand.png                # 动效手型光标资源
 ├── vendor/

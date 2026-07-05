@@ -59,7 +59,12 @@ const {
     loadPreset,
     saveCookieCredentialRecord,
     captureCurrentTab,
-    clearCurrentPageCache
+    clearCurrentPageCache,
+    getCurrentActiveTabForCookieManager,
+    refreshCookieManagerList,
+    openCookieManagerPanel,
+    closeCookieManagerPanel,
+    deleteCookieManagerItem
 } = cookieModule;
 
 const ACCOUNT_KEY = shared.STORAGE_KEYS.ACCOUNT_KEY;
@@ -102,6 +107,12 @@ const cookieCredentialDateFilterNode = document.getElementById('cookie-credentia
 const cookieCredentialSearchNode = document.getElementById('cookie-credential-search');
 const captureButton = document.getElementById('capture');
 const clearCurrentPageCacheButton = document.getElementById('clear-current-page-cache');
+const cookieManagerPanelNode = document.getElementById('cookie-manager-panel');
+const closeCookieManagerButton = document.getElementById('close-cookie-manager');
+const refreshCookieManagerButton = document.getElementById('refresh-cookie-manager');
+const downloadCookieManagerButton = document.getElementById('download-cookie-manager');
+const clearAllCookieManagerButton = document.getElementById('clear-all-cookie-manager');
+const cookieManagerListNode = document.getElementById('cookie-manager-list');
 const statusNode = document.getElementById('status');
 const cookieCredentialCountNode = document.getElementById('cookie-credential-count');
 const cookieCredentialListNode = document.getElementById('cookie-credential-list');
@@ -201,7 +212,7 @@ const {
     normalizeDebugControlMode,
     setDebugControlMode,
     setLoopButtonState,
-    refreshRegisterLoopButtonState,
+    refreshLoopButtonState,
     refreshDebugControlUi,
     sendDebugControlAction,
     sendStopAction,
@@ -527,7 +538,83 @@ cardCacheListNode?.addEventListener('click', (event) => {
 });
 
 captureButton?.addEventListener('click', () => {
-    void captureCurrentTab();
+    void openCookieManagerPanel();
+});
+
+closeCookieManagerButton?.addEventListener('click', () => {
+    closeCookieManagerPanel();
+});
+
+cookieManagerPanelNode?.addEventListener('click', (event) => {
+    if (event.target === cookieManagerPanelNode) {
+        closeCookieManagerPanel();
+    }
+});
+
+document.addEventListener('keydown', (event) => {
+    if (String(event.key || '').toLowerCase() !== 'escape') {
+        return;
+    }
+    if (!cookieManagerPanelNode || !cookieManagerPanelNode.classList.contains('is-visible')) {
+        return;
+    }
+    closeCookieManagerPanel();
+});
+
+refreshCookieManagerButton?.addEventListener('click', () => {
+    void (async () => {
+        refreshCookieManagerButton.disabled = true;
+        try {
+            await refreshCookieManagerList();
+        } catch (error) {
+            showActionToast(error && error.message ? error.message : '刷新 Cookie 列表失败', 'error');
+        } finally {
+            refreshCookieManagerButton.disabled = false;
+        }
+    })();
+});
+
+downloadCookieManagerButton?.addEventListener('click', () => {
+    void (async () => {
+        downloadCookieManagerButton.disabled = true;
+        try {
+            await captureCurrentTab();
+        } finally {
+            downloadCookieManagerButton.disabled = false;
+        }
+    })();
+});
+
+clearAllCookieManagerButton?.addEventListener('click', () => {
+    void (async () => {
+        clearAllCookieManagerButton.disabled = true;
+        try {
+            await clearCurrentPageCache();
+            await refreshCookieManagerList().catch(() => {});
+        } finally {
+            clearAllCookieManagerButton.disabled = false;
+        }
+    })();
+});
+
+cookieManagerListNode?.addEventListener('click', (event) => {
+    const button = event.target && event.target.closest ? event.target.closest('[data-cookie-manager-action="delete"]') : null;
+    if (!button) {
+        return;
+    }
+
+    const itemNode = button.closest('[data-cookie-manager-item]');
+    void (async () => {
+        button.disabled = true;
+        try {
+            const result = await deleteCookieManagerItem(itemNode);
+            showActionToast(`已删除 Cookie: ${result.name}`, 'success');
+            await refreshCookieManagerList().catch(() => {});
+        } catch (error) {
+            showActionToast(error && error.message ? error.message : '删除 Cookie 失败', 'error');
+            button.disabled = false;
+        }
+    })();
 });
 
 importCookieButton?.addEventListener('click', () => {
@@ -783,7 +870,7 @@ sidebarExportCardButton?.addEventListener('click', () => {
     })();
 });
 
-sidebarLoopRegisterButton?.addEventListener('click', () => {
+sidebarLoopButton?.addEventListener('click', () => {
     void loopCard();
 });
 
@@ -1042,7 +1129,7 @@ void (async () => {
     syncCookieCredentialEditUi();
     await refreshCookieCredentialCacheUi().catch(() => {});
     await refreshDebugControlUi();
-    await refreshRegisterLoopButtonState();
+    await refreshLoopButtonState();
     try {
         const storedProgress = await loadStandaloneProgressState();
         if (storedProgress && storedProgress.visible !== false) {

@@ -90,7 +90,6 @@ export function listToolDefs(): ToolDef[] {
       implementation: t.implementation || {
         kind: dynamicToolIds.has(t.id) ? 'dynamic' : 'builtin',
         handler_source: String(t.handler),
-        editable_via: 'mcp.manage_dynamic_tool',
       },
     }))
 }

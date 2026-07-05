@@ -27,7 +27,8 @@
         "https://*/*"
       ],
       "js": [
-        "content/fx.js"
+        "content/fx.js",
+        "content/observe.js"
       ],
       "run_at": "document_idle"
     }

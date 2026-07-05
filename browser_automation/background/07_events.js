@@ -67,6 +67,38 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         return true;
     }
 
+    if (message.type === 'cookie-capture-list-cookies') {
+        (async () => {
+            try {
+                const payload = message.payload && typeof message.payload === 'object' ? message.payload : {};
+                const result = await listCurrentTabCookies(payload.tabId || 0);
+                sendResponse(result);
+            } catch (error) {
+                sendResponse({
+                    success: false,
+                    error: error && error.message ? error.message : '获取 Cookie 列表失败'
+                });
+            }
+        })();
+        return true;
+    }
+
+    if (message.type === 'cookie-capture-remove-cookie') {
+        (async () => {
+            try {
+                const payload = message.payload && typeof message.payload === 'object' ? message.payload : {};
+                const result = await removeCurrentTabCookie(payload.tabId || 0, payload.cookie || {});
+                sendResponse(result);
+            } catch (error) {
+                sendResponse({
+                    success: false,
+                    error: error && error.message ? error.message : '删除 Cookie 失败'
+                });
+            }
+        })();
+        return true;
+    }
+
     if (message.type === 'cookie-capture-import-cookies') {
         (async () => {
             try {

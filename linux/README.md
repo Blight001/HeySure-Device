@@ -79,9 +79,10 @@ so the reported `capabilities` and `toolDefs` surface through
 
 ## 联调测试
 
-Linux 桌面端与 Windows 同源：壳内仅内置 `mcp.manage_dynamic_tool`，其余 MCP 能力为
-服务端下发的 **runtime 工具**（种子定义见
-`server/main/api/services/device_runtime_tools/`）。共享 UI 与 `mcp.test` 来自
+Linux 桌面端与 Windows 同源：壳内**没有任何内置 MCP 工具**（也没有本地动态工具或
+设备端的 MCP 管理工具），全部 MCP 能力为服务端下发的动态 MCP / **runtime 工具**
+（`device:tool-config`；种子定义见 `server/main/api/services/device_runtime_tools/`；
+边界说明见 `../read.md` 第 5、6 节）。共享 UI 与 `mcp.test` 来自
 `device/linux/src/renderer/`（本地独立）。
 
 ### 测试前准备

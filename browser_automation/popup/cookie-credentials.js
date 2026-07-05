@@ -26,6 +26,10 @@ const cookieCredentialCountNode = document.getElementById('cookie-credential-cou
 const cookieCredentialListNode = document.getElementById('cookie-credential-list');
 const captureButton = document.getElementById('capture');
 const clearCurrentPageCacheButton = document.getElementById('clear-current-page-cache');
+const cookieManagerPanelNode = document.getElementById('cookie-manager-panel');
+const cookieManagerSubtitleNode = document.getElementById('cookie-manager-subtitle');
+const cookieManagerCountNode = document.getElementById('cookie-manager-count');
+const cookieManagerListNode = document.getElementById('cookie-manager-list');
 
 let editingCookieCredentialId = '';
 let cookieCredentialSelectedDate = '';
@@ -1113,6 +1117,148 @@ async function captureCurrentTab() {
     }
 }
 
+function formatCookieManagerExpiry(cookie = {}) {
+    if (cookie.session === true || !Number.isFinite(Number(cookie.expirationDate))) {
+        return '会话期间';
+    }
+
+    const date = new Date(Number(cookie.expirationDate) * 1000);
+    if (Number.isNaN(date.getTime())) {
+        return '会话期间';
+    }
+
+    return date.toLocaleString('zh-CN', { hour12: false });
+}
+
+async function getCurrentActiveTabForCookieManager() {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true }).catch(() => []);
+    const tab = Array.isArray(tabs) ? tabs.find((item) => item && Number(item.id || 0) > 0) || null : null;
+    if (!tab) {
+        throw new Error('未找到可管理 Cookie 的当前标签页');
+    }
+    return tab;
+}
+
+async function fetchCookieManagerList() {
+    const tab = await getCurrentActiveTabForCookieManager();
+    const result = await chrome.runtime.sendMessage({
+        type: 'cookie-capture-list-cookies',
+        payload: { tabId: Number(tab.id || 0) || 0 }
+    });
+
+    if (!result || result.success !== true) {
+        throw new Error(result?.error || '获取 Cookie 列表失败');
+    }
+
+    return {
+        tabId: result.tabId,
+        pageUrl: String(result.pageUrl || ''),
+        cookies: Array.isArray(result.cookies) ? result.cookies : []
+    };
+}
+
+function renderCookieManagerList(state = { pageUrl: '', cookies: [] }) {
+    if (!cookieManagerListNode) {
+        return;
+    }
+
+    const cookies = Array.isArray(state.cookies) ? state.cookies : [];
+    if (cookieManagerCountNode) {
+        cookieManagerCountNode.textContent = `${cookies.length} 条`;
+    }
+    if (cookieManagerSubtitleNode) {
+        cookieManagerSubtitleNode.textContent = state.pageUrl
+            ? `当前页面：${state.pageUrl}`
+            : '未识别到当前页面地址';
+    }
+
+    if (cookies.length === 0) {
+        cookieManagerListNode.innerHTML = '<div class="cookie-credential-empty">当前页面没有可管理的 Cookie。</div>';
+        return;
+    }
+
+    cookieManagerListNode.innerHTML = cookies.map((cookie, index) => {
+        const name = String(cookie.name || '').trim() || `cookie_${index + 1}`;
+        const domain = String(cookie.domain || '').trim();
+        const path = String(cookie.path || '/').trim() || '/';
+        const value = String(cookie.value || '');
+        const expiry = formatCookieManagerExpiry(cookie);
+
+        return `
+          <div class="cookie-manager-item" data-cookie-manager-item data-cookie-name="${escapeHtml(name)}" data-cookie-domain="${escapeHtml(domain)}" data-cookie-path="${escapeHtml(path)}" data-cookie-store-id="${escapeHtml(String(cookie.storeId || ''))}" data-cookie-secure="${cookie.secure === true ? '1' : '0'}">
+            <div class="cookie-manager-item__main">
+              <div class="cookie-manager-item__title">${escapeHtml(name)}</div>
+              <div class="cookie-manager-item__meta">域：${escapeHtml(domain || '-')} · 路径：${escapeHtml(path)} · 过期：${escapeHtml(expiry)}</div>
+              <div class="cookie-manager-item__value">${escapeHtml(value)}</div>
+            </div>
+            <button type="button" class="button-secondary cookie-credential-delete-btn" data-cookie-manager-action="delete">删除</button>
+          </div>
+        `;
+    }).join('');
+}
+
+async function refreshCookieManagerList() {
+    const state = await fetchCookieManagerList();
+    renderCookieManagerList(state);
+    return state;
+}
+
+async function openCookieManagerPanel() {
+    if (!cookieManagerPanelNode) {
+        return;
+    }
+
+    cookieManagerPanelNode.classList.add('is-visible');
+    if (cookieManagerSubtitleNode) {
+        cookieManagerSubtitleNode.textContent = '正在读取当前页面 Cookie...';
+    }
+
+    try {
+        await refreshCookieManagerList();
+    } catch (error) {
+        const message = error && error.message ? error.message : '读取 Cookie 失败';
+        if (cookieManagerSubtitleNode) {
+            cookieManagerSubtitleNode.textContent = message;
+        }
+        if (cookieManagerListNode) {
+            cookieManagerListNode.innerHTML = `<div class="cookie-credential-empty">${escapeHtml(message)}</div>`;
+        }
+    }
+}
+
+function closeCookieManagerPanel() {
+    if (!cookieManagerPanelNode) {
+        return;
+    }
+    cookieManagerPanelNode.classList.remove('is-visible');
+}
+
+async function deleteCookieManagerItem(itemNode = null) {
+    if (!itemNode) {
+        throw new Error('未找到可删除的 Cookie');
+    }
+
+    const tab = await getCurrentActiveTabForCookieManager();
+    const cookie = {
+        name: String(itemNode.dataset.cookieName || '').trim(),
+        domain: String(itemNode.dataset.cookieDomain || '').trim(),
+        path: String(itemNode.dataset.cookiePath || '/').trim(),
+        storeId: String(itemNode.dataset.cookieStoreId || '').trim(),
+        secure: itemNode.dataset.cookieSecure === '1'
+    };
+
+    const result = await chrome.runtime.sendMessage({
+        type: 'cookie-capture-remove-cookie',
+        payload: { tabId: Number(tab.id || 0) || 0, cookie }
+    });
+
+    if (!result || result.success !== true) {
+        throw new Error(result?.error || '删除 Cookie 失败');
+    }
+
+    return { ...result, name: cookie.name };
+}
+
 async function clearCurrentPageCache() {
     clearCurrentPageCacheButton.disabled = true;
     setStatus('正在清理当前页面缓存...', '');
@@ -1210,5 +1356,13 @@ globalThis.CookieCaptureCookieCredentials = {
     loadPreset,
     saveCookieCredentialRecord,
     captureCurrentTab,
-    clearCurrentPageCache
+    clearCurrentPageCache,
+    formatCookieManagerExpiry,
+    getCurrentActiveTabForCookieManager,
+    fetchCookieManagerList,
+    renderCookieManagerList,
+    refreshCookieManagerList,
+    openCookieManagerPanel,
+    closeCookieManagerPanel,
+    deleteCookieManagerItem
 };

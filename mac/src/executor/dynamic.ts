@@ -1,7 +1,13 @@
+// dynamic — applies MCP tools the server pushes down (device:tool-config).
+//
+// The device authors nothing here: every tool beyond the transport protocol
+// itself is defined server-side (by an AI via the library-bound
+// device_mcp.manage tool, or by a human in the web console) and pushed to
+// this device at runtime. There is no local/device-authored tool store and
+// no device-side "manage" MCP tool — see device/read.md for the full
+// static toolDefs (device-owned) vs. dynamic MCP (server-owned) boundary.
+
 import crypto from 'crypto'
-import fs, { FSWatcher } from 'fs'
-import path from 'path'
-import { app } from 'electron'
 import { getBuiltinTool, getTool, listBuiltinToolIds, replaceDynamicTools, ToolDefinition } from './registry'
 import { runRuntimeTool, isToolRuntime, type ToolRuntime } from '../runtime/runtime-tool'
 
@@ -29,23 +35,12 @@ type DynamicInstruction = {
   save_as?: string
 }
 
-const MANAGER_TOOL = 'mcp.manage_dynamic_tool'
 const NAME_RE = /^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)*$/
-// Merged set (local + server) used at runtime for child-tool resolution.
+
+// The current server-pushed set, applied to the registry.
 let definitions: DynamicMcpDefinition[] = []
-// Locally-authored tools (via mcp.manage_dynamic_tool); persisted to filePath.
-let localDefinitions: DynamicMcpDefinition[] = []
-// Web-authored tools pushed by the server (device:tool-config), scoped by
-// device type; held in memory only (no disk cache). The server owns them —
-// the manager never edits them. Cleared on disconnect so stale tools cannot
-// outlive the server session.
-let serverDefinitions: DynamicMcpDefinition[] = []
 let appliedServerRevision = ''
-let filePath = ''
-let legacyServerCachePath = ''
-let watcher: FSWatcher | null = null
 let changeListener: (() => void) | null = null
-let reloadTimer: NodeJS.Timeout | null = null
 
 function revision(value: any): string {
   return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex')
@@ -54,7 +49,6 @@ function revision(value: any): string {
 function validate(raw: any): DynamicMcpDefinition {
   const name = String(raw?.name || '').trim()
   if (!NAME_RE.test(name)) throw new Error(`Invalid dynamic MCP name: ${name || '(empty)'}`)
-  if (name === MANAGER_TOOL) throw new Error(`${MANAGER_TOOL} is reserved`)
   const description = String(raw?.description || '').trim()
   if (!description) throw new Error(`Dynamic MCP ${name} requires description`)
   const inputSchema = raw?.input_schema ?? raw?.inputSchema
@@ -151,7 +145,6 @@ async function runProgram(def: DynamicMcpDefinition, workspaceRoot: string, args
     }
     if (step.op === 'return') return render(step.value, context)
     const target = String(render(step.tool || '', context) || '').trim()
-    if (target === MANAGER_TOOL) throw new Error('Dynamic MCP code cannot invoke the management tool')
     const builtinTarget = target.startsWith('builtin:') ? target.slice('builtin:'.length) : ''
     const child = definitions.find(item => item.name === target)
     const childArgs = render(step.args || {}, context)
@@ -172,7 +165,7 @@ async function runProgram(def: DynamicMcpDefinition, workspaceRoot: string, args
   return context.last
 }
 
-function asTool(def: DynamicMcpDefinition, fromServer = false): ToolDefinition {
+function asTool(def: DynamicMcpDefinition): ToolDefinition {
   return {
     id: def.name,
     platform: 'all',
@@ -183,9 +176,7 @@ function asTool(def: DynamicMcpDefinition, fromServer = false): ToolDefinition {
       definition: def,
       code_kind: def.code_kind || 'program',
       code: def.code,
-      storage_file: fromServer ? 'memory:server' : filePath,
-      source: fromServer ? 'server' : 'local',
-      editable_via: MANAGER_TOOL,
+      source: 'server',
     },
     handler: ({ workspaceRoot, args }) =>
       def.code_kind === 'runtime'
@@ -196,200 +187,14 @@ function asTool(def: DynamicMcpDefinition, fromServer = false): ToolDefinition {
   }
 }
 
-function sourceFilesForTool(name: string): string[] {
-  if (name === MANAGER_TOOL) return ['src/executor/dynamic.ts']
-  const namespace = String(name || '').split('.', 1)[0]
-  return ['src/executor/catalog.ts', `src/tools/${namespace}.ts`]
-}
-
-function sourceCandidates(relative: string): string[] {
-  const candidates = [relative]
-  const sourceMatch = relative.match(/^src\/(.+)\.tsx?$/i)
-  if (sourceMatch) candidates.push(`dist/${sourceMatch[1]}.js`)
-  return Array.from(new Set(candidates))
-}
-
-type ResolvedSource = {
-  requested_path: string
-  path: string
-  root: string
-  absolute_path: string
-  fallback: boolean
-}
-
-function sourceRoots(): string[] {
-  const roots: string[] = []
-  const add = (value?: string) => {
-    if (!value) return
-    const resolved = path.resolve(value)
-    if (!roots.includes(resolved)) roots.push(resolved)
-  }
-  try { add(app.getAppPath()) } catch {}
-  add(process.cwd())
-  add(path.resolve(__dirname, '..', '..'))
-  if (process.resourcesPath) {
-    add(process.resourcesPath)
-    add(path.join(process.resourcesPath, 'app'))
-    add(path.join(process.resourcesPath, 'app.asar'))
-    add(path.join(process.resourcesPath, 'app.asar.unpacked'))
-  }
-  try {
-    const exeDir = path.dirname(app.getPath('exe'))
-    add(exeDir)
-    add(path.dirname(exeDir))
-  } catch {}
-  return roots
-}
-
-function resolveReadableSource(requested: string): ResolvedSource | null {
-  for (const root of sourceRoots()) {
-    for (const candidate of sourceCandidates(requested)) {
-      const resolved = path.resolve(root, candidate)
-      if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) continue
-      if (fs.existsSync(resolved) && fs.statSync(resolved).isFile()) {
-        return { requested_path: requested, path: candidate, root, absolute_path: resolved, fallback: candidate !== requested }
-      }
-    }
-  }
-  return null
-}
-
-function readAppSource(requested: string): Record<string, any> {
-  const relative = String(requested || '').trim().replace(/\\/g, '/')
-  if (!relative || path.isAbsolute(relative) || relative.split('/').includes('..')) {
-    throw new Error('source_path must be a relative path inside the device application')
-  }
-  const source = resolveReadableSource(relative)
-  if (!source) {
-    const attempted = sourceRoots().flatMap(root => sourceCandidates(relative).map(candidate => path.resolve(root, candidate)))
-    throw new Error(`Source file not found: ${relative}. Tried: ${attempted.join(', ')}`)
-  }
-  const size = fs.statSync(source.absolute_path).size
-  if (size > 256 * 1024) throw new Error(`Source file is too large to inspect: ${source.path}`)
-  return { ...source, content: fs.readFileSync(source.absolute_path, 'utf8'), size }
-}
-
-function readToolSources(name: string): Record<string, any>[] {
-  const seen = new Set<string>()
-  const sources: Record<string, any>[] = []
-  for (const requested of sourceFilesForTool(name)) {
-    const resolved = resolveReadableSource(requested)
-    if (!resolved || seen.has(resolved.absolute_path)) continue
-    seen.add(resolved.absolute_path)
-    sources.push(readAppSource(requested))
-  }
-  return sources
-}
-
-function inspectTool(name: string, includeSource = true): Record<string, any> {
-  const dynamic = definitions.find(item => item.name === name)
-  const active = getTool(name)
-  const builtin = getBuiltinTool(name)
-  if (!active && !builtin) throw new Error(`MCP tool not found: ${name}`)
-  const sourceFiles = sourceFilesForTool(name)
-  const availableSources = sourceFiles.map(resolveReadableSource).filter(Boolean)
-  return {
-    ok: true,
-    name,
-    implementation_kind: dynamic ? 'dynamic_override' : 'builtin',
-    active_definition: dynamic || {
-      name,
-      description: active?.description || builtin?.description || '',
-      input_schema: active?.inputSchema || builtin?.inputSchema || {},
-    },
-    active_handler_source: String(active?.handler || ''),
-    builtin_handler_source: builtin ? String(builtin.handler) : null,
-    source_files: sourceFiles,
-    available_source_files: availableSources.map(item => item!.path),
-    source_resolution: availableSources,
-    source_roots: sourceRoots(),
-    sources: includeSource ? readToolSources(name) : undefined,
-    dynamic_storage_file: filePath,
-    edit_workflow: [
-      `Call ${MANAGER_TOOL} action=get_source for a source_files path to read the implementation.`,
-      `Call ${MANAGER_TOOL} action=upsert with starter_definition or a revised definition.`,
-      `Use builtin:${name} inside a call instruction to wrap the original implementation.`,
-      `Call ${MANAGER_TOOL} action=delete to remove the override and restore the built-in implementation.`,
-    ],
-    starter_definition: dynamic || {
-      name,
-      description: active?.description || builtin?.description || `Dynamic override for ${name}`,
-      input_schema: active?.inputSchema || builtin?.inputSchema || { type: 'object', properties: {} },
-      code: [
-        { op: 'call', tool: `builtin:${name}`, args: '${args}', save_as: 'original_result' },
-        { op: 'return', value: '${vars.original_result}' },
-      ],
-    },
-  }
-}
-
-function ensurePaths(): void {
-  if (!filePath) filePath = path.join(app.getPath('userData'), 'dynamic-mcp-tools.json')
-  if (!legacyServerCachePath) {
-    legacyServerCachePath = path.join(app.getPath('userData'), 'dynamic-mcp-tools.server.json')
-  }
-}
-
-function purgeLegacyServerCache(): void {
-  ensurePaths()
-  if (!legacyServerCachePath || !fs.existsSync(legacyServerCachePath)) return
-  try { fs.unlinkSync(legacyServerCachePath) } catch { /* best-effort */ }
-}
-
-function readToolsFile(target: string): DynamicMcpDefinition[] {
-  if (!target || !fs.existsSync(target)) return []
-  const raw = JSON.parse(fs.readFileSync(target, 'utf8'))
-  const list = Array.isArray(raw) ? raw : raw?.tools
-  if (list == null) return []
-  if (!Array.isArray(list)) throw new Error(`${path.basename(target)} must contain a tools array`)
-  const next = list.map(validate)
-  const names = new Set<string>()
-  for (const item of next) {
-    if (names.has(item.name)) throw new Error(`Duplicate dynamic MCP: ${item.name}`)
-    names.add(item.name)
-  }
-  return next
-}
-
-function persist(next: DynamicMcpDefinition[]): void {
-  const temp = `${filePath}.tmp`
-  fs.mkdirSync(path.dirname(filePath), { recursive: true })
-  fs.writeFileSync(temp, JSON.stringify({ version: 1, tools: next }, null, 2), 'utf8')
-  fs.renameSync(temp, filePath)
-}
-
-function mergeAndApply(): { tools: number; local: number; server: number; revision: string; file: string } {
-  const serverNames = new Set(serverDefinitions.map(item => item.name))
-  const merged = new Map<string, DynamicMcpDefinition>()
-  for (const def of localDefinitions) merged.set(def.name, def)
-  for (const def of serverDefinitions) merged.set(def.name, def)
-  const next = Array.from(merged.values())
-  replaceDynamicTools(next.map(def => asTool(def, serverNames.has(def.name))))
-  definitions = next
-  return {
-    tools: next.length,
-    local: localDefinitions.length,
-    server: serverDefinitions.length,
-    revision: revision(next),
-    file: filePath,
-  }
-}
-
-export function reloadDynamicMcp(): { tools: number; local: number; server: number; revision: string; file: string } {
-  ensurePaths()
-  localDefinitions = readToolsFile(filePath)
-  return mergeAndApply()
-}
-
-// Drop server-pushed tools from memory (e.g. on disconnect). Local tools
-// created via mcp.manage_dynamic_tool are untouched.
+// Drop server-pushed tools from memory (e.g. on disconnect).
 export function clearServerDynamicMcp(): { cleared: boolean; tools: number; server: number } {
-  const hadServer = serverDefinitions.length > 0 || !!appliedServerRevision
-  serverDefinitions = []
+  const hadServer = definitions.length > 0 || !!appliedServerRevision
+  definitions = []
   appliedServerRevision = ''
-  const status = mergeAndApply()
+  replaceDynamicTools([])
   if (hadServer) changeListener?.()
-  return { cleared: hadServer, tools: status.tools, server: status.server }
+  return { cleared: hadServer, tools: 0, server: 0 }
 }
 
 // Apply a server-pushed dynamic MCP set (device:tool-config). Returns
@@ -406,144 +211,13 @@ export function applyServerDynamicMcp(payload: any): { applied: boolean; revisio
   }
   const rev = revision(tools)
   if (rev === appliedServerRevision) return { applied: false, revision: rev, tools: tools.length }
-  serverDefinitions = tools
+  definitions = tools
   appliedServerRevision = rev
-  mergeAndApply()
+  replaceDynamicTools(tools.map(asTool))
   changeListener?.()
   return { applied: true, revision: rev, tools: tools.length }
 }
 
-function scheduleReload(): void {
-  if (reloadTimer) clearTimeout(reloadTimer)
-  reloadTimer = setTimeout(() => {
-    try {
-      reloadDynamicMcp()
-      changeListener?.()
-    } catch (err) {
-      console.error('Dynamic MCP reload failed:', err)
-    }
-  }, 120)
-}
-
 export function initializeDynamicMcp(listener?: () => void): void {
   changeListener = listener || null
-  purgeLegacyServerCache()
-  reloadDynamicMcp()
-  watcher?.close()
-  fs.mkdirSync(path.dirname(filePath), { recursive: true })
-  watcher = fs.watch(path.dirname(filePath), (_event, filename) => {
-    if (String(filename || '') === path.basename(filePath)) scheduleReload()
-  })
-}
-
-export async function manageDynamicMcp(args: Record<string, any>): Promise<any> {
-  const action = String(args?.action || 'list').trim().toLowerCase()
-  if (action === 'reload') return { ok: true, ...reloadDynamicMcp() }
-  if (action === 'list') return {
-    ok: true,
-    file: filePath,
-    revision: revision(localDefinitions),
-    tools: localDefinitions.map(item => ({ name: item.name, description: item.description, revision: revision(item) })),
-  }
-  const name = String(args?.name || args?.definition?.name || '').trim()
-  if (action === 'get_source') {
-    const requested = String(args?.source_path || '').trim()
-    const sources: Record<string, any>[] = []
-    const seen = new Set<string>()
-    let requestedError: Error | null = null
-    if (requested) {
-      try {
-        const source = readAppSource(requested)
-        sources.push(source)
-        seen.add(source.absolute_path)
-      } catch (err) {
-        requestedError = err instanceof Error ? err : new Error(String(err))
-      }
-    }
-    if (name) {
-      for (const source of readToolSources(name)) {
-        if (!seen.has(source.absolute_path)) sources.push(source)
-        seen.add(source.absolute_path)
-      }
-    }
-    if (!sources.length) {
-      if (requestedError) throw requestedError
-      throw new Error('get_source requires name or source_path')
-    }
-    return { ok: true, name: name || undefined, requested_path: requested || undefined, source: sources[0], sources, source_roots: sourceRoots() }
-  }
-  if (!name) throw new Error('name is required')
-  if (action === 'inspect') return inspectTool(name, args?.include_source !== false)
-  // The manager edits only locally-authored tools. Server-pushed tools for this
-  // device type are managed from the web console, never here.
-  const current = localDefinitions.find(item => item.name === name)
-  if (action === 'get') {
-    if (!current) throw new Error(`Dynamic MCP not found: ${name}`)
-    return { ok: true, definition: current, revision: revision(current), file: filePath }
-  }
-  if (args?.expected_revision && current && args.expected_revision !== revision(current)) {
-    throw new Error(`Dynamic MCP changed since it was read: ${name}`)
-  }
-  if (action === 'delete') {
-    if (!current) throw new Error(`Dynamic MCP not found: ${name}`)
-    persist(localDefinitions.filter(item => item.name !== name))
-  } else if (action === 'upsert') {
-    if (serverDefinitions.some(item => item.name === name)) {
-      throw new Error(`${name} is managed from the web console for this device type`)
-    }
-    const nextDef = validate({ ...(args.definition || {}), name })
-    persist([...localDefinitions.filter(item => item.name !== name), nextDef].sort((a, b) => a.name.localeCompare(b.name)))
-  } else {
-    throw new Error(`Unsupported action: ${action}`)
-  }
-  const status = reloadDynamicMcp()
-  changeListener?.()
-  return { ok: true, action, name, ...status }
-}
-
-export const DYNAMIC_MCP_MANAGER_DEFINITION: ToolDefinition = {
-  id: MANAGER_TOOL,
-  platform: 'all',
-  destructive: true,
-  description: '动态管理本设备的传承 MCP 代码。可读取、创建、更新、删除并热加载 JSON 程序工具；使用现有工具名可覆盖内置实现，删除后恢复内置版本；保存后设备会立即向服务器重新上报工具目录。',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      action: { type: 'string', enum: ['list', 'get', 'inspect', 'get_source', 'upsert', 'delete', 'reload'], description: '管理动作。inspect 默认直接返回任意工具的注册与实现源码；get_source 可按工具名读取全部相关源码。' },
-      name: { type: 'string', description: 'MCP 名称，如 keyboard.type；get_source 只传名称即可读取注册代码和底层实现。' },
-      source_path: { type: 'string', description: '可选的相对源码路径。读取失败但同时提供 name 时，会自动按工具名查找实际源码。' },
-      include_source: { type: 'boolean', description: 'inspect 是否附带完整源码内容，默认 true。' },
-      expected_revision: { type: 'string', description: 'get 返回的修订哈希；更新/删除时用于防止覆盖并发修改。' },
-      definition: {
-        type: 'object', description: 'upsert 使用的完整动态 MCP 定义。',
-        properties: {
-          name: { type: 'string', description: '工具名；与内置工具同名时覆盖内置实现。' },
-          description: { type: 'string', description: '向 AI 展示的工具说明。' },
-          input_schema: { type: 'object', description: 'JSON Schema 入参定义。' },
-          code: {
-            type: 'array', minItems: 1, maxItems: 32, description: '顺序执行的程序指令。',
-            items: { type: 'object', properties: {
-              op: { type: 'string', enum: ['call', 'set', 'return'] },
-              tool: { type: 'string', description: 'call 的目标 MCP。' },
-              args: { type: 'object', description: 'call 参数；支持 ${args.x}、${vars.x}、${last.x} 模板。' },
-              name: { type: 'string', description: 'set 写入的变量名。' },
-              value: { description: 'set/return 的值或模板。' },
-              save_as: { type: 'string', description: '把 call 结果保存到 vars.<name>。' },
-            }, required: ['op'] },
-          },
-          runtime: { type: 'string', enum: ['python', 'powershell', 'shell'], description: '运行时类型；设置后改用 source 提供源码（程序/JS 工具留空）。' },
-          source: { type: 'string', description: 'runtime 工具源码：python 脚本（用 args 取参、result 返回）/ powershell 脚本 / shell 命令，支持 ${args.x} 模板。' },
-          permissions: { type: 'array', items: { type: 'string' }, description: 'runtime 工具声明的权限标签，本机按策略 allow/confirm/deny。' },
-        }, required: ['name', 'description', 'input_schema'],
-      },
-    },
-    required: ['action'],
-    additionalProperties: false,
-  },
-  implementation: {
-    kind: 'builtin_manager',
-    source_files: ['src/executor/dynamic.ts', 'dist/executor/dynamic.js'],
-    editable_via: MANAGER_TOOL,
-  },
-  handler: ({ args }) => manageDynamicMcp(args),
 }

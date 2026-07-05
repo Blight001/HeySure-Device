@@ -75,11 +75,9 @@ npm run typecheck      # 仅前端 TS 类型检查（无需 Rust 工具链）
 
 ## 已知取舍（第一阶段范围内）
 
-- **MCP 工具驱动**：出厂默认桌面工具集已全部迁移到 PowerShell 驱动（Windows PowerShell 5.1 优先）。仅支持 `powershell` 和 `shell` 运行时；Python runtime 已完全移除（不再支持用户自建 `runtime=python` 工具）。
-- **不再支持 Python**：`mcp.manage_dynamic_tool` 中的 runtime 枚举已移除 `python`。如需 Python 能力，请使用其他平台或将逻辑迁移到 PowerShell/shell。
-- **`mcp.manage_dynamic_tool` 的 `get_source`/源码检视不可用**：应用源码以打包产物分发，
-  没有可读的 `src/**.ts`；`inspect` 仍返回注册定义与 handler 源码。
-- **本地动态工具 JSON 无文件监听热加载**（Electron 版有 fs.watch）；改用 `action=reload`。
+- **MCP 工具驱动**：出厂默认桌面工具集已全部迁移到 PowerShell 驱动（Windows PowerShell 5.1 优先）。仅支持 `powershell` 和 `shell` 运行时；Python runtime 已完全移除（不再支持 `runtime=python` 的动态 MCP 工具）。
+- **不再支持 Python**：服务器下发的动态 MCP（`device:tool-config`）若带 `runtime=python`，在 Windows 上会校验失败——如需 Python 能力，请用于 Linux/macOS 设备类型，或把逻辑迁移到 PowerShell/shell。
+- **没有本地动态工具、没有设备端的 MCP 管理工具**：本机不再持有任何"本地工具 JSON"，也不暴露 `mcp.manage_dynamic_tool` 这类管理工具——所有非内置能力均由服务器经 `device:tool-config` 下发，设备只负责合并与执行。详见 `../read.md` 第 5、6 节。
 - **与 Electron 版同时运行会冲突**：默认 deviceId 都是 `agent-<hostname>`，
   同时连接会互相顶替；如需并行测试，改 `%APPDATA%/com.heysure.device.win.tauri/settings.json`
   里的 `deviceId`。

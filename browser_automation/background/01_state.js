@@ -740,6 +740,62 @@ async function clearCurrentPageCache(tabId = 0) {
     };
 }
 
+async function resolveCookieManagerTab(tabId = 0) {
+    const normalizedTabId = Number(tabId || 0) || 0;
+    const tab = normalizedTabId
+        ? await chrome.tabs.get(normalizedTabId).catch(() => null)
+        : await getActiveTab().catch(() => null);
+    if (!tab || !Number.isFinite(Number(tab.id || 0))) {
+        throw new Error('未找到可管理 Cookie 的当前标签页');
+    }
+    return tab;
+}
+
+async function listCurrentTabCookies(tabId = 0) {
+    const tab = await resolveCookieManagerTab(tabId);
+    const pageUrl = String(tab.url || '').trim();
+    const cookies = await readCookies(pageUrl).catch(() => []);
+
+    return {
+        success: true,
+        tabId: Number(tab.id),
+        pageUrl,
+        cookies: Array.isArray(cookies) ? cookies : []
+    };
+}
+
+async function removeCurrentTabCookie(tabId = 0, cookie = {}) {
+    const tab = await resolveCookieManagerTab(tabId);
+    const pageUrl = String(tab.url || '').trim();
+    const name = String(cookie?.name || '').trim();
+    if (!name) {
+        throw new Error('缺少要删除的 Cookie 名称');
+    }
+
+    const url = buildCookieRemovalUrl(pageUrl, cookie);
+    if (!url) {
+        throw new Error('无法定位该 Cookie 的删除地址');
+    }
+
+    const removeArgs = { url, name };
+    const storeId = String(cookie?.storeId || '').trim();
+    if (storeId) {
+        removeArgs.storeId = storeId;
+    }
+
+    const removed = await chrome.cookies.remove(removeArgs).catch(() => null);
+    if (!removed) {
+        throw new Error('删除 Cookie 失败');
+    }
+
+    return {
+        success: true,
+        tabId: Number(tab.id),
+        name,
+        removed
+    };
+}
+
 async function loadCardSidebarState() {
     const stored = await runtimeStateStorage.get([CARD_SIDEBAR_STATE_KEY]).catch(() => ({}));
     const state = stored && typeof stored === 'object' ? stored[CARD_SIDEBAR_STATE_KEY] : null;

@@ -73,9 +73,10 @@ treat it as a desktop endpoint.
 
 ## 联调测试
 
-macOS 桌面壳与 win/linux 一致：内置仅 `mcp.manage_dynamic_tool`，业务能力来自服务端
-**runtime 工具**（`server/main/api/services/device_runtime_tools/`）。UI 与
-`mcp.test` 使用本地 `src/renderer/` 与 runtime。
+macOS 桌面壳与 win/linux 一致：**没有任何内置 MCP 工具**（也没有本地动态工具或设备端
+的 MCP 管理工具），业务能力来自服务端下发的动态 MCP / **runtime 工具**
+（`device:tool-config`；`server/main/api/services/device_runtime_tools/`；边界说明见
+`../read.md` 第 5、6 节）。UI 与 `mcp.test` 使用本地 `src/renderer/` 与 runtime。
 
 ### 测试前准备
 

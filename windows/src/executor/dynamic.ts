@@ -1,15 +1,13 @@
-// dynamic — port of device/shared/src/executor/dynamic.ts for the Tauri shell.
+// dynamic — applies MCP tools the server pushes down (device:tool-config).
 //
-// Kept 1:1 with the Electron version: validation, the program DSL, injected-JS
-// tools, runtime tools, local/server merge semantics and the revision guard.
-// Adapted for the WebView environment:
-//   - persistence goes through the Rust shell (save_json_file) instead of fs;
-//   - no fs.watch hot-reload of the hand-edited JSON (use action=reload);
-//   - the app ships bundled JS, so get_source / inspect cannot read source
-//     files off disk; inspect still returns definitions and handler sources.
+// The device authors nothing here: every tool beyond the transport protocol
+// itself is defined server-side (by an AI via the library-bound
+// device_mcp.manage tool, or by a human in the web console) and pushed to
+// this device at runtime. There is no local/device-authored tool store and
+// no device-side "manage" MCP tool — see device/read.md for the full
+// static toolDefs (device-owned) vs. dynamic MCP (server-owned) boundary.
 
 import { sha256Hex } from '../sha256'
-import { native } from '../native'
 import { getBuiltinTool, getTool, listBuiltinToolIds, replaceDynamicTools, type ToolDefinition } from './registry'
 import { runRuntimeTool, isToolRuntime, type ToolRuntime } from '../runtime/runtime-tool'
 
@@ -37,18 +35,11 @@ type DynamicInstruction = {
   save_as?: string
 }
 
-const MANAGER_TOOL = 'mcp.manage_dynamic_tool'
 const NAME_RE = /^[a-z][a-z0-9_-]*(?:\.[a-z][a-z0-9_-]*)*$/
-const TOOLS_FILE = 'dynamic-mcp-tools.json'
 
-// Merged set (local + server) used at runtime for child-tool resolution.
+// The current server-pushed set, applied to the registry.
 let definitions: DynamicMcpDefinition[] = []
-// Locally-authored tools (via mcp.manage_dynamic_tool); persisted via Rust.
-let localDefinitions: DynamicMcpDefinition[] = []
-// Web-authored tools pushed by the server (device:tool-config); memory only.
-let serverDefinitions: DynamicMcpDefinition[] = []
 let appliedServerRevision = ''
-let filePath = TOOLS_FILE
 let changeListener: (() => void) | null = null
 
 function revision(value: any): string {
@@ -58,7 +49,6 @@ function revision(value: any): string {
 function validate(raw: any): DynamicMcpDefinition {
   const name = String(raw?.name || '').trim()
   if (!NAME_RE.test(name)) throw new Error(`Invalid dynamic MCP name: ${name || '(empty)'}`)
-  if (name === MANAGER_TOOL) throw new Error(`${MANAGER_TOOL} is reserved`)
   const description = String(raw?.description || '').trim()
   if (!description) throw new Error(`Dynamic MCP ${name} requires description`)
   const inputSchema = raw?.input_schema ?? raw?.inputSchema
@@ -152,7 +142,6 @@ async function runProgram(def: DynamicMcpDefinition, workspaceRoot: string, args
     }
     if (step.op === 'return') return render(step.value, context)
     const target = String(render(step.tool || '', context) || '').trim()
-    if (target === MANAGER_TOOL) throw new Error('Dynamic MCP code cannot invoke the management tool')
     const builtinTarget = target.startsWith('builtin:') ? target.slice('builtin:'.length) : ''
     const child = definitions.find(item => item.name === target)
     const childArgs = render(step.args || {}, context)
@@ -173,7 +162,7 @@ async function runProgram(def: DynamicMcpDefinition, workspaceRoot: string, args
   return context.last
 }
 
-function asTool(def: DynamicMcpDefinition, fromServer = false): ToolDefinition {
+function asTool(def: DynamicMcpDefinition): ToolDefinition {
   return {
     id: def.name,
     platform: 'all',
@@ -184,9 +173,7 @@ function asTool(def: DynamicMcpDefinition, fromServer = false): ToolDefinition {
       definition: def,
       code_kind: def.code_kind || 'program',
       code: def.code,
-      storage_file: fromServer ? 'memory:server' : filePath,
-      source: fromServer ? 'server' : 'local',
-      editable_via: MANAGER_TOOL,
+      source: 'server',
     },
     handler: ({ workspaceRoot, args }) =>
       def.code_kind === 'runtime'
@@ -197,91 +184,14 @@ function asTool(def: DynamicMcpDefinition, fromServer = false): ToolDefinition {
   }
 }
 
-function inspectTool(name: string): Record<string, any> {
-  const dynamic = definitions.find(item => item.name === name)
-  const active = getTool(name)
-  const builtin = getBuiltinTool(name)
-  if (!active && !builtin) throw new Error(`MCP tool not found: ${name}`)
-  return {
-    ok: true,
-    name,
-    implementation_kind: dynamic ? 'dynamic_override' : 'builtin',
-    active_definition: dynamic || {
-      name,
-      description: active?.description || builtin?.description || '',
-      input_schema: active?.inputSchema || builtin?.inputSchema || {},
-    },
-    active_handler_source: String(active?.handler || ''),
-    builtin_handler_source: builtin ? String(builtin.handler) : null,
-    source_files: [],
-    note: 'Tauri 原型：应用源码以打包产物形式分发，get_source/源码检视不可用。',
-    dynamic_storage_file: filePath,
-    edit_workflow: [
-      `Call ${MANAGER_TOOL} action=upsert with starter_definition or a revised definition.`,
-      `Use builtin:${name} inside a call instruction to wrap the original implementation.`,
-      `Call ${MANAGER_TOOL} action=delete to remove the override and restore the built-in implementation.`,
-    ],
-    starter_definition: dynamic || {
-      name,
-      description: active?.description || builtin?.description || `Dynamic override for ${name}`,
-      input_schema: active?.inputSchema || builtin?.inputSchema || { type: 'object', properties: {} },
-      code: [
-        { op: 'call', tool: `builtin:${name}`, args: '${args}', save_as: 'original_result' },
-        { op: 'return', value: '${vars.original_result}' },
-      ],
-    },
-  }
-}
-
-function parseToolsPayload(raw: any): DynamicMcpDefinition[] {
-  if (raw == null) return []
-  const list = Array.isArray(raw) ? raw : raw?.tools
-  if (list == null) return []
-  if (!Array.isArray(list)) throw new Error(`${TOOLS_FILE} must contain a tools array`)
-  const next = list.map(validate)
-  const names = new Set<string>()
-  for (const item of next) {
-    if (names.has(item.name)) throw new Error(`Duplicate dynamic MCP: ${item.name}`)
-    names.add(item.name)
-  }
-  return next
-}
-
-async function persist(next: DynamicMcpDefinition[]): Promise<void> {
-  await native.saveJsonFile(TOOLS_FILE, { version: 1, tools: next })
-}
-
-function mergeAndApply(): { tools: number; local: number; server: number; revision: string; file: string } {
-  const serverNames = new Set(serverDefinitions.map(item => item.name))
-  const merged = new Map<string, DynamicMcpDefinition>()
-  for (const def of localDefinitions) merged.set(def.name, def)
-  for (const def of serverDefinitions) merged.set(def.name, def)
-  const next = Array.from(merged.values())
-  replaceDynamicTools(next.map(def => asTool(def, serverNames.has(def.name))))
-  definitions = next
-  return {
-    tools: next.length,
-    local: localDefinitions.length,
-    server: serverDefinitions.length,
-    revision: revision(next),
-    file: filePath,
-  }
-}
-
-export async function reloadDynamicMcp(): Promise<{ tools: number; local: number; server: number; revision: string; file: string }> {
-  localDefinitions = parseToolsPayload(await native.loadJsonFile(TOOLS_FILE))
-  return mergeAndApply()
-}
-
-// Drop server-pushed tools from memory (e.g. on disconnect). Local tools
-// created via mcp.manage_dynamic_tool are untouched.
+// Drop server-pushed tools from memory (e.g. on disconnect).
 export function clearServerDynamicMcp(): { cleared: boolean; tools: number; server: number } {
-  const hadServer = serverDefinitions.length > 0 || !!appliedServerRevision
-  serverDefinitions = []
+  const hadServer = definitions.length > 0 || !!appliedServerRevision
+  definitions = []
   appliedServerRevision = ''
-  const status = mergeAndApply()
+  replaceDynamicTools([])
   if (hadServer) changeListener?.()
-  return { cleared: hadServer, tools: status.tools, server: status.server }
+  return { cleared: hadServer, tools: 0, server: 0 }
 }
 
 // Apply a server-pushed dynamic MCP set (device:tool-config). Returns
@@ -298,105 +208,13 @@ export function applyServerDynamicMcp(payload: any): { applied: boolean; revisio
   }
   const rev = revision(tools)
   if (rev === appliedServerRevision) return { applied: false, revision: rev, tools: tools.length }
-  serverDefinitions = tools
+  definitions = tools
   appliedServerRevision = rev
-  mergeAndApply()
+  replaceDynamicTools(tools.map(asTool))
   changeListener?.()
   return { applied: true, revision: rev, tools: tools.length }
 }
 
-export async function initializeDynamicMcp(listener?: () => void): Promise<void> {
+export function initializeDynamicMcp(listener?: () => void): void {
   changeListener = listener || null
-  try {
-    const paths = await native.configPaths()
-    filePath = `${paths.configDir}\\${TOOLS_FILE}`
-  } catch { /* display-only */ }
-  await reloadDynamicMcp()
-}
-
-export async function manageDynamicMcp(args: Record<string, any>): Promise<any> {
-  const action = String(args?.action || 'list').trim().toLowerCase()
-  if (action === 'reload') return { ok: true, ...(await reloadDynamicMcp()) }
-  if (action === 'list') return {
-    ok: true,
-    file: filePath,
-    revision: revision(localDefinitions),
-    tools: localDefinitions.map(item => ({ name: item.name, description: item.description, revision: revision(item) })),
-  }
-  const name = String(args?.name || args?.definition?.name || '').trim()
-  if (action === 'get_source') {
-    throw new Error('Tauri 原型不支持 get_source：应用源码以打包产物分发。使用 action=inspect 查看注册定义与 handler 源码。')
-  }
-  if (!name) throw new Error('name is required')
-  if (action === 'inspect') return inspectTool(name)
-  // The manager edits only locally-authored tools. Server-pushed tools for this
-  // device type are managed from the web console, never here.
-  const current = localDefinitions.find(item => item.name === name)
-  if (action === 'get') {
-    if (!current) throw new Error(`Dynamic MCP not found: ${name}`)
-    return { ok: true, definition: current, revision: revision(current), file: filePath }
-  }
-  if (args?.expected_revision && current && args.expected_revision !== revision(current)) {
-    throw new Error(`Dynamic MCP changed since it was read: ${name}`)
-  }
-  if (action === 'delete') {
-    if (!current) throw new Error(`Dynamic MCP not found: ${name}`)
-    await persist(localDefinitions.filter(item => item.name !== name))
-  } else if (action === 'upsert') {
-    if (serverDefinitions.some(item => item.name === name)) {
-      throw new Error(`${name} is managed from the web console for this device type`)
-    }
-    const nextDef = validate({ ...(args.definition || {}), name })
-    await persist([...localDefinitions.filter(item => item.name !== name), nextDef].sort((a, b) => a.name.localeCompare(b.name)))
-  } else {
-    throw new Error(`Unsupported action: ${action}`)
-  }
-  const status = await reloadDynamicMcp()
-  changeListener?.()
-  return { ok: true, action, name, ...status }
-}
-
-export const DYNAMIC_MCP_MANAGER_DEFINITION: ToolDefinition = {
-  id: MANAGER_TOOL,
-  platform: 'all',
-  destructive: true,
-  description: '动态管理本设备的传承 MCP 代码。可读取、创建、更新、删除并热加载 JSON 程序工具；使用现有工具名可覆盖内置实现，删除后恢复内置版本；保存后设备会立即向服务器重新上报工具目录。',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      action: { type: 'string', enum: ['list', 'get', 'inspect', 'upsert', 'delete', 'reload'], description: '管理动作。inspect 返回工具的注册定义与 handler 源码。' },
-      name: { type: 'string', description: 'MCP 名称，如 keyboard.type。' },
-      expected_revision: { type: 'string', description: 'get 返回的修订哈希；更新/删除时用于防止覆盖并发修改。' },
-      definition: {
-        type: 'object', description: 'upsert 使用的完整动态 MCP 定义。',
-        properties: {
-          name: { type: 'string', description: '工具名；与内置工具同名时覆盖内置实现。' },
-          description: { type: 'string', description: '向 AI 展示的工具说明。' },
-          input_schema: { type: 'object', description: 'JSON Schema 入参定义。' },
-          code: {
-            type: 'array', minItems: 1, maxItems: 32, description: '顺序执行的程序指令。',
-            items: { type: 'object', properties: {
-              op: { type: 'string', enum: ['call', 'set', 'return'] },
-              tool: { type: 'string', description: 'call 的目标 MCP。' },
-              args: { type: 'object', description: 'call 参数；支持 ${args.x}、${vars.x}、${last.x} 模板。' },
-              name: { type: 'string', description: 'set 写入的变量名。' },
-              value: { description: 'set/return 的值或模板。' },
-              save_as: { type: 'string', description: '把 call 结果保存到 vars.<name>。' },
-            }, required: ['op'] },
-          },
-          runtime: { type: 'string', enum: ['powershell', 'shell'], description: '运行时类型；设置后改用 source 提供源码（程序/JS 工具留空）。' },
-          source: { type: 'string', description: 'runtime 工具源码：powershell 脚本（用 $toolArgs 取参、$result 返回，默认运行时）/ shell 命令；shell/powershell 另支持 ${args.x} 模板。' },
-          permissions: { type: 'array', items: { type: 'string' }, description: 'runtime 工具声明的权限标签，本机按策略 allow/confirm/deny。' },
-        }, required: ['name', 'description', 'input_schema'],
-      },
-    },
-    required: ['action'],
-    additionalProperties: false,
-  },
-  implementation: {
-    kind: 'builtin_manager',
-    source_files: ['src/executor/dynamic.ts'],
-    editable_via: MANAGER_TOOL,
-  },
-  handler: ({ args }) => manageDynamicMcp(args),
 }

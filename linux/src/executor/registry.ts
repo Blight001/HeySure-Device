@@ -79,19 +79,6 @@ export function listBuiltinToolIds(): string[] {
   return Array.from(builtinTools.keys())
 }
 
-function builtinSourceFiles(id: string): string[] {
-  if (id === 'mcp.manage_dynamic_tool') {
-    return ['src/executor/dynamic.ts', 'dist/executor/dynamic.js']
-  }
-  const namespace = String(id || '').split('.', 1)[0]
-  return [
-    'src/executor/catalog.ts',
-    `src/tools/${namespace}.ts`,
-    'dist/executor/catalog.js',
-    `dist/tools/${namespace}.js`,
-  ]
-}
-
 function isToolAvailable(t: ToolDefinition): boolean {
   return t.platform === 'all'
     || (t.platform === platformProfile.platform && platformProfile.isCurrentPlatform)
@@ -113,9 +100,7 @@ export function listToolDefs(): ToolDef[] {
       destructive: !!t.destructive,
       implementation: t.implementation || {
         kind: dynamicToolIds.has(t.id) ? 'dynamic' : 'builtin',
-        source_files: builtinSourceFiles(t.id),
         handler_source: String(t.handler),
-        editable_via: 'mcp.manage_dynamic_tool',
       },
     }))
 }

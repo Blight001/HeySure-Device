@@ -27,6 +27,19 @@
         "https://*/*"
       ],
       "js": [
+        "content/shadow-patch.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": true,
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
         "content/fx.js",
         "content/observe.js"
       ],

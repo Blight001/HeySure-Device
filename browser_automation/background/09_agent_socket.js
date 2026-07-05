@@ -91,7 +91,7 @@ function effectiveAgentToolDefs() {
         // ── 页面观察 ───────────────────────────────────────────────────────
         {
             name: 'browser_observe',
-            description: '感知当前视口里用户能看到的内容：返回 items 混排列表，kind=interactive 是最顶层、未被遮挡的按钮/链接/输入框/下拉/菜单项等（每项带 id，用于 browser_action 的 ref 参数），kind=text 是普通可见文本。仅扫描当前标签页的主文档，不识别跨域 iframe 内部内容，也不识别 img/video/audio 媒体元素（这是与桌面端/其他浏览器扩展实现的差异，纯 JS 扩展没有 CDP/跨域访问能力）。若匹配条目超过 limit/max_items，默认不返回 items，只返回 tooMany=true 与 categoryCounts，提示继续用 filter/tag/keyword 缩小范围。默认会在页面上绘制无遮挡=绿色/被遮挡或不可点=红色的描边标记，便于配合 browser_screenshot 查看。用途：点击/输入前的首选观察手段。场景：先 observe 拿到 id，再用 browser_action {action:"click", ref:id} 精确点击；页面变化后重新 observe 以刷新 id（id 只在下一次 observe 前有效）。',
+            description: '感知当前视口里用户能看到的内容：返回 items 单一混排列表（按位置排序、已去重），kind=interactive 是最顶层、未被遮挡的按钮/链接/输入框/下拉/菜单项等（每项带 id，用于 browser_action 的 ref 参数），kind=text 是普通可见文本，kind=media 是图片/视频/音频（category=image/video/audio，不可点击），kind=frame 是页面内 iframe 边界（accessible=true 表示同源已扫描，其子元素以 inFrame=true 的 interactive 返回）。会扫描主文档、同源（含嵌套）iframe 内部内容以及 Shadow DOM（开放与被强制开放的封闭 root），并识别 img/video/audio 媒体元素；跨域 iframe 内部仍不可访问。除固定的按钮/链接/表单控件外，还会识别 cursor:pointer 或类名/ID 以 btn/button/link 结尾的自定义控件。若匹配条目超过 limit/max_items，默认不返回 items，只返回 tooMany=true 与 categoryCounts，提示继续用 filter/tag/keyword 缩小范围；也可传 frame（iframe 的 frameSelector）或 frame_path 只观察某个 iframe 内部。默认会在页面上绘制描边标记：绿色=可点击、红色=被遮挡/禁用/不可点、紫色虚线=iframe 边界。用途：点击/输入前的首选观察手段。场景：先 observe 拿到 id，再用 browser_action {action:"click", ref:id} 精确点击；页面变化后重新 observe 以刷新 id（id 只在下一次 observe 前有效）。',
             input_schema: {
                 type: 'object',
                 properties: {
@@ -100,8 +100,10 @@ function effectiveAgentToolDefs() {
                     filter: {
                         type: ['string', 'array'],
                         items: { type: 'string' },
-                        description: '按类别筛选，缩小噪音。可传单个字符串、逗号分隔字符串或字符串数组。可选类别：button（按钮）、link（链接）、input（输入框/文本域/可编辑区）、select（下拉框）、checkbox（复选/开关）、radio（单选）、tab（标签页）、menuitem（菜单项）、option（选项）、label（标签元素）、text（普通可见文本）。例：filter:"button" 只看按钮；filter:["input","select"] 只看输入框和下拉框；不传或传 "all" 则返回全部。'
+                        description: '按类别筛选，缩小噪音。可传单个字符串、逗号分隔字符串或字符串数组。可选类别：button（按钮）、link（链接）、input（输入框/文本域/可编辑区）、select（下拉框）、checkbox（复选/开关）、radio（单选）、tab（标签页）、menuitem（菜单项）、option（选项）、label（标签元素）、image/video/audio 或 media（媒体）、text（普通可见文本）、frame（iframe 边界）。例：filter:"button" 只看按钮；filter:["input","select"] 只看输入框和下拉框；不传或传 "all" 则返回全部。'
                     },
+                    frame: { type: 'string', description: '只观察某个同源 iframe 内部：传 browser_observe 返回的该 frame 的 frameSelector。用于整页 items 过多时钻取单个 iframe（如内嵌编辑器）。' },
+                    frame_path: { type: 'array', items: { type: 'string' }, description: 'frame 的多级形式：从外到内的 iframe frameSelector 数组，用于嵌套 iframe 定位。' },
                     tag: { type: ['string', 'array'], items: { type: 'string' }, description: '按 HTML 标签名进一步筛选，如 "button"、"a"、"input"，也可传数组或逗号分隔字符串。' },
                     tags: { type: ['string', 'array'], items: { type: 'string' }, description: 'tag 的别名。' },
                     keyword: { type: 'string', description: '按关键词筛选，匹配可见文本、aria-label/title、name/id、href 等常用字段；也兼容 query/text_filter。' },
@@ -111,18 +113,6 @@ function effectiveAgentToolDefs() {
                     text_limit: { type: 'number', description: '最多返回的普通可见文本条数。默认 200，最大 500。' },
                     allow_truncate: { type: 'boolean', description: '为 true 时即使超过 limit/max_items 也截断返回；默认 false，即超量时不返回 items，只给 categoryCounts 和筛选提示。' },
                     mark: { type: 'boolean', description: '是否在页面上绘制状态色描边标记，便于随后截图查看。默认 true；传 false 只清除已有标记、不重绘。标记为纯视觉叠加，不影响其他工具或点击。' }
-                }
-            }
-        },
-        {
-            name: 'browser_screenshot',
-            description: '对当前标签页截图并返回 base64 图片 dataUrl（服务器会据此自动保存并按需推送给用户）。仅支持可视区域截图（本插件无 debugger 权限，不支持整页/精确元素裁剪截图，也无法截取非前台标签页），若传 selector 会先尝试把该元素滚动进视口再截可视区。用途：让 AI「看见」页面，常与 browser_observe 的描边标记配合核对可点击元素。场景：核对页面状态、在无法读取文本时改用视觉理解。',
-            input_schema: {
-                type: 'object',
-                properties: {
-                    selector: { type: 'string', description: '截图前尝试滚动进视口的元素 CSS selector（仍是可视区域截图，不做元素裁剪）。' },
-                    format: { type: 'string', enum: ['png', 'jpeg'], description: '图片格式。默认 png。' },
-                    quality: { type: 'number', description: 'JPEG 质量，0-100。' }
                 }
             }
         },
@@ -169,23 +159,6 @@ function effectiveAgentToolDefs() {
                 }
             }
         },
-        {
-            name: 'browser_drag',
-            description: '从源元素/点拖拽到目标元素/点并放下，派发 pointer/mouse 合成事件序列 + HTML5 dragstart/dragover/drop 事件，返回源元素是否发生了可观察位移。合成拖拽，不接入真实操作系统级拖拽，依赖原生文件拖拽等场景的页面可能无法响应。用途：拖放交互。场景：拖动排序、把元素拖入投放区、滑块操作。',
-            input_schema: {
-                type: 'object',
-                properties: {
-                    selector: { type: 'string', description: '源元素 CSS selector。' },
-                    text: { type: 'string', description: '源元素可见文本。' },
-                    x: { type: 'number', description: '源点 X 坐标（像素）。' },
-                    y: { type: 'number', description: '源点 Y 坐标（像素）。' },
-                    to_selector: { type: 'string', description: '目标元素 CSS selector。' },
-                    to_text: { type: 'string', description: '目标元素可见文本。' },
-                    to_x: { type: 'number', description: '目标点 X 坐标（像素）。' },
-                    to_y: { type: 'number', description: '目标点 Y 坐标（像素）。' }
-                }
-            }
-        }
     ];
 }
 
@@ -513,14 +486,10 @@ async function runAgentToolCommand(tool, args) {
             return await toolBrowserTab(payload);
         case 'browser_observe':
             return await toolBrowserObserve(payload);
-        case 'browser_screenshot':
-            return await toolBrowserScreenshot(payload);
         case 'browser_action':
             return await toolBrowserAction(payload);
         case 'browser_wait':
             return await toolBrowserWait(payload);
-        case 'browser_drag':
-            return await toolBrowserDrag(payload);
         default:
             throw new Error(`未知工具: ${tool || '(空)'}`);
     }
@@ -548,9 +517,6 @@ function summarizeAgentResult(tool, result) {
                 ? `匹配元素过多（${result.itemCount || 0} 个），已收窄筛选提示`
                 : `共 ${Number(result.count || 0)} 个可交互元素、${Number(result.textCount || 0)} 段文本`;
         }
-        if (tool === 'browser_screenshot') {
-            return result.success === false ? `截图失败: ${result.error || ''}` : '已截取当前可视区域';
-        }
         if (tool === 'browser_action') {
             return result.success === false
                 ? `${result.code || 'browser_action'} 未成功: ${result.error || ''}`
@@ -558,9 +524,6 @@ function summarizeAgentResult(tool, result) {
         }
         if (tool === 'browser_wait') {
             return result.success === false ? `等待超时: ${result.error || ''}` : '等待完成';
-        }
-        if (tool === 'browser_drag') {
-            return result.success === false ? `拖拽失败: ${result.error || ''}` : `拖拽完成（源元素${result.moved ? '' : '未'}发生位移）`;
         }
     }
     return `${tool} 执行完成`;

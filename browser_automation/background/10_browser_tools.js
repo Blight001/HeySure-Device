@@ -1,11 +1,12 @@
 // background/10_browser_tools.js — 三类浏览器 MCP 工具的后台封装：
 //   · 导航与搜索：browser_tab（list/switch/replace/navigate/close/back/forward）
-//   · 页面观察：  browser_observe / browser_screenshot
+//   · 页面观察：  browser_observe
 //   · 页面交互：  browser_action（click/double_click/right_click/scroll/type/press_key）/
-//                browser_wait / browser_drag
-// 简化移植自 device/extension/src/lib/tools/browser.ts：本插件没有 debugger/CDP 权限，
-// 也没有跨域 iframe 观察，点击/输入/按键都是合成事件，只作用于主文档。真正的扫描/交互
-// 逻辑在 content/observe.js 的 window.__hsObserve 里，这里只是薄封装 + 旧标签页补注入。
+//                browser_wait
+// 移植自 device/extension/src/lib/tools/browser.ts：本插件没有 debugger/CDP 权限，
+// 点击/输入/按键都是合成事件（非 CDP trusted 事件）。真正的扫描/交互逻辑在
+// content/observe.js 的 window.__hsObserve 里（含同源 iframe / Shadow DOM / 媒体识别），
+// 这里只是薄封装 + 旧标签页补注入。
 
 // ── content/observe.js 调用封装（含旧标签页补注入兜底）───────────────────────
 async function callObserveMethod(tabId, method, callArgs) {
@@ -180,63 +181,6 @@ async function toolBrowserObserve(args = {}) {
     return callObserveMethod(tab.id, 'scan', [args]);
 }
 
-// ── 页面观察：browser_screenshot（仅可视区域，无 debugger 权限）───────────────
-function unsupportedScreenshotReason(url = '') {
-    const raw = String(url || '');
-    if (/^(chrome|edge|brave|vivaldi|opera|chrome-extension):\/\//i.test(raw)) {
-        return '浏览器内部页面或扩展页面不允许扩展截图，请切换到普通 http/https 页面后重试。';
-    }
-    if (/^https:\/\/chromewebstore\.google\.com\//i.test(raw)) {
-        return 'Chrome 网上应用店页面不允许扩展截图。';
-    }
-    return '';
-}
-
-async function isTabForeground(tab) {
-    if (!tab.active) return false;
-    try {
-        const win = await chrome.windows.get(tab.windowId);
-        return win.focused === true && win.state !== 'minimized';
-    } catch (_error) {
-        return false;
-    }
-}
-
-async function toolBrowserScreenshot(args = {}) {
-    const tab = await getActiveTab();
-    if (!tab) throw new Error('未找到可截图的当前标签页');
-
-    const unsupported = unsupportedScreenshotReason(tab.url);
-    if (unsupported) {
-        return { success: false, disabled: true, unsupported: true, error: unsupported, tabId: tab.id, url: tab.url };
-    }
-
-    if (args.selector) {
-        await callObserveMethod(tab.id, 'scroll', [{ selector: args.selector }]).catch(() => {});
-    }
-
-    if (!(await isTabForeground(tab))) {
-        await focusTab(tab.id).catch(() => {});
-    }
-
-    const format = String(args.format || 'png').toLowerCase() === 'jpeg' ? 'jpeg' : 'png';
-    const quality = Number.isFinite(Number(args.quality)) ? Math.min(100, Math.max(0, Math.round(Number(args.quality)))) : undefined;
-
-    try {
-        const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format, quality });
-        return { success: true, dataUrl, tabId: tab.id, url: tab.url, method: 'captureVisibleTab' };
-    } catch (error) {
-        const message = error && error.message ? error.message : String(error);
-        return {
-            success: false,
-            error: message,
-            tabId: tab.id,
-            url: tab.url,
-            hint: '截图不可用：本工具仅支持可视区域截图（无 debugger 权限，无法后台标签页/整页截图），请确认标签页在前台可见后重试。'
-        };
-    }
-}
-
 // ── 页面交互：browser_action ──────────────────────────────────────────────
 const BROWSER_ACTION_KINDS = ['click', 'double_click', 'right_click', 'scroll', 'type', 'press_key'];
 
@@ -256,15 +200,9 @@ async function toolBrowserAction(args = {}) {
     }
 }
 
-// ── 页面交互：browser_wait / browser_drag ─────────────────────────────────
+// ── 页面交互：browser_wait ────────────────────────────────────────────────
 async function toolBrowserWait(args = {}) {
     const tab = await getActiveTab();
     if (!tab) throw new Error('未找到可等待的当前标签页');
     return callObserveMethod(tab.id, 'wait', [args]);
-}
-
-async function toolBrowserDrag(args = {}) {
-    const tab = await getActiveTab();
-    if (!tab) throw new Error('未找到可拖拽的当前标签页');
-    return callObserveMethod(tab.id, 'drag', [args]);
 }

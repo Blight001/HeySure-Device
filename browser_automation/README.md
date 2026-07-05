@@ -64,19 +64,19 @@
 | 自动化卡片 | `run_card`      | 在当前活动标签页执行自动化卡片流程（可指定账号/邮箱，耗时操作） |
 | 自动化卡片 | `save_cookies`  | 抓取当前页面的 Cookie + localStorage + sessionStorage，可选上传到指定服务器 |
 | 导航与搜索 | `browser_tab`   | 标签页管理与导航：list / switch / replace / navigate / close / back / forward |
-| 页面观察   | `browser_observe`    | 感知当前视口的可交互元素与可见文本，返回带 id 的 items 列表供 `browser_action` 用 `ref` 精确点击 |
-| 页面观察   | `browser_screenshot` | 对当前标签页可视区域截图，返回 base64 dataUrl |
+| 页面观察   | `browser_observe`    | 感知当前视口的可交互元素、媒体、可见文本与 iframe 边界，返回带 id 的 items 列表供 `browser_action` 用 `ref` 精确点击 |
 | 页面交互   | `browser_action`     | 点击 / 双击 / 右键 / 滚动 / 输入文本 / 键盘按键的聚合工具 |
 | 页面交互   | `browser_wait`       | 等待某个 CSS selector 出现，或固定等待一段时间 |
-| 页面交互   | `browser_drag`       | 从源元素/点拖拽到目标元素/点并放下 |
 
 工具 schema 在设备登记时上报给服务器，由服务器在 `mcp.list_tools` / `describe_tool` 中呈现，无需服务端硬编码。
 
-> `browser_tab`/`browser_observe`/`browser_screenshot`/`browser_action`/`browser_wait`/`browser_drag`
-> 简化移植自 `device/extension` 的同名 MCP 工具：本插件没有 `debugger`/CDP 权限，因此点击/输入/
-> 按键都是合成事件（非 CDP trusted 事件），`browser_observe` 只扫描主文档（不含跨域 iframe，也
-> 不识别 img/video/audio），`browser_screenshot` 只支持可视区域截图（无整页/精确元素裁剪）。
-> 执行逻辑见 `background/10_browser_tools.js` + `content/observe.js`。
+> `browser_tab`/`browser_observe`/`browser_action`/`browser_wait`
+> 移植自 `device/extension` 的同名 MCP 工具：本插件没有 `debugger`/CDP 权限，因此点击/输入/按键都是
+> 合成事件（非 CDP trusted 事件）。`browser_observe` 已与桌面浏览器扩展的观察能力对齐——扫描主文档、
+> 同源（含嵌套）iframe 内部、Shadow DOM（开放 root，封闭 root 由 `content/shadow-patch.js` 强制转开放），
+> 识别 img/video/audio 媒体元素及 `cursor:pointer` / 类名或 ID 以 btn/button/link 结尾的自定义控件，
+> 并支持 `frame`/`frame_path` 钻取单个 iframe；跨域 iframe 内部仍不可访问。
+> 执行逻辑见 `background/10_browser_tools.js` + `content/observe.js`（+ `content/shadow-patch.js`）。
 
 ## 项目结构
 
@@ -94,8 +94,9 @@ browser_automation/
 │   ├── 07_events.js
 │   ├── 08_agent_auth.js        # 软件端账号登录 / 认证 HTTP 客户端
 │   ├── 09_agent_socket.js      # Socket.IO 连接 / 设备登记 / task 调度 / AI 分配
-│   └── 10_browser_tools.js     # browser_tab/observe/screenshot/action/wait/drag 工具封装
+│   └── 10_browser_tools.js     # browser_tab/observe/action/wait 工具封装
 ├── content/
+│   ├── shadow-patch.js         # document_start / MAIN world：强制 shadow root 转 open（供 observe 扫描封闭 root）
 │   ├── fx.js                   # 页面操作动效（手型光标 / 点击涟漪 / 输入高亮）
 │   └── observe.js              # 页面观察与交互底座（window.__hsObserve，供 10_browser_tools.js 调用）
 ├── cursors/

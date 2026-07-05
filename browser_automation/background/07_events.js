@@ -118,17 +118,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         return true;
     }
 
-    if (message.type === 'standalone-registration-start') {
+    if (message.type === 'card-run-start') {
         (async () => {
             try {
                 const payload = message.payload && typeof message.payload === 'object' ? message.payload : {};
-                const loopRegistration = payload.loopRegistration === true;
+                const isLooping = payload.isLooping === true;
                 let result = null;
 
                 do {
-                    result = await runStandaloneRegistration({
+                    result = await runStandaloneCard({
                         ...payload,
-                        loopRegistration
+                        isLooping
                     });
 
                     const success = result?.success === true;
@@ -137,8 +137,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                         currentControlState
                         && (currentControlState.stopRequested === true || currentControlState.running === false)
                     );
-                    const stopped = result?.stopped === true || (loopRegistration && success && stopRequested);
-                    const continuation = loopRegistration && success && !stopped && !stopRequested;
+                    const stopped = result?.stopped === true || (isLooping && success && stopRequested);
+                    const continuation = isLooping && success && !stopped && !stopRequested;
 
                     try {
                         const lastState = await loadStandaloneProgressState().catch(() => null);
@@ -147,15 +147,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                             tabId: lastState?.tabId || null,
                             cardName: String(result?.cardName || lastState?.cardName || payload?.cardData?.name || '').trim(),
                             message: String(continuation
-                                ? `本轮注册完成: ${result.cardName || '未命名卡片'}`
+                                ? `本轮执行完成: ${result.cardName || '未命名卡片'}`
                                 : success
-                                    ? `注册完成: ${result.cardName || '未命名卡片'}`
+                                    ? `执行完成: ${result.cardName || '未命名卡片'}`
                                     : stopped
-                                        ? `已停止注册: ${result.cardName || '未命名卡片'}`
-                                        : result?.error || '注册失败'),
+                                        ? `已停止执行: ${result.cardName || '未命名卡片'}`
+                                        : result?.error || '执行失败'),
                             phase: continuation ? 'loop_iteration_finished' : success ? 'finished' : stopped ? 'stopped' : 'failed',
                             mode: continuation ? 'loop' : '',
-                            loopRegistration: continuation,
+                            isLooping: continuation,
                             kind: continuation || success || stopped ? '' : 'error',
                             errorReason: continuation || success || stopped ? '' : String(result?.error || '').trim(),
                             progress: continuation
@@ -176,7 +176,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                             mode: continuation ? 'loop' : 'pause',
                             stepBudget: 0,
                             running: continuation,
-                            loopRegistration: continuation,
+                            isLooping: continuation,
                             stopRequested: false
                         });
                     } catch (_error) {
@@ -184,21 +184,21 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
                     try {
                         await chrome.runtime.sendMessage({
-                            type: 'standalone-registration-finished',
+                            type: 'card-run-finished',
                             success,
                             stopped,
                             continuation,
-                            loopRegistration,
+                            isLooping,
                             progress: success || continuation ? 100 : stopped ? Number(result?.progress || 0) : 0,
                             mode: continuation ? 'loop' : message.payload?.debugMode === true ? 'debug' : 'run',
                             errorReason: success || stopped ? '' : String(result?.error || '').trim(),
                             message: continuation
-                                ? `本轮注册完成: ${result.cardName || '未命名卡片'}`
+                                ? `本轮执行完成: ${result.cardName || '未命名卡片'}`
                                 : success
-                                    ? `注册完成: ${result.cardName || '未命名卡片'}`
+                                    ? `执行完成: ${result.cardName || '未命名卡片'}`
                                     : stopped
-                                        ? `已停止注册: ${result.cardName || '未命名卡片'}`
-                                        : result?.error || '注册失败'
+                                        ? `已停止执行: ${result.cardName || '未命名卡片'}`
+                                        : result?.error || '执行失败'
                         });
                     } catch (_error) {
                     }
@@ -223,12 +223,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                         ...(lastState && typeof lastState === 'object' ? lastState : {}),
                         tabId: lastState?.tabId || null,
                         cardName: String(message.payload?.cardData?.name || lastState?.cardName || '').trim(),
-                        message: error && error.message ? error.message : '注册失败',
+                        message: error && error.message ? error.message : '执行失败',
                         phase: 'failed',
                         mode: '',
-                        loopRegistration: false,
+                        isLooping: false,
                         kind: 'error',
-                        errorReason: error && error.message ? error.message : '注册失败',
+                        errorReason: error && error.message ? error.message : '执行失败',
                         progress: Number.isFinite(Number(lastState?.progress)) ? Number(lastState.progress) : 0,
                         running: false,
                         visible: true
@@ -239,31 +239,31 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                         mode: 'pause',
                         stepBudget: 0,
                         running: false,
-                        loopRegistration: false
+                        isLooping: false
                     });
                 } catch (_error) {
                 }
                 try {
                     await chrome.runtime.sendMessage({
-                        type: 'standalone-registration-finished',
+                        type: 'card-run-finished',
                         success: false,
                         progress: 0,
                         mode: message.payload?.debugMode === true ? 'debug' : 'run',
-                        errorReason: error && error.message ? error.message : '注册失败',
-                        message: error && error.message ? error.message : '注册失败'
+                        errorReason: error && error.message ? error.message : '执行失败',
+                        message: error && error.message ? error.message : '执行失败'
                     });
                 } catch (_error) {
                 }
                 sendResponse({
                     success: false,
-                    error: error && error.message ? error.message : '注册失败'
+                    error: error && error.message ? error.message : '执行失败'
                 });
             }
         })();
         return true;
     }
 
-    if (message.type === 'standalone-registration-control') {
+    if (message.type === 'card-run-control') {
         (async () => {
             try {
                 const payload = message.payload && typeof message.payload === 'object' ? message.payload : {};
@@ -306,14 +306,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         return true;
     }
 
-    if (message.type === 'standalone-registration-stop') {
+    if (message.type === 'card-run-stop') {
         (async () => {
             try {
                 const controlState = await loadStandaloneDebugControlState().catch(() => null);
                 const progressState = await loadStandaloneProgressState().catch(() => null);
                 const tabId = Number(controlState?.tabId || progressState?.tabId || 0);
                 if (!tabId) {
-                    sendResponse({ success: false, error: '当前没有正在运行的注册任务' });
+                    sendResponse({ success: false, error: '当前没有正在运行的自动化任务' });
                     return;
                 }
 
@@ -324,17 +324,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                     mode: controlState?.mode || 'pause',
                     stepBudget: 0,
                     running: false,
-                    loopRegistration: false,
+                    isLooping: false,
                     stopRequested: true
                 });
                 await saveStandaloneProgressState({
                     ...(progressState && typeof progressState === 'object' ? progressState : {}),
                     tabId,
                     cardName,
-                    message: '正在停止注册流程...',
+                    message: '正在停止执行流程...',
                     phase: 'stopping',
                     mode: '',
-                    loopRegistration: false,
+                    isLooping: false,
                     kind: '',
                     errorReason: '',
                     running: true,
@@ -348,19 +348,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             } catch (error) {
                 sendResponse({
                     success: false,
-                    error: error && error.message ? error.message : '停止注册失败'
+                    error: error && error.message ? error.message : '停止执行失败'
                 });
             }
         })();
         return true;
     }
 
-    if (message.type === 'standalone-registration-sync-card') {
+    if (message.type === 'card-sync') {
         (async () => {
             try {
                 const payload = message.payload && typeof message.payload === 'object' ? message.payload : {};
                 const senderTabId = Number(_sender?.tab?.id || 0);
-                const result = await syncStandaloneRegistrationSession(payload, senderTabId);
+                const result = await syncStandaloneSession(payload, senderTabId);
                 sendResponse(result);
             } catch (error) {
                 sendResponse({

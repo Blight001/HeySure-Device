@@ -866,7 +866,7 @@
       display: none;
     }
 
-    html[data-layout='sidebar'] #register-card-section {
+    html[data-layout='sidebar'] #card-section {
       display: none;
     }
 
@@ -894,7 +894,7 @@
       justify-content: flex-start;
     }
 
-    .register-card-toolbar {
+    .card-toolbar {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 8px;

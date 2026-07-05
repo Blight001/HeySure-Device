@@ -249,7 +249,7 @@ async function invokeTempEmailControlWithRetry(channel = '', payload = {}, optio
 
     while (true) {
         if (controlTabId) {
-            await throwIfStandaloneRegistrationStopped(controlTabId);
+            await throwIfStopped(controlTabId);
         }
         attempt += 1;
         try {
@@ -512,7 +512,7 @@ async function getTempEmailDesktopCode(payload = {}, context = null) {
     const controlTabId = Number(payload.tabId || payload.runTabId || apiContext.runTabId || apiContext.tabId || 0) || 0;
     let email = String(payload.email || apiContext.email || '').trim();
     if (controlTabId) {
-        await throwIfStandaloneRegistrationStopped(controlTabId);
+        await throwIfStopped(controlTabId);
     }
     if (!email) {
         const emailResult = await getTempEmailDesktopEmail({
@@ -537,7 +537,7 @@ async function getTempEmailDesktopCode(payload = {}, context = null) {
         forceRefresh: payload.forceRefresh === true
     });
     if (controlTabId) {
-        await throwIfStandaloneRegistrationStopped(controlTabId);
+        await throwIfStopped(controlTabId);
     }
     const response = await invokeTempEmailControlWithRetry('temp-email-get-code', {
         ...payload,
@@ -658,7 +658,7 @@ async function waitForVerificationCode(payload = {}, tempEmailContext = null, em
     ).trim() || 'default';
     let email = String(tempEmailContext?.email || payload.email || '').trim();
     if (controlTabId) {
-        await throwIfStandaloneRegistrationStopped(controlTabId);
+        await throwIfStopped(controlTabId);
     }
     if (!email) {
         const emailResult = await getTempEmailDesktopEmail({
@@ -721,7 +721,7 @@ async function waitForVerificationCode(payload = {}, tempEmailContext = null, em
     return '';
 }
 
-async function pauseStandaloneRegistrationAtStep({
+async function pauseAtStep({
     tabId = 0,
     cardName = '',
     stepName = '',
@@ -766,6 +766,6 @@ async function pauseStandaloneRegistrationAtStep({
 // 说明：临时邮箱「调试栏目」相关的入口函数（handleTempEmailOpen / GetEmail /
 // Refresh / GetCode / Close）已随该栏目一并移除。以上的引擎函数
 // （ensureTempEmailContext / waitForVerificationCode / getTempEmailDesktopEmail /
-// closeTempEmailDesktopWindow 等）仍由注册流程 06_registration_run.js 的
+// closeTempEmailDesktopWindow 等）仍由自动化流程 06_automation_run.js 的
 // wait_verification_code 步骤内部调用，故保留。
 

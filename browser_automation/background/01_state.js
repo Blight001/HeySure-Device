@@ -33,7 +33,7 @@ async function getActiveTab() {
 }
 
 function extractTabMatchKey(url = '') {
-    const normalized = normalizeRegistrationUrl(String(url || '').trim());
+    const normalized = normalizeTargetUrl(String(url || '').trim());
     if (!normalized) {
         return '';
     }
@@ -806,7 +806,7 @@ async function saveStandaloneProgressState(state = {}) {
         message: String(state.message || '').trim(),
         phase: String(state.phase || '').trim(),
         mode: String(state.mode || '').trim(),
-        loopRegistration: state.loopRegistration === true,
+        isLooping: state.isLooping === true,
         kind: String(state.kind || '').trim(),
         errorReason: String(state.errorReason || '').trim(),
         stepIndex: Number(state.stepIndex || 0) || 0,
@@ -842,7 +842,7 @@ async function loadStandaloneDebugControlState() {
         mode: String(state.mode || 'loop').trim() || 'loop',
         stepBudget: Math.max(0, Number(state.stepBudget || 0) || 0),
         running: state.running !== false,
-        loopRegistration: state.loopRegistration === true,
+        isLooping: state.isLooping === true,
         stopRequested: state.stopRequested === true,
         updatedAt: String(state.updatedAt || '').trim()
     };
@@ -856,7 +856,7 @@ async function saveStandaloneDebugControlState(state = {}) {
         mode,
         stepBudget: Math.max(0, Number(state.stepBudget || 0) || 0),
         running: state.running !== false,
-        loopRegistration: state.loopRegistration === true,
+        isLooping: state.isLooping === true,
         stopRequested: state.stopRequested === true,
         updatedAt: new Date().toISOString()
     };
@@ -871,18 +871,18 @@ async function clearStandaloneDebugControlState() {
     await runtimeStateStorage.remove([STANDALONE_DEBUG_CONTROL_STATE_KEY]).catch(() => {});
 }
 
-function createRegistrationStopError() {
-    const error = new Error('注册已停止');
-    error.name = 'RegistrationStopError';
-    error.code = 'REGISTRATION_STOPPED';
+function createStopError() {
+    const error = new Error('执行已停止');
+    error.name = 'StopError';
+    error.code = 'STOPPED';
     return error;
 }
 
-function isRegistrationStopError(error) {
-    return Boolean(error) && (error.code === 'REGISTRATION_STOPPED' || error.name === 'RegistrationStopError');
+function isStopError(error) {
+    return Boolean(error) && (error.code === 'STOPPED' || error.name === 'StopError');
 }
 
-async function throwIfStandaloneRegistrationStopped(tabId = 0) {
+async function throwIfStopped(tabId = 0) {
     const normalizedTabId = Number(tabId || 0) || 0;
     if (!normalizedTabId) {
         return;
@@ -894,7 +894,7 @@ async function throwIfStandaloneRegistrationStopped(tabId = 0) {
     }
 
     if (control.stopRequested === true || control.running === false) {
-        throw createRegistrationStopError();
+        throw createStopError();
     }
 }
 
@@ -910,10 +910,10 @@ async function sleepWithStandaloneStopCheck(ms = 0, tabId = 0, intervalMs = 200)
 
     const deadline = Date.now() + durationMs;
     while (Date.now() < deadline) {
-        await throwIfStandaloneRegistrationStopped(normalizedTabId);
+        await throwIfStopped(normalizedTabId);
         await sleep(Math.min(Math.max(50, Number(intervalMs) || 200), Math.max(0, deadline - Date.now())));
     }
-    await throwIfStandaloneRegistrationStopped(normalizedTabId);
+    await throwIfStopped(normalizedTabId);
 }
 
 async function waitForTabCompleteWithStandaloneStopCheck(tabId, timeoutMs = 30000) {
@@ -921,7 +921,7 @@ async function waitForTabCompleteWithStandaloneStopCheck(tabId, timeoutMs = 3000
     const tabPromise = waitForTabComplete(normalizedTabId, timeoutMs);
     const stopPromise = (async () => {
         while (true) {
-            await throwIfStandaloneRegistrationStopped(normalizedTabId);
+            await throwIfStopped(normalizedTabId);
             await sleep(150);
         }
     })();
@@ -930,11 +930,11 @@ async function waitForTabCompleteWithStandaloneStopCheck(tabId, timeoutMs = 3000
 
 async function executePageActionWithStandaloneStopCheck(tabId, action) {
     const normalizedTabId = Number(tabId || 0) || 0;
-    await throwIfStandaloneRegistrationStopped(normalizedTabId);
+    await throwIfStopped(normalizedTabId);
     const actionPromise = executePageAction(normalizedTabId, action);
     const stopPromise = (async () => {
         while (true) {
-            await throwIfStandaloneRegistrationStopped(normalizedTabId);
+            await throwIfStopped(normalizedTabId);
             await sleep(150);
         }
     })();
@@ -957,7 +957,7 @@ async function waitForStandaloneDebugControl(tabId, emitProgress = async () => {
         }
 
         if (control.stopRequested === true) {
-            throw createRegistrationStopError();
+            throw createStopError();
         }
 
         if (control.running === false) {
@@ -1003,7 +1003,7 @@ async function waitForStandaloneDebugControl(tabId, emitProgress = async () => {
     }
 }
 
-async function syncStandaloneRegistrationSession(payload = {}, senderTabId = null) {
+async function syncStandaloneSession(payload = {}, senderTabId = null) {
     const tabId = Number(payload.tabId || senderTabId || 0) || null;
     const providedCardData = payload.cardData && typeof payload.cardData === 'object' ? payload.cardData : null;
     if (!tabId || !providedCardData) {
@@ -1011,14 +1011,14 @@ async function syncStandaloneRegistrationSession(payload = {}, senderTabId = nul
     }
 
     const normalizedCard = normalizeStandaloneSteps(providedCardData);
-    const session = standaloneRegistrationSessions.get(tabId);
+    const session = standaloneSessions.get(tabId);
     if (session && session.cardData) {
         session.cardData = normalizedCard;
         session.cardName = String(normalizedCard.name || '').trim();
         session.updatedAt = new Date().toISOString();
     }
 
-    await saveRegisterCardCacheToStorage(normalizedCard).catch(() => {});
+    await saveCardCacheState(normalizedCard).catch(() => {});
 
     return {
         success: true,

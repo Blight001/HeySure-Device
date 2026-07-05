@@ -6,14 +6,14 @@ function isEmailStepName(value = '') {
     return /邮箱|email|mail|电子邮箱|邮箱地址|e-mail/i.test(String(value || '').trim());
 }
 
-async function runStandaloneRegistration(payload = {}) {
+async function runStandaloneCard(payload = {}) {
     const providedCardData = payload.cardData && typeof payload.cardData === 'object'
         ? payload.cardData
         : null;
-    const isLoopRegistration = payload.loopRegistration === true;
+    const isLooping = payload.isLooping === true;
     const cachedCard = providedCardData ? null : await loadCardCache().catch(() => null);
     const cardData = normalizeStandaloneSteps(providedCardData || cachedCard?.cardData || {});
-    const progressMode = payload.debugMode === true ? 'debug' : isLoopRegistration ? 'loop' : 'run';
+    const progressMode = payload.debugMode === true ? 'debug' : isLooping ? 'loop' : 'run';
     const totalSteps = Array.isArray(cardData.steps) ? cardData.steps.length : 0;
     const stepProgressStart = 40;
     const stepProgressEnd = payload.debugMode === true ? 96 : 94;
@@ -33,7 +33,7 @@ async function runStandaloneRegistration(payload = {}) {
                 payloadState.kind = kind;
             }
             payloadState.mode = progressMode;
-            payloadState.loopRegistration = isLoopRegistration;
+            payloadState.isLooping = isLooping;
             payloadState.tabId = tabId;
             payloadState.cardName = currentCardName;
             payloadState.running = payloadState.running === false ? false : true;
@@ -44,7 +44,7 @@ async function runStandaloneRegistration(payload = {}) {
             }
             await saveStandaloneProgressState(payloadState);
             await chrome.runtime.sendMessage({
-                type: 'standalone-registration-progress',
+                type: 'card-run-progress',
                 ...payloadState
             });
         } catch (_error) {
@@ -76,7 +76,7 @@ async function runStandaloneRegistration(payload = {}) {
         running: true,
         updatedAt: new Date().toISOString()
     };
-    standaloneRegistrationSessions.set(tabId, executionState);
+    standaloneSessions.set(tabId, executionState);
     let tempEmailContext = null;
     try {
         if (payload.debugMode === true) {
@@ -86,9 +86,9 @@ async function runStandaloneRegistration(payload = {}) {
                 mode: 'step',
                 stepBudget: 1,
                 running: true,
-                loopRegistration: false
+                isLooping: false
             }).catch(() => {});
-        } else if (isLoopRegistration) {
+        } else if (isLooping) {
             const controlState = await loadStandaloneDebugControlState().catch(() => null);
             const stopRequested = controlState && Number(controlState.tabId || 0) === tabId
                 ? controlState.stopRequested === true
@@ -99,17 +99,17 @@ async function runStandaloneRegistration(payload = {}) {
                 mode: 'loop',
                 stepBudget: 0,
                 running: stopRequested ? false : true,
-                loopRegistration: true,
+                isLooping: true,
                 stopRequested
             }).catch(() => {});
             if (stopRequested) {
-                throw createRegistrationStopError();
+                throw createStopError();
             }
         } else {
             await clearStandaloneDebugControlState().catch(() => {});
         }
         if (providedCardData && currentCardName) {
-            await saveRegisterCardCacheToStorage(cardData).catch(() => {});
+            await saveCardCacheState(cardData).catch(() => {});
         }
 
         await chrome.storage.local.set({
@@ -117,7 +117,7 @@ async function runStandaloneRegistration(payload = {}) {
         }).catch(() => {});
 
         await emitProgress({
-            message: `开始本地注册: ${currentCardName || '未命名卡片'}`,
+            message: `开始本地执行: ${currentCardName || '未命名卡片'}`,
             progress: 3,
             phase: 'start'
         });
@@ -132,7 +132,7 @@ async function runStandaloneRegistration(payload = {}) {
             account: context.account,
             email: context.email
         }, emitProgress, 8);
-        await throwIfStandaloneRegistrationStopped(tabId);
+        await throwIfStopped(tabId);
         await emitProgress({
             message: `已生成随机密码: ${context.password.length} 位`,
             progress: 38,
@@ -156,7 +156,7 @@ async function runStandaloneRegistration(payload = {}) {
 
     let index = 0;
     while (index < (Array.isArray(executionState.cardData?.steps) ? executionState.cardData.steps.length : 0)) {
-        await throwIfStandaloneRegistrationStopped(tabId);
+        await throwIfStopped(tabId);
         const activeCardData = executionState.cardData || cardData;
         const steps = Array.isArray(activeCardData.steps) ? activeCardData.steps : [];
         if (index >= steps.length) {
@@ -211,7 +211,7 @@ async function runStandaloneRegistration(payload = {}) {
             executionState.currentStepName = stepName;
             executionState.pausedAtFailure = true;
             executionState.updatedAt = new Date().toISOString();
-            await pauseStandaloneRegistrationAtStep({
+            await pauseAtStep({
                 tabId,
                 cardName: currentCardName,
                 stepName,
@@ -243,9 +243,9 @@ async function runStandaloneRegistration(payload = {}) {
             previousStepName,
             nextStepName
         });
-        await throwIfStandaloneRegistrationStopped(tabId);
+        await throwIfStopped(tabId);
 
-        if (payload.debugMode === true || isLoopRegistration) {
+        if (payload.debugMode === true || isLooping) {
             await waitForStandaloneDebugControl(tabId, emitProgress, {
                 mode: progressMode,
                 progress: stepStartProgress,
@@ -259,7 +259,7 @@ async function runStandaloneRegistration(payload = {}) {
 
         if (stepType === 'navigate') {
             try {
-                const url = normalizeRegistrationUrl(resolveTemplate(step.url || '', context) || resolveTemplate(activeCardData.website || '', context));
+                const url = normalizeTargetUrl(resolveTemplate(step.url || '', context) || resolveTemplate(activeCardData.website || '', context));
                 if (!url) {
                     await handleStepFailure({
                         error: new Error(`步骤 ${stepName} 缺少有效 URL`),
@@ -271,7 +271,7 @@ async function runStandaloneRegistration(payload = {}) {
                 }
 
                 const currentTab = await chrome.tabs.get(tabId).catch(() => null);
-                const currentTabUrl = normalizeRegistrationUrl(String(currentTab?.url || '').trim());
+                const currentTabUrl = normalizeTargetUrl(String(currentTab?.url || '').trim());
                 if (currentTabUrl === url) {
                     await chrome.tabs.reload(tabId, { bypassCache: true });
                     await sleepWithStandaloneStopCheck(250, tabId);
@@ -385,7 +385,7 @@ async function runStandaloneRegistration(payload = {}) {
             }
 
             try {
-                const saveResult = await saveRegistrationCookieStepResult(tabId, captureAccount, capturePassword);
+                const saveResult = await saveCookieStepResult(tabId, captureAccount, capturePassword);
                 result.cookiesSaved = true;
                 result.savedFileName = saveResult.fileName;
                 result.cookieCount = saveResult.cookieCount;
@@ -611,7 +611,7 @@ async function runStandaloneRegistration(payload = {}) {
         let lastError = '';
 
         for (const selector of selectors) {
-            await throwIfStandaloneRegistrationStopped(tabId);
+            await throwIfStopped(tabId);
             try {
                 const actionResult = await executePageActionWithStandaloneStopCheck(tabId, {
                     ...actionPayload,
@@ -676,19 +676,19 @@ async function runStandaloneRegistration(payload = {}) {
             mode: 'pause',
             stepBudget: 0,
             running: false,
-            loopRegistration: false
+            isLooping: false
         }).catch(() => {});
         await emitProgress({
-            message: '调试模式下已完成注册步骤，跳过 Cookie 保存',
+            message: '调试模式下已完成自动化步骤，跳过 Cookie 保存',
             progress: 98,
             phase: 'debug_complete'
         });
         return result;
     }
 
-    if (isLoopRegistration) {
+    if (isLooping) {
         await emitProgress({
-            message: `本轮注册完成: ${currentCardName || '未命名卡片'}`,
+            message: `本轮执行完成: ${currentCardName || '未命名卡片'}`,
             progress: 100,
             phase: 'loop_iteration_finished'
         });
@@ -707,10 +707,10 @@ async function runStandaloneRegistration(payload = {}) {
             mode: 'pause',
             stepBudget: 0,
             running: false,
-            loopRegistration: false
+            isLooping: false
         }).catch(() => {});
         await emitProgress({
-            message: `本地注册完成: ${currentCardName || '未命名卡片'}`,
+            message: `本地执行完成: ${currentCardName || '未命名卡片'}`,
             progress: 100,
             phase: 'finished'
         });
@@ -718,13 +718,13 @@ async function runStandaloneRegistration(payload = {}) {
     }
 
     await emitProgress({
-        message: '注册步骤执行完成，正在保存 Cookie',
+        message: '自动化步骤执行完成，正在保存 Cookie',
         progress: 97,
         phase: 'save_cookies'
     });
 
     try {
-        const saveResult = await saveRegistrationResult(cardData, result, tabId);
+        const saveResult = await saveCardResult(cardData, result, tabId);
         result.cookiesSaved = true;
         result.savedFileName = saveResult.fileName;
         result.cookieCount = saveResult.cookieCount;
@@ -742,21 +742,21 @@ async function runStandaloneRegistration(payload = {}) {
         mode: 'pause',
         stepBudget: 0,
         running: false,
-        loopRegistration: false
+        isLooping: false
     }).catch(() => {});
     await emitProgress({
-        message: `本地注册完成: ${currentCardName || '未命名卡片'}`,
+        message: `本地执行完成: ${currentCardName || '未命名卡片'}`,
         progress: 100,
         phase: 'finished'
     });
     return result;
     } catch (error) {
-        if (isRegistrationStopError(error)) {
+        if (isStopError(error)) {
             const lastState = await loadStandaloneProgressState().catch(() => null);
             const stoppedProgress = Number.isFinite(Number(lastState?.progress))
                 ? Number(lastState.progress)
                 : 0;
-            const stoppedMessage = `已停止注册: ${currentCardName || '未命名卡片'}`;
+            const stoppedMessage = `已停止执行: ${currentCardName || '未命名卡片'}`;
             await saveStandaloneProgressState({
                 ...(lastState && typeof lastState === 'object' ? lastState : {}),
                 tabId,
@@ -764,7 +764,7 @@ async function runStandaloneRegistration(payload = {}) {
                 message: stoppedMessage,
                 phase: 'stopped',
                 mode: '',
-                loopRegistration: false,
+                isLooping: false,
                 kind: '',
                 errorReason: '',
                 progress: stoppedProgress,
@@ -777,7 +777,7 @@ async function runStandaloneRegistration(payload = {}) {
                 mode: 'pause',
                 stepBudget: 0,
                 running: false,
-                loopRegistration: false,
+                isLooping: false,
                 stopRequested: false
             }).catch(() => {});
             await emitProgress({
@@ -803,7 +803,7 @@ async function runStandaloneRegistration(payload = {}) {
                 points: Number(cardData.points || 0) || 0,
                 cookiesSaved: false,
                 progress: stoppedProgress,
-            error: '注册已停止'
+            error: '执行已停止'
             };
         }
         throw error;
@@ -815,11 +815,11 @@ async function runStandaloneRegistration(payload = {}) {
                 email: tempEmailContext.email || context.email || ''
             }, tempEmailContext).catch(() => {});
         }
-        standaloneRegistrationSessions.delete(tabId);
+        standaloneSessions.delete(tabId);
     }
 }
 
-async function saveRegistrationCookieStepResult(tabId, account, password) {
+async function saveCookieStepResult(tabId, account, password) {
     const snapshot = await collectTabCookieSnapshot(tabId);
     const fileName = buildCaptureFileName(account, password);
     const savePayload = {
@@ -830,14 +830,14 @@ async function saveRegistrationCookieStepResult(tabId, account, password) {
         cookies: snapshot.cookies,
         browserStorage: snapshot.browserStorage,
         capturedAt: new Date().toISOString(),
-        source: 'standalone-registration-save-cookies-step'
+        source: 'card-run-save-cookies-step'
     };
 
     const jsonText = JSON.stringify(savePayload, null, 2);
     const downloadUrl = `data:application/json;charset=utf-8,${encodeURIComponent(jsonText)}`;
     await chrome.downloads.download({
         url: downloadUrl,
-        filename: `registration_capture/${fileName}`,
+        filename: `automation_capture/${fileName}`,
         saveAs: false,
         conflictAction: 'overwrite'
     });

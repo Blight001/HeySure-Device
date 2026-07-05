@@ -1,11 +1,11 @@
 const PRESET_ACCOUNT_KEY = 'cookie-capture-account';
 const PRESET_PASSWORD_KEY = 'cookie-capture-password';
 const STANDALONE_LAST_CARD_KEY = 'cookie-capture-standalone-last-card';
-const REGISTER_CARD_CACHE_KEY = 'cookie-capture-register-card-cache';
-const REGISTER_CARD_CACHE_NAME_KEY = 'cookie-capture-register-card-cache-name';
-const REGISTER_CARD_CACHE_TIME_KEY = 'cookie-capture-register-card-cache-time';
-const REGISTER_CARD_CACHE_LIST_KEY = 'cookie-capture-register-card-cache-list';
-const REGISTER_CARD_SELECTED_ID_KEY = 'cookie-capture-register-card-cache-selected-id';
+const AUTOMATION_CARD_CACHE_KEY = 'cookie-capture-automation-card-cache';
+const AUTOMATION_CARD_CACHE_NAME_KEY = 'cookie-capture-automation-card-cache-name';
+const AUTOMATION_CARD_CACHE_TIME_KEY = 'cookie-capture-automation-card-cache-time';
+const AUTOMATION_CARD_CACHE_LIST_KEY = 'cookie-capture-automation-card-cache-list';
+const AUTOMATION_CARD_SELECTED_ID_KEY = 'cookie-capture-automation-card-cache-selected-id';
 const TEMP_EMAIL_CARD_CACHE_KEY = 'cookie-capture-temp-email-card-cache';
 const TEMP_EMAIL_CARD_CACHE_NAME_KEY = 'cookie-capture-temp-email-card-cache-name';
 const TEMP_EMAIL_CARD_CACHE_TIME_KEY = 'cookie-capture-temp-email-card-cache-time';
@@ -16,7 +16,7 @@ const STANDALONE_PROGRESS_STATE_KEY = 'cookie-capture-standalone-progress-state'
 const STANDALONE_DEBUG_CONTROL_STATE_KEY = 'cookie-capture-standalone-debug-control-state';
 let tempEmailRuntimeContext = null;
 const runtimeStateStorage = chrome.storage.session || chrome.storage.local;
-const standaloneRegistrationSessions = new Map();
+const standaloneSessions = new Map();
 
 function sanitizeFilePart(value = '') {
     return String(value || '')
@@ -34,8 +34,8 @@ function buildFileName(account = '', password = '') {
     return `cookie_${timestamp}.json`;
 }
 
-function buildRegistrationFileName(cardName = '', account = '', password = '') {
-    const baseName = sanitizeFilePart(cardName) || 'registration';
+function buildCaptureFileName(cardName = '', account = '', password = '') {
+    const baseName = sanitizeFilePart(cardName) || 'automation';
     const normalizedAccount = sanitizeFilePart(account);
     const normalizedPassword = sanitizeFilePart(password);
     if (normalizedAccount && normalizedPassword) {
@@ -66,7 +66,7 @@ function normalizeCaptureUrl(url = '') {
     }
 }
 
-function normalizeRegistrationUrl(value = '') {
+function normalizeTargetUrl(value = '') {
     const raw = String(value || '').trim();
     if (!raw) {
         return '';

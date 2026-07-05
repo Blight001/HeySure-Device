@@ -69,11 +69,11 @@ const COOKIE_CREDENTIAL_CACHE_LIST_KEY = shared.STORAGE_KEYS.COOKIE_CREDENTIAL_C
 const COOKIE_CREDENTIAL_SELECTED_DATE_KEY = shared.STORAGE_KEYS.COOKIE_CREDENTIAL_SELECTED_DATE_KEY;
 const COOKIE_CREDENTIAL_SEARCH_KEY = shared.STORAGE_KEYS.COOKIE_CREDENTIAL_SEARCH_KEY;
 const COOKIE_CREDENTIAL_CACHE_MAX_ITEMS = 50;
-const REGISTER_CARD_CACHE_KEY = shared.STORAGE_KEYS.REGISTER_CARD_CACHE_KEY;
-const REGISTER_CARD_CACHE_NAME_KEY = shared.STORAGE_KEYS.REGISTER_CARD_CACHE_NAME_KEY;
-const REGISTER_CARD_CACHE_TIME_KEY = shared.STORAGE_KEYS.REGISTER_CARD_CACHE_TIME_KEY;
-const REGISTER_CARD_CACHE_LIST_KEY = shared.STORAGE_KEYS.REGISTER_CARD_CACHE_LIST_KEY;
-const REGISTER_CARD_SELECTED_ID_KEY = shared.STORAGE_KEYS.REGISTER_CARD_SELECTED_ID_KEY;
+const AUTOMATION_CARD_CACHE_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_CACHE_KEY;
+const AUTOMATION_CARD_CACHE_NAME_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_CACHE_NAME_KEY;
+const AUTOMATION_CARD_CACHE_TIME_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_CACHE_TIME_KEY;
+const AUTOMATION_CARD_CACHE_LIST_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_CACHE_LIST_KEY;
+const AUTOMATION_CARD_SELECTED_ID_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_SELECTED_ID_KEY;
 const LAST_MAIN_PANEL_KEY = shared.STORAGE_KEYS.LAST_MAIN_PANEL_KEY;
 const STANDALONE_PROGRESS_STATE_KEY = shared.STORAGE_KEYS.STANDALONE_PROGRESS_STATE_KEY;
 const STANDALONE_DEBUG_CONTROL_STATE_KEY = shared.STORAGE_KEYS.STANDALONE_DEBUG_CONTROL_STATE_KEY;
@@ -102,18 +102,18 @@ const clearCurrentPageCacheButton = document.getElementById('clear-current-page-
 const statusNode = document.getElementById('status');
 const cookieCredentialCountNode = document.getElementById('cookie-credential-count');
 const cookieCredentialListNode = document.getElementById('cookie-credential-list');
-const registerCardFileInput = document.getElementById('register-card-file');
-const pickRegisterCardFileButton = document.getElementById('pick-register-card-file');
-const importRegisterCardButton = document.getElementById('import-register-card');
-const loopRegisterCardButton = document.getElementById('loop-register-card');
+const cardFileInput = document.getElementById('card-file');
+const pickCardFileButton = document.getElementById('pick-card-file');
+const importCardButton = document.getElementById('import-card');
+const loopCardButton = document.getElementById('loop-card');
 const cardFileNameNode = document.getElementById('card-file-name');
 const cardCacheBadgeNode = document.getElementById('card-cache-badge');
 const cardCacheListNode = document.getElementById('card-cache-list');
-const deleteRegisterCardButton = document.getElementById('delete-register-card');
-const registerCardEditor = document.getElementById('register-card-editor');
+const deleteCardButton = document.getElementById('delete-card');
+const cardEditor = document.getElementById('card-editor');
 const loadCardToEditorButton = document.getElementById('load-card-to-editor');
 const saveCardEditorButton = document.getElementById('save-card-editor');
-const exportRegisterCardButton = document.getElementById('export-register-card');
+const exportCardButton = document.getElementById('export-card');
 const appendStepButton = document.getElementById('append-step');
 const stepTypeSelect = document.getElementById('step-type');
 const stepNameInput = document.getElementById('step-name');
@@ -156,7 +156,7 @@ const sidebarAddStepButton = document.getElementById('sidebar-add-step');
 const sidebarLoadCardButton = document.getElementById('sidebar-load-card');
 const sidebarSaveCardButton = document.getElementById('sidebar-save-card');
 const sidebarExportCardButton = document.getElementById('sidebar-export-card');
-const sidebarLoopRegisterButton = document.getElementById('sidebar-loop-register-card');
+const sidebarLoopButton = document.getElementById('sidebar-loop-card');
 const sidebarRefreshCardButton = document.getElementById('sidebar-refresh-card');
 const sidebarCloseButton = document.getElementById('sidebar-close');
 const sidebarTutorialButton = document.getElementById('sidebar-tutorial');
@@ -167,8 +167,8 @@ const runtimeStateStorage = chrome.storage.session || chrome.storage.local;
 let activeDebugErrorReason = '';
 let debugProgressAutoHideTimer = null;
 
-await import('./register-workbench.js');
-const registerModule = globalThis.CookieCaptureRegisterWorkbench || {};
+await import('./automation-workbench.js');
+const workbenchModule = globalThis.CookieCaptureAutomationWorkbench || {};
 const {
     clearDebugProgressAutoHideTimer,
     scheduleDebugProgressAutoHide,
@@ -184,11 +184,11 @@ const {
     activateMainPanel,
     setCardFileName,
     setCardCacheBadge,
-    buildRegisterCardExportFileName,
-    buildRegisterCardCacheId,
-    normalizeRegisterCardCacheEntry,
-    buildRegisterCardListLabel,
-    renderRegisterCardCacheList,
+    buildCardExportFileName,
+    buildCardCacheId,
+    normalizeCardCacheEntry,
+    buildCardListLabel,
+    renderCardCacheList,
     normalizeProgressValue,
     setDebugProgress,
     resetDebugProgress,
@@ -197,17 +197,17 @@ const {
     formatStepTypeLabel,
     normalizeDebugControlMode,
     setDebugControlMode,
-    setRegisterLoopButtonState,
-    refreshRegisterLoopButtonState,
+    setLoopButtonState,
+    refreshLoopButtonState,
     refreshDebugControlUi,
     sendDebugControlAction,
-    sendRegistrationStopAction,
+    sendStopAction,
     syncSidebarCardToRunningDebugSession,
     normalizeCardData,
     stringifyCardData,
     parseEditorCardData,
-    setRegisterCardEditorValue,
-    getRegisterCardEditorValue,
+    setCardEditorValue,
+    getCardEditorValue,
     isVerificationStepName,
     isEmailStepName,
     createDebugStepTemplate,
@@ -237,30 +237,30 @@ const {
     collectSidebarCardDataFromForm,
     renderSidebarCardEditor,
     getSidebarCardDataFromEditor,
-    getRegisterCardDataForExport,
-    exportRegisterCard,
-    loadRegisterCardCacheState,
-    saveRegisterCardCacheState,
-    refreshRegisterCardCacheUi,
-    selectRegisterCardCacheItem,
-    upsertRegisterCardCache,
+    getCardDataForExport,
+    exportCard,
+    loadCardCacheState,
+    saveCardCacheState,
+    refreshCardCacheUi,
+    selectCardCacheItem,
+    upsertCardCache,
     renderSidebarEditorFromCurrentState,
     saveCardCache,
     saveEditorCardToCache
-} = registerModule;
+} = workbenchModule;
 
-async function loadRegisterCardIntoEditor() {
-    const imported = await importSelectedRegisterCardFilesToCache().catch(() => null);
+async function loadCardIntoEditor() {
+    const imported = await importSelectedCardFilesToCache().catch(() => null);
     const cachedCard = await loadCardCache().catch(() => null);
     const cardData = imported?.selectedItem?.cardData || cachedCard?.cardData || null;
     if (!cardData) {
-        throw new Error('没有可载入的注册卡片');
+        throw new Error('没有可载入的自动化卡片');
     }
     if (isSidebarLayout()) {
         renderSidebarCardEditor(cardData);
         syncSidebarEditorToHiddenJson();
     } else {
-        setRegisterCardEditorValue(cardData);
+        setCardEditorValue(cardData);
     }
     if (cardData?.name) {
         setCardFileName(cardData.name);
@@ -269,7 +269,7 @@ async function loadRegisterCardIntoEditor() {
 }
 
 async function loadCardCache() {
-    const state = await loadRegisterCardCacheState();
+    const state = await loadCardCacheState();
     if (!state.items.length) {
         return null;
     }
@@ -288,24 +288,24 @@ async function loadCardCache() {
 
 async function clearCardCache() {
     await chrome.storage.local.remove([
-        REGISTER_CARD_CACHE_LIST_KEY,
-        REGISTER_CARD_SELECTED_ID_KEY,
-        REGISTER_CARD_CACHE_KEY,
-        REGISTER_CARD_CACHE_NAME_KEY,
-        REGISTER_CARD_CACHE_TIME_KEY
+        AUTOMATION_CARD_CACHE_LIST_KEY,
+        AUTOMATION_CARD_SELECTED_ID_KEY,
+        AUTOMATION_CARD_CACHE_KEY,
+        AUTOMATION_CARD_CACHE_NAME_KEY,
+        AUTOMATION_CARD_CACHE_TIME_KEY
     ]);
-    if (registerCardFileInput) {
-        registerCardFileInput.value = '';
+    if (cardFileInput) {
+        cardFileInput.value = '';
     }
-    renderRegisterCardCacheList({ items: [], selectedId: '' });
+    renderCardCacheList({ items: [], selectedId: '' });
     setCardFileName('未选择卡片');
 }
 
-async function deleteSelectedRegisterCardCache() {
-    const state = await loadRegisterCardCacheState().catch(() => ({ items: [], selectedId: '' }));
+async function deleteSelectedCardCache() {
+    const state = await loadCardCacheState().catch(() => ({ items: [], selectedId: '' }));
     const items = Array.isArray(state.items) ? state.items : [];
     if (!items.length) {
-        throw new Error('没有可删除的注册卡片');
+        throw new Error('没有可删除的自动化卡片');
     }
 
     const selectedId = String(state.selectedId || items[0]?.id || '').trim();
@@ -317,27 +317,27 @@ async function deleteSelectedRegisterCardCache() {
 
     if (nextItems.length === 0) {
         await chrome.storage.local.remove([
-            REGISTER_CARD_CACHE_LIST_KEY,
-            REGISTER_CARD_SELECTED_ID_KEY,
-            REGISTER_CARD_CACHE_KEY,
-            REGISTER_CARD_CACHE_NAME_KEY,
-            REGISTER_CARD_CACHE_TIME_KEY
+            AUTOMATION_CARD_CACHE_LIST_KEY,
+            AUTOMATION_CARD_SELECTED_ID_KEY,
+            AUTOMATION_CARD_CACHE_KEY,
+            AUTOMATION_CARD_CACHE_NAME_KEY,
+            AUTOMATION_CARD_CACHE_TIME_KEY
         ]);
-        renderRegisterCardCacheList({ items: [], selectedId: '' });
+        renderCardCacheList({ items: [], selectedId: '' });
         setCardFileName('未选择卡片');
         return deletedItem;
     }
 
     const nextSelectedId = String(nextItems[0]?.id || '').trim();
-    await saveRegisterCardCacheState(nextItems, nextSelectedId);
+    await saveCardCacheState(nextItems, nextSelectedId);
     const nextItem = nextItems.find((item) => item.id === nextSelectedId) || nextItems[0];
     if (isSidebarLayout()) {
         renderSidebarCardEditor(nextItem.cardData);
         syncSidebarEditorToHiddenJson();
     } else {
-        setRegisterCardEditorValue(nextItem.cardData);
+        setCardEditorValue(nextItem.cardData);
     }
-    renderRegisterCardCacheList({
+    renderCardCacheList({
         items: nextItems,
         selectedId: nextSelectedId
     });
@@ -346,7 +346,7 @@ async function deleteSelectedRegisterCardCache() {
 }
 
 async function readSelectedCardFiles() {
-    const files = Array.from(registerCardFileInput?.files || []).filter(Boolean);
+    const files = Array.from(cardFileInput?.files || []).filter(Boolean);
     if (files.length === 0) {
         return [];
     }
@@ -358,7 +358,7 @@ async function readSelectedCardFiles() {
         try {
             cardData = JSON.parse(rawText);
         } catch (_error) {
-            throw new Error(`注册卡片文件不是有效的 JSON: ${file.name}`);
+            throw new Error(`自动化卡片文件不是有效的 JSON: ${file.name}`);
         }
         cards.push(normalizeCardData(cardData, file.name, { allowEmptySteps: true }));
     }
@@ -390,39 +390,39 @@ async function openCardEditorSidebar() {
     return result;
 }
 
-async function resolveRegisterCardForRun() {
+async function resolveCardForRun() {
     if (isSidebarLayout()) {
-        const cardData = normalizeCardData(getSidebarCardDataFromEditor(), 'registration');
+        const cardData = normalizeCardData(getSidebarCardDataFromEditor(), 'automation');
         await saveCardCache(cardData);
         return cardData;
     }
 
-    const editorText = getRegisterCardEditorValue().trim();
+    const editorText = getCardEditorValue().trim();
     if (editorText) {
         const cardData = parseEditorCardData(editorText);
         await saveCardCache(cardData);
         return cardData;
     }
 
-    const imported = await importSelectedRegisterCardFilesToCache().catch(() => null);
+    const imported = await importSelectedCardFilesToCache().catch(() => null);
     if (imported?.selectedItem?.cardData) {
-        const cardData = normalizeCardData(imported.selectedItem.cardData, imported.selectedItem.cardName || 'registration');
-        setRegisterCardEditorValue(cardData);
+        const cardData = normalizeCardData(imported.selectedItem.cardData, imported.selectedItem.cardName || 'automation');
+        setCardEditorValue(cardData);
         await saveCardCache(cardData);
         return cardData;
     }
 
     const cachedCard = await loadCardCache().catch(() => null);
     if (cachedCard?.cardData) {
-        const cardData = normalizeCardData(cachedCard.cardData, cachedCard?.cardName || cachedCard.cardData?.name || 'registration');
-        setRegisterCardEditorValue(cardData);
+        const cardData = normalizeCardData(cachedCard.cardData, cachedCard?.cardName || cachedCard.cardData?.name || 'automation');
+        setCardEditorValue(cardData);
         return cardData;
     }
 
-    throw new Error('请先导入或编辑注册卡片');
+    throw new Error('请先导入或编辑自动化卡片');
 }
 
-async function importSelectedRegisterCardFilesToCache() {
+async function importSelectedCardFilesToCache() {
     const selectedCards = await readSelectedCardFiles();
     if (!selectedCards.length) {
         return null;
@@ -430,7 +430,7 @@ async function importSelectedRegisterCardFilesToCache() {
 
     const items = [];
     for (const cardData of selectedCards) {
-        const result = await upsertRegisterCardCache(cardData, {
+        const result = await upsertCardCache(cardData, {
             append: true,
             select: false,
             fileName: cardData.name
@@ -446,9 +446,9 @@ async function importSelectedRegisterCardFilesToCache() {
 
     const selectedItem = items[items.length - 1] || null;
     if (selectedItem) {
-        const state = await loadRegisterCardCacheState().catch(() => ({ items: [], selectedId: '' }));
-        await saveRegisterCardCacheState(state.items, selectedItem.id);
-        renderRegisterCardCacheList({
+        const state = await loadCardCacheState().catch(() => ({ items: [], selectedId: '' }));
+        await saveCardCacheState(state.items, selectedItem.id);
+        renderCardCacheList({
             items: state.items,
             selectedId: selectedItem.id
         });
@@ -456,13 +456,13 @@ async function importSelectedRegisterCardFilesToCache() {
             renderSidebarCardEditor(selectedItem.cardData);
             syncSidebarEditorToHiddenJson();
         } else {
-            setRegisterCardEditorValue(selectedItem.cardData);
+            setCardEditorValue(selectedItem.cardData);
         }
         setCardFileName(selectedItem.cardName);
     }
 
-    if (registerCardFileInput) {
-        registerCardFileInput.value = '';
+    if (cardFileInput) {
+        cardFileInput.value = '';
     }
 
     return {
@@ -471,115 +471,115 @@ async function importSelectedRegisterCardFilesToCache() {
     };
 }
 
-async function importAndStartRegistration() {
-    importRegisterCardButton.disabled = true;
-    showActionToast('正在准备注册卡片...', 'info');
+async function importAndStartCard() {
+    importCardButton.disabled = true;
+    showActionToast('正在准备自动化卡片...', 'info');
     setDebugProgress({
         visible: true,
         progress: 0,
-        message: '正在启动注册流程...',
-        meta: '注册模式',
+        message: '正在启动自动化流程...',
+        meta: '执行模式',
         mode: 'run'
     });
 
     try {
         await savePreset();
-        const imported = await importSelectedRegisterCardFilesToCache().catch(() => null);
-        const cardData = imported?.selectedItem?.cardData || await resolveRegisterCardForRun();
+        const imported = await importSelectedCardFilesToCache().catch(() => null);
+        const cardData = imported?.selectedItem?.cardData || await resolveCardForRun();
         const savedCardData = await saveCardCache(cardData);
 
-        showActionToast(`已启动本地注册: ${savedCardData.name}`, 'info');
+        showActionToast(`已启动本地执行: ${savedCardData.name}`, 'info');
         void sendStandaloneMessage({
-            type: 'standalone-registration-start',
+            type: 'card-run-start',
             payload: {
                 cardData: savedCardData
             }
         }).catch((error) => {
-            showActionToast(error && error.message ? error.message : '启动注册失败', 'error');
+            showActionToast(error && error.message ? error.message : '启动执行失败', 'error');
         });
 
     } catch (error) {
-        showActionToast(error && error.message ? error.message : '导入并注册失败', 'error');
+        showActionToast(error && error.message ? error.message : '导入并执行失败', 'error');
     } finally {
-        importRegisterCardButton.disabled = false;
+        importCardButton.disabled = false;
     }
 }
 
-async function registerLoopCard() {
-    const isRunning = await refreshRegisterLoopButtonState();
+async function loopCard() {
+    const isRunning = await refreshLoopButtonState();
     if (isRunning) {
-        loopRegisterCardButton && (loopRegisterCardButton.disabled = true);
-        sidebarLoopRegisterButton && (sidebarLoopRegisterButton.disabled = true);
-        showActionToast('正在停止注册流程...', 'info');
+        loopCardButton && (loopCardButton.disabled = true);
+        sidebarLoopButton && (sidebarLoopButton.disabled = true);
+        showActionToast('正在停止执行流程...', 'info');
         try {
-            await sendRegistrationStopAction();
-            showActionToast('已停止注册流程', 'success');
+            await sendStopAction();
+            showActionToast('已停止执行流程', 'success');
         } catch (error) {
-            showActionToast(error && error.message ? error.message : '停止注册失败', 'error');
-            await refreshRegisterLoopButtonState().catch(() => {});
+            showActionToast(error && error.message ? error.message : '停止执行失败', 'error');
+            await refreshLoopButtonState().catch(() => {});
         } finally {
-            if (loopRegisterCardButton) {
-                loopRegisterCardButton.disabled = false;
+            if (loopCardButton) {
+                loopCardButton.disabled = false;
             }
-            if (sidebarLoopRegisterButton) {
-                sidebarLoopRegisterButton.disabled = false;
+            if (sidebarLoopButton) {
+                sidebarLoopButton.disabled = false;
             }
         }
         return;
     }
 
-    loopRegisterCardButton && (loopRegisterCardButton.disabled = true);
-    sidebarLoopRegisterButton && (sidebarLoopRegisterButton.disabled = true);
-    showActionToast('正在启动循环注册...', 'info');
+    loopCardButton && (loopCardButton.disabled = true);
+    sidebarLoopButton && (sidebarLoopButton.disabled = true);
+    showActionToast('正在启动循环执行...', 'info');
     setDebugProgress({
         visible: true,
         progress: 0,
-        message: '正在启动循环注册...',
-        meta: '循环模式',
+        message: '正在启动循环执行...',
+        meta: '循环执行',
         mode: 'loop'
     });
 
     try {
-        const imported = await importSelectedRegisterCardFilesToCache().catch(() => null);
-        const cardData = imported?.selectedItem?.cardData || await resolveRegisterCardForRun();
+        const imported = await importSelectedCardFilesToCache().catch(() => null);
+        const cardData = imported?.selectedItem?.cardData || await resolveCardForRun();
         await saveCardCache(cardData);
 
-        setRegisterLoopButtonState(true);
+        setLoopButtonState(true);
         void sendStandaloneMessage({
-            type: 'standalone-registration-start',
+            type: 'card-run-start',
             payload: {
                 cardData,
-                loopRegistration: true
+                isLooping: true
             }
         }).catch((error) => {
-            showActionToast(error && error.message ? error.message : '循环注册失败', 'error');
-            void refreshRegisterLoopButtonState().catch(() => {});
+            showActionToast(error && error.message ? error.message : '循环执行失败', 'error');
+            void refreshLoopButtonState().catch(() => {});
         });
 
-        showActionToast(`已开始循环注册: ${cardData.name || '未命名卡片'}`, 'success');
+        showActionToast(`已开始循环执行: ${cardData.name || '未命名卡片'}`, 'success');
     } catch (error) {
-        showActionToast(error && error.message ? error.message : '循环注册失败', 'error');
-        await refreshRegisterLoopButtonState().catch(() => {});
+        showActionToast(error && error.message ? error.message : '循环执行失败', 'error');
+        await refreshLoopButtonState().catch(() => {});
     } finally {
-        if (loopRegisterCardButton) {
-            loopRegisterCardButton.disabled = false;
+        if (loopCardButton) {
+            loopCardButton.disabled = false;
         }
-        if (sidebarLoopRegisterButton) {
-            sidebarLoopRegisterButton.disabled = false;
+        if (sidebarLoopButton) {
+            sidebarLoopButton.disabled = false;
         }
     }
 }
-globalThis.CookieCaptureRegistrationFlow = {
-    loadRegisterCardIntoEditor,
+globalThis.CookieCaptureAutomationFlow = {
+    loadCardIntoEditor,
     loadCardCache,
     clearCardCache,
-    deleteSelectedRegisterCardCache,
+    deleteSelectedCardCache,
     readSelectedCardFiles,
     readSelectedCardFile,
     sendStandaloneMessage,
     openCardEditorSidebar,
-    resolveRegisterCardForRun,
-    importSelectedRegisterCardFilesToCache,
-    importAndStartRegistration,
-    registerLoopCard
+    resolveCardForRun,
+    importSelectedCardFilesToCache,
+    importAndStartCard,
+    loopCard
 };

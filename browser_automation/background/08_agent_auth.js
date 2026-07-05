@@ -9,7 +9,7 @@ const AGENT_AUTH_KEY = '_agent_auth_state';
 const AGENT_SETTINGS_DEFAULT = {
     serverUrl: 'http://127.0.0.1:3000',
     agentSocketUrl: '',
-    agentName: '注册浏览器',
+    agentName: 'AI自动化浏览器',
     agentGroup: '',
     deviceId: '',
     offlineMode: false,

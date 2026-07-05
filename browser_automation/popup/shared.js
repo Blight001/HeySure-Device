@@ -10,11 +10,11 @@ const STORAGE_KEYS = {
     COOKIE_CREDENTIAL_CACHE_LIST_KEY: 'cookie-capture-credential-cache-list',
     COOKIE_CREDENTIAL_SELECTED_DATE_KEY: 'cookie-capture-credential-selected-date',
     COOKIE_CREDENTIAL_SEARCH_KEY: 'cookie-capture-credential-search',
-    REGISTER_CARD_CACHE_KEY: 'cookie-capture-register-card-cache',
-    REGISTER_CARD_CACHE_NAME_KEY: 'cookie-capture-register-card-cache-name',
-    REGISTER_CARD_CACHE_TIME_KEY: 'cookie-capture-register-card-cache-time',
-    REGISTER_CARD_CACHE_LIST_KEY: 'cookie-capture-register-card-cache-list',
-    REGISTER_CARD_SELECTED_ID_KEY: 'cookie-capture-register-card-cache-selected-id',
+    AUTOMATION_CARD_CACHE_KEY: 'cookie-capture-automation-card-cache',
+    AUTOMATION_CARD_CACHE_NAME_KEY: 'cookie-capture-automation-card-cache-name',
+    AUTOMATION_CARD_CACHE_TIME_KEY: 'cookie-capture-automation-card-cache-time',
+    AUTOMATION_CARD_CACHE_LIST_KEY: 'cookie-capture-automation-card-cache-list',
+    AUTOMATION_CARD_SELECTED_ID_KEY: 'cookie-capture-automation-card-cache-selected-id',
     LAST_MAIN_PANEL_KEY: 'cookie-capture-last-main-panel',
     STANDALONE_PROGRESS_STATE_KEY: 'cookie-capture-standalone-progress-state',
     STANDALONE_DEBUG_CONTROL_STATE_KEY: 'cookie-capture-standalone-debug-control-state'
@@ -177,30 +177,30 @@ function showActionToast(message, kind = 'info', durationMs = 2600) {
     return showToast(message, kind, durationMs);
 }
 
-function buildRegisterCardExportFileName(cardName = '') {
+function buildCardExportFileName(cardName = '') {
     const normalizedName = sanitizeFilePart(cardName);
     if (normalizedName) {
         return `${normalizedName}.json`;
     }
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    return `registration_card_${timestamp}.json`;
+    return `automation_card_${timestamp}.json`;
 }
 
 function normalizeCardData(cardData, fileName = '', options = {}) {
     if (!cardData || typeof cardData !== 'object' || Array.isArray(cardData)) {
-        throw new Error('注册卡片内容格式不正确');
+        throw new Error('自动化卡片内容格式不正确');
     }
 
     const steps = Array.isArray(cardData.steps) ? cardData.steps : [];
     const allowEmptySteps = options && options.allowEmptySteps === true;
     if (!allowEmptySteps && steps.length === 0) {
-        throw new Error('注册卡片缺少 steps 步骤');
+        throw new Error('自动化卡片缺少 steps 步骤');
     }
 
     const normalized = { ...cardData };
     normalized.steps = steps;
     if (!String(normalized.name || '').trim()) {
-        normalized.name = sanitizeFilePart(String(fileName || '').replace(/\.json$/i, '')) || '未命名注册卡片';
+        normalized.name = sanitizeFilePart(String(fileName || '').replace(/\.json$/i, '')) || '未命名自动化卡片';
     }
 
     return normalized;
@@ -213,14 +213,14 @@ function stringifyCardData(cardData) {
 function parseEditorCardData(text = '', options = {}) {
     const rawText = String(text || '').trim();
     if (!rawText) {
-        throw new Error('注册卡片编辑器内容不能为空');
+        throw new Error('自动化卡片编辑器内容不能为空');
     }
 
     let cardData;
     try {
         cardData = JSON.parse(rawText);
     } catch (_error) {
-        throw new Error('注册卡片编辑器不是有效的 JSON');
+        throw new Error('自动化卡片编辑器不是有效的 JSON');
     }
 
     return normalizeCardData(cardData, cardData?.name || '', options);
@@ -252,7 +252,7 @@ globalThis.CookieCaptureShared = {
     downloadJsonFile,
     showToast,
     showActionToast,
-    buildRegisterCardExportFileName,
+    buildCardExportFileName,
     normalizeCardData,
     stringifyCardData,
     parseEditorCardData,

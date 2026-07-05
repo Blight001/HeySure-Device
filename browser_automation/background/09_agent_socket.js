@@ -4,7 +4,7 @@
 // 之后 AI 触发的工具调用经 Connector Runtime 以 task:dispatch 下发到这里执行。
 //
 // 依赖：vendor/socket.io.js 提供的全局 io（importScripts 顺序保证其先加载）；
-//       08_agent_auth.js 的登录/设置读写；00-07 的注册卡片 / Cookie 抓取实现。
+//       08_agent_auth.js 的登录/设置读写；00-07 的自动化卡片 / Cookie 抓取实现。
 
 const AGENT_KEEPALIVE_ALARM = 'agent-keepalive';
 const AGENT_VERSION = '1.0.0';
@@ -26,12 +26,12 @@ function effectiveAgentToolDefs() {
     return [
         {
             name: 'get_status',
-            description: '列出本浏览器插件当前保存的所有注册卡片及其基本信息（id、名称、步骤数、保存时间、是否为当前选中卡片）。',
+            description: '列出本浏览器插件当前保存的所有自动化卡片及其基本信息（id、名称、步骤数、保存时间、是否为当前选中卡片）。',
             input_schema: { type: 'object', properties: {} }
         },
         {
             name: 'write_card',
-            description: '创建新的注册卡片、用同一个 id 覆盖已有卡片，或删除一个已有卡片。action=create/overwrite 时需要提供 cardData（完整卡片 JSON，至少包含 name/website/steps）；action=delete 时需要提供 id。',
+            description: '创建新的自动化卡片、用同一个 id 覆盖已有卡片，或删除一个已有卡片。action=create/overwrite 时需要提供 cardData（完整卡片 JSON，至少包含 name/website/steps）；action=delete 时需要提供 id。',
             input_schema: {
                 type: 'object',
                 properties: {
@@ -44,13 +44,13 @@ function effectiveAgentToolDefs() {
         },
         {
             name: 'run_card',
-            description: '在当前活动标签页运行一张已保存的注册卡片，等待整个流程结束并返回最终结果（可能耗时数分钟，例如需等待邮箱验证码）。同一时间只能运行一个 run_card。',
+            description: '在当前活动标签页运行一张已保存的自动化卡片，等待整个流程结束并返回最终结果（可能耗时数分钟，例如需等待邮箱验证码）。同一时间只能运行一个 run_card。',
             input_schema: {
                 type: 'object',
                 properties: {
                     id: { type: 'string', description: '要运行的卡片 id；省略则使用当前选中的卡片。' },
-                    account: { type: 'string', description: '可选：指定注册账号。' },
-                    email: { type: 'string', description: '可选：指定注册邮箱。' }
+                    account: { type: 'string', description: '可选：指定执行账号。' },
+                    email: { type: 'string', description: '可选：指定执行邮箱。' }
                 }
             }
         },
@@ -101,7 +101,7 @@ function setAgentStatus(status, reason) {
     try {
         chrome.action.setBadgeBackgroundColor({ color: badgeColors[status] || '#787878' });
         chrome.action.setBadgeText({ text: status === 'registered' ? '●' : status === 'error' ? '!' : '' });
-        chrome.action.setTitle({ title: `注册插件 — ${status}${reason ? `（${reason}）` : ''}` });
+        chrome.action.setTitle({ title: `AI自动化插件 — ${status}${reason ? `（${reason}）` : ''}` });
     } catch (_error) {}
     broadcastAgentStatus();
 }
@@ -127,7 +127,7 @@ function parseAiConfigId(raw) {
     return Number.isFinite(n) ? n : null;
 }
 
-// ── 注册 ────────────────────────────────────────────────────────────────────
+// ── 设备注册 ────────────────────────────────────────────────────────────────────
 async function emitAgentRegisterOn(socket) {
     const settings = await getAgentSettings();
     const auth = await getAgentAuth();
@@ -142,7 +142,7 @@ async function emitAgentRegisterOn(socket) {
         // 与扩展端一致：设备不自选 AI，登录连接后由网页端「作坊」为其分配；服务器
         // 每次注册都会重新套用该绑定，因此这里始终发送 aiConfigId: null。
         aiConfigId: null,
-        name: settings.agentName || '注册浏览器',
+        name: settings.agentName || 'AI自动化浏览器',
         group: settings.agentGroup || '',
         platform: `browser-extension (${(typeof navigator !== 'undefined' && navigator.userAgent ? navigator.userAgent.split(' ').pop() : 'chrome')})`,
         os: { platform: 'browser', arch: 'unknown', release: AGENT_VERSION, hostname: id },
@@ -279,7 +279,7 @@ function attachAgentListeners(socket) {
     });
 
     socket.on('device:register_rejected', (data) => {
-        const reason = (data && data.reason) || '注册被服务器拒绝';
+        const reason = (data && data.reason) || '设备注册被服务器拒绝';
         // 非瞬时错误（token 失效或 AI 归属不符）：用同一 token 重连会无限循环，
         // 因此锁定 authRejected、关闭自动重连并断开，等用户重新登录后再连。
         agentAuthRejected = true;
@@ -338,37 +338,37 @@ function flushUnsentAgentOutcomes() {
     }
 }
 
-// ── 工具命令执行（task.tool → 注册卡片 / Cookie 抓取实现）────────────────────
+// ── 工具命令执行（task.tool → 自动化卡片 / Cookie 抓取实现）────────────────────
 async function runAgentToolCommand(tool, args) {
     const payload = args && typeof args === 'object' ? args : {};
     switch (tool) {
         case 'get_status': {
-            const state = await loadRegisterCardCacheState();
+            const state = await loadCardCacheState();
             return { items: state.items, selectedId: state.selectedId };
         }
         case 'write_card': {
             const action = String(payload.action || '').trim();
             if (action === 'delete') {
-                return await deleteRegisterCardCacheEntry(String(payload.id || '').trim());
+                return await deleteCardCacheEntry(String(payload.id || '').trim());
             }
             if (action === 'create' || action === 'overwrite') {
-                const saved = await saveRegisterCardCacheToStorage(payload.cardData, String(payload.id || '').trim());
+                const saved = await saveCardCacheState(payload.cardData, String(payload.id || '').trim());
                 return { action, id: saved.selectedId, items: saved.items, selectedId: saved.selectedId };
             }
             throw new Error(`未知的 write_card action: ${action || '(空)'}`);
         }
         case 'run_card': {
-            const state = await loadRegisterCardCacheState();
+            const state = await loadCardCacheState();
             const targetId = String(payload.id || '').trim();
             const entry = targetId ? state.items.find((item) => item.id === targetId) : null;
             if (targetId && !entry) {
-                throw new Error(`未找到注册卡片: ${targetId}`);
+                throw new Error(`未找到自动化卡片: ${targetId}`);
             }
-            return await runStandaloneRegistration({
+            return await runStandaloneCard({
                 cardData: entry ? entry.cardData : undefined,
                 account: payload.account || '',
                 email: payload.email || '',
-                loopRegistration: false,
+                isLooping: false,
                 debugMode: false
             });
         }
@@ -401,13 +401,13 @@ function summarizeAgentResult(tool, result) {
             return result.summary.trim();
         }
         if (tool === 'run_card' && result.cardName) {
-            return `${result.success ? '注册完成' : '注册未完成'}: ${result.cardName}`;
+            return `${result.success ? '执行完成' : '执行未完成'}: ${result.cardName}`;
         }
         if (tool === 'save_cookies') {
             return `已抓取 Cookie ${Number(result.cookieCount || 0)} 条`;
         }
         if (tool === 'get_status' && Array.isArray(result.items)) {
-            return `共 ${result.items.length} 张注册卡片`;
+            return `共 ${result.items.length} 张自动化卡片`;
         }
     }
     return `${tool} 执行完成`;

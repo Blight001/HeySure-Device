@@ -1,25 +1,25 @@
 function normalizeCardData(cardData) {
     if (!cardData || typeof cardData !== 'object' || Array.isArray(cardData)) {
-        throw new Error('注册卡片内容格式不正确');
+        throw new Error('自动化卡片内容格式不正确');
     }
 
     const steps = Array.isArray(cardData.steps) ? [...cardData.steps] : [];
     if (steps.length === 0) {
-        throw new Error('注册卡片缺少 steps 步骤');
+        throw new Error('自动化卡片缺少 steps 步骤');
     }
 
     const normalized = { ...cardData, steps };
     if (!String(normalized.name || '').trim()) {
-        normalized.name = `registration_${Date.now()}`;
+        normalized.name = `automation_${Date.now()}`;
     }
     return normalized;
 }
 
-function normalizeRegisterCardCacheEntry(entry = {}, index = 0) {
+function normalizeCardCacheEntry(entry = {}, index = 0) {
     const source = entry && typeof entry === 'object' ? entry : {};
     const cardData = normalizeCardData(source.cardData || source);
     return {
-        id: String(source.id || source.cacheId || `${cardData.name || 'registration'}_${index + 1}`).trim(),
+        id: String(source.id || source.cacheId || `${cardData.name || 'automation'}_${index + 1}`).trim(),
         cardData,
         cardName: String(source.cardName || cardData.name || '').trim() || cardData.name,
         savedAt: String(source.savedAt || source.updatedAt || new Date().toISOString()).trim(),
@@ -27,45 +27,45 @@ function normalizeRegisterCardCacheEntry(entry = {}, index = 0) {
     };
 }
 
-async function loadRegisterCardCacheState() {
+async function loadCardCacheState() {
     const stored = await chrome.storage.local.get([
-        REGISTER_CARD_CACHE_LIST_KEY,
-        REGISTER_CARD_SELECTED_ID_KEY,
-        REGISTER_CARD_CACHE_KEY,
-        REGISTER_CARD_CACHE_NAME_KEY,
-        REGISTER_CARD_CACHE_TIME_KEY
+        AUTOMATION_CARD_CACHE_LIST_KEY,
+        AUTOMATION_CARD_SELECTED_ID_KEY,
+        AUTOMATION_CARD_CACHE_KEY,
+        AUTOMATION_CARD_CACHE_NAME_KEY,
+        AUTOMATION_CARD_CACHE_TIME_KEY
     ]);
 
-    const list = Array.isArray(stored[REGISTER_CARD_CACHE_LIST_KEY]) ? stored[REGISTER_CARD_CACHE_LIST_KEY] : [];
+    const list = Array.isArray(stored[AUTOMATION_CARD_CACHE_LIST_KEY]) ? stored[AUTOMATION_CARD_CACHE_LIST_KEY] : [];
     if (list.length > 0) {
-        const items = list.map((item, index) => normalizeRegisterCardCacheEntry(item, index));
-        let selectedId = String(stored[REGISTER_CARD_SELECTED_ID_KEY] || '').trim();
+        const items = list.map((item, index) => normalizeCardCacheEntry(item, index));
+        let selectedId = String(stored[AUTOMATION_CARD_SELECTED_ID_KEY] || '').trim();
         if (!selectedId || !items.some((item) => item.id === selectedId)) {
             selectedId = String(items[0]?.id || '').trim();
         }
         return { items, selectedId };
     }
 
-    const cachedCard = stored[REGISTER_CARD_CACHE_KEY];
+    const cachedCard = stored[AUTOMATION_CARD_CACHE_KEY];
     if (!cachedCard || typeof cachedCard !== 'object') {
         return { items: [], selectedId: '' };
     }
 
     const normalized = normalizeCardData(cachedCard);
-    const legacyId = String(stored[REGISTER_CARD_CACHE_NAME_KEY] || normalized.name || 'registration').trim() || 'registration';
+    const legacyId = String(stored[AUTOMATION_CARD_CACHE_NAME_KEY] || normalized.name || 'automation').trim() || 'automation';
     return {
         items: [{
             id: legacyId,
             cardData: normalized,
-            cardName: String(stored[REGISTER_CARD_CACHE_NAME_KEY] || normalized.name || '').trim() || normalized.name,
-            savedAt: String(stored[REGISTER_CARD_CACHE_TIME_KEY] || '').trim()
+            cardName: String(stored[AUTOMATION_CARD_CACHE_NAME_KEY] || normalized.name || '').trim() || normalized.name,
+            savedAt: String(stored[AUTOMATION_CARD_CACHE_TIME_KEY] || '').trim()
         }],
         selectedId: legacyId
     };
 }
 
 async function loadCardCache() {
-    const state = await loadRegisterCardCacheState();
+    const state = await loadCardCacheState();
     if (!state.items.length) {
         return null;
     }
@@ -82,11 +82,11 @@ async function loadCardCache() {
     };
 }
 
-async function saveRegisterCardCacheToStorage(cardData, selectedId = '') {
+async function saveCardCacheState(cardData, selectedId = '') {
     const safeCardData = normalizeCardData(cardData);
-    const state = await loadRegisterCardCacheState().catch(() => ({ items: [], selectedId: '' }));
-    const nextItem = normalizeRegisterCardCacheEntry({
-        id: String(selectedId || state.selectedId || safeCardData.name || 'registration').trim() || safeCardData.name || 'registration',
+    const state = await loadCardCacheState().catch(() => ({ items: [], selectedId: '' }));
+    const nextItem = normalizeCardCacheEntry({
+        id: String(selectedId || state.selectedId || safeCardData.name || 'automation').trim() || safeCardData.name || 'automation',
         cardData: safeCardData,
         cardName: safeCardData.name,
         savedAt: new Date().toISOString()
@@ -95,11 +95,11 @@ async function saveRegisterCardCacheToStorage(cardData, selectedId = '') {
     nextItems.push(nextItem);
     const nextSelectedId = nextItem.id;
     await chrome.storage.local.set({
-        [REGISTER_CARD_CACHE_LIST_KEY]: nextItems,
-        [REGISTER_CARD_SELECTED_ID_KEY]: nextSelectedId,
-        [REGISTER_CARD_CACHE_KEY]: safeCardData,
-        [REGISTER_CARD_CACHE_NAME_KEY]: String(safeCardData.name || '').trim(),
-        [REGISTER_CARD_CACHE_TIME_KEY]: new Date().toISOString()
+        [AUTOMATION_CARD_CACHE_LIST_KEY]: nextItems,
+        [AUTOMATION_CARD_SELECTED_ID_KEY]: nextSelectedId,
+        [AUTOMATION_CARD_CACHE_KEY]: safeCardData,
+        [AUTOMATION_CARD_CACHE_NAME_KEY]: String(safeCardData.name || '').trim(),
+        [AUTOMATION_CARD_CACHE_TIME_KEY]: new Date().toISOString()
     }).catch(() => {});
     return {
         items: nextItems,
@@ -108,25 +108,25 @@ async function saveRegisterCardCacheToStorage(cardData, selectedId = '') {
     };
 }
 
-async function deleteRegisterCardCacheEntry(id) {
+async function deleteCardCacheEntry(id) {
     const targetId = String(id || '').trim();
     if (!targetId) {
-        throw new Error('缺少要删除的注册卡片 id');
+        throw new Error('缺少要删除的自动化卡片 id');
     }
 
-    const state = await loadRegisterCardCacheState().catch(() => ({ items: [], selectedId: '' }));
+    const state = await loadCardCacheState().catch(() => ({ items: [], selectedId: '' }));
     if (!state.items.some((item) => item.id === targetId)) {
-        throw new Error(`未找到注册卡片: ${targetId}`);
+        throw new Error(`未找到自动化卡片: ${targetId}`);
     }
 
     const nextItems = state.items.filter((item) => item.id !== targetId);
     const nextSelectedId = state.selectedId === targetId ? String(nextItems[0]?.id || '') : state.selectedId;
     await chrome.storage.local.set({
-        [REGISTER_CARD_CACHE_LIST_KEY]: nextItems,
-        [REGISTER_CARD_SELECTED_ID_KEY]: nextSelectedId,
-        [REGISTER_CARD_CACHE_KEY]: nextItems.find((item) => item.id === nextSelectedId)?.cardData || nextItems[0]?.cardData || {},
-        [REGISTER_CARD_CACHE_NAME_KEY]: nextItems.find((item) => item.id === nextSelectedId)?.cardName || nextItems[0]?.cardName || '',
-        [REGISTER_CARD_CACHE_TIME_KEY]: nextItems.find((item) => item.id === nextSelectedId)?.savedAt || nextItems[0]?.savedAt || ''
+        [AUTOMATION_CARD_CACHE_LIST_KEY]: nextItems,
+        [AUTOMATION_CARD_SELECTED_ID_KEY]: nextSelectedId,
+        [AUTOMATION_CARD_CACHE_KEY]: nextItems.find((item) => item.id === nextSelectedId)?.cardData || nextItems[0]?.cardData || {},
+        [AUTOMATION_CARD_CACHE_NAME_KEY]: nextItems.find((item) => item.id === nextSelectedId)?.cardName || nextItems[0]?.cardName || '',
+        [AUTOMATION_CARD_CACHE_TIME_KEY]: nextItems.find((item) => item.id === nextSelectedId)?.savedAt || nextItems[0]?.savedAt || ''
     }).catch(() => {});
 
     return {

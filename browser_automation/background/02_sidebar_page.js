@@ -4,7 +4,7 @@ async function injectCardEditorSidebar(tabId, width = 820) {
         target: { tabId },
         args: [sidebarUrl, width],
         func: async (iframeUrl, panelWidth) => {
-            const rootId = '__register_plugin_card_sidebar_root__';
+            const rootId = '__automation_card_sidebar_root__';
             const existing = document.getElementById(rootId);
             if (existing) {
                 existing.remove();
@@ -94,7 +94,7 @@ async function injectCardEditorSidebar(tabId, width = 820) {
                     <div class="resize" title="拖动调整宽度"></div>
                     <div class="bar">
                         <div class="title">
-                            <strong>注册卡片编辑侧边栏</strong>
+                            <strong>自动化卡片编辑侧边栏</strong>
                             <span>右侧独立编辑，不再挤在小栏目里</span>
                         </div>
                         <button class="close" type="button">关闭</button>
@@ -629,7 +629,7 @@ async function executePageAction(tabId, action) {
     return result && result.result ? result.result : result;
 }
 
-async function saveRegistrationResult(cardData, payload, tabId) {
+async function saveCardResult(cardData, payload, tabId) {
     const snapshot = await collectTabCookieSnapshot(tabId);
     const pageUrl = snapshot.pageUrl;
     const pageTitle = snapshot.pageTitle;
@@ -638,7 +638,7 @@ async function saveRegistrationResult(cardData, payload, tabId) {
 
     const account = String(payload.account || '').trim();
     const password = String(payload.password || '').trim();
-    const fileName = buildRegistrationFileName(cardData?.name || 'registration', account, password);
+    const fileName = buildCaptureFileName(cardData?.name || 'automation', account, password);
     const savePayload = {
         account,
         password,
@@ -648,14 +648,14 @@ async function saveRegistrationResult(cardData, payload, tabId) {
         cookies,
         browserStorage,
         capturedAt: new Date().toISOString(),
-        source: 'standalone-registration'
+        source: 'standalone-automation'
     };
 
     const jsonText = JSON.stringify(savePayload, null, 2);
     const downloadUrl = `data:application/json;charset=utf-8,${encodeURIComponent(jsonText)}`;
     await chrome.downloads.download({
         url: downloadUrl,
-        filename: `registration_capture/${fileName}`,
+        filename: `automation_capture/${fileName}`,
         saveAs: false,
         conflictAction: 'overwrite'
     });

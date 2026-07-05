@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>注册插件</title>
+  <title>AI自动化插件</title>
   <link rel="icon" href="icon16.png">
   <link rel="stylesheet" href="popup.css">
   <style>
@@ -74,7 +74,7 @@
     <div class="hero">
       <div class="hero-top">
         <img class="app-logo" src="icon.ico" alt="">
-        <h1 class="title">注册插件</h1>
+        <h1 class="title">AI自动化插件</h1>
         <button id="hero-tutorial" class="button-secondary hero-tutorial" type="button">教程</button>
         <div class="badge">本地执行</div>
       </div>
@@ -92,7 +92,7 @@
     </div>
 
     <div id="main-tabs" class="main-tabs" role="tablist" aria-label="主区域切换">
-      <button id="main-tab-register" class="main-tab is-active" type="button" data-main-tab="register">注册卡片</button>
+      <button id="main-tab-card" class="main-tab is-active" type="button" data-main-tab="card">自动化卡片</button>
       <button id="main-tab-cookie" class="main-tab" type="button" data-main-tab="cookie">Cookie 抓取</button>
     </div>
 
@@ -101,7 +101,7 @@
     <div id="sidebar-editor-shell" class="sidebar-editor-shell">
       <div class="sidebar-editor-topbar">
         <div class="sidebar-editor-title">
-          <h2>注册卡片编辑</h2>
+          <h2>自动化卡片编辑</h2>
           <div id="sidebar-editor-meta" class="sidebar-editor-meta">
             <span class="sidebar-editor-meta__chip">未载入卡片</span>
           </div>
@@ -111,7 +111,7 @@
           <button id="sidebar-load-card" class="button-secondary" type="button">载入缓存</button>
           <button id="sidebar-save-card" class="button-secondary" type="button">保存卡片</button>
           <button id="sidebar-export-card" class="button-secondary" type="button">导出卡片</button>
-          <button id="sidebar-loop-register-card" class="button-secondary" type="button">循环注册</button>
+          <button id="sidebar-loop-card" class="button-secondary" type="button">循环执行</button>
         </div>
       </div>
 
@@ -125,7 +125,7 @@
                 <input id="sidebar-card-name" type="text">
               </div>
               <div class="full">
-                <label for="sidebar-card-website">注册网址</label>
+                <label for="sidebar-card-website">目标网址</label>
                 <input id="sidebar-card-website" type="text">
               </div>
               <div class="full">
@@ -178,7 +178,7 @@
 
         <div class="sidebar-column sidebar-column--main">
           <section class="sidebar-section">
-            <h3 class="sidebar-section__title">注册步骤</h3>
+            <h3 class="sidebar-section__title">自动化步骤</h3>
             <div class="sidebar-step-toolbar">
               <select id="sidebar-step-template">
                 <option value="navigate">访问网页</option>
@@ -204,23 +204,23 @@
     </div>
 
     <div class="stack">
-      <section id="register-card-section" class="card card--accent" data-main-panel="register">
+      <section id="card-section" class="card card--accent" data-main-panel="card">
         <div class="card-title-row">
-          <h2 class="card-title">注册卡片</h2>
+          <h2 class="card-title">自动化卡片</h2>
         </div>
         <div class="field">
-          <input id="register-card-file" type="file" accept=".json,application/json" multiple hidden>
-          <div class="field-actions field-actions--left register-card-toolbar">
-            <button id="pick-register-card-file" class="button-secondary" type="button">导入卡片</button>
-            <button id="export-register-card" class="button-secondary" type="button">导出卡片</button>
-            <button id="delete-register-card" class="button-secondary" type="button">删除选中卡片</button>
+          <input id="card-file" type="file" accept=".json,application/json" multiple hidden>
+          <div class="field-actions field-actions--left card-toolbar">
+            <button id="pick-card-file" class="button-secondary" type="button">导入卡片</button>
+            <button id="export-card" class="button-secondary" type="button">导出卡片</button>
+            <button id="delete-card" class="button-secondary" type="button">删除选中卡片</button>
           </div>
-          <div class="field-actions field-actions--left register-card-toolbar">
-            <button id="import-register-card">开始注册</button>
-            <button id="loop-register-card" class="button-secondary" type="button">循环注册</button>
+          <div class="field-actions field-actions--left card-toolbar">
+            <button id="import-card">开始执行</button>
+            <button id="loop-card" class="button-secondary" type="button">循环执行</button>
             <button id="open-card-sidebar" class="button-secondary" type="button">打开侧边栏</button>
           </div>
-          <div id="card-cache-list" class="card-cache-list" aria-label="注册卡片缓存列表"></div>
+          <div id="card-cache-list" class="card-cache-list" aria-label="自动化卡片列表"></div>
         </div>
       </section>
 
@@ -337,7 +337,7 @@
       <div id="debug-progress-meta" class="debug-progress-meta"></div>
       <div id="debug-progress-error" class="debug-progress-error"></div>
       <div class="run-control-bar">
-        <div class="debug-control-label">当前：正常注册</div>
+        <div class="debug-control-label">当前：正常执行</div>
         <div class="debug-control-actions">
           <button id="run-control-stop" class="button-secondary debug-control-btn" type="button">停止</button>
         </div>
@@ -363,7 +363,7 @@
         <div class="agent-card">
           <div class="agent-kv"><span class="k">连接状态</span><span class="v" id="agent-conn-status">未连接</span></div>
           <div class="agent-kv"><span class="k">AI 分配</span><span class="v" id="agent-ai-status">未分配</span></div>
-          <div class="agent-hint">登录后自动连接服务器，本设备会出现在网页端「作坊」栏目里等待管理员为它分配 AI；分配后 AI 可远程调度本插件的注册卡片与 Cookie 抓取工具。</div>
+          <div class="agent-hint">登录后自动连接服务器，本设备会出现在网页端「作坊」栏目里等待管理员为它分配 AI；分配后 AI 可远程调度本插件的自动化卡片与 Cookie 抓取工具。</div>
         </div>
 
         <div class="agent-card" id="agent-login-card">
@@ -389,7 +389,7 @@
         <div class="agent-card">
           <div class="agent-card-title">⚙ 选项</div>
           <label class="agent-check"><input id="agent-mousefx" type="checkbox"> AI 操作时在页面显示动效（手型光标、点击涟漪、输入高亮）</label>
-          <div class="agent-field"><label for="agent-name">设备名称（显示在作坊里）</label><input id="agent-name" type="text" placeholder="注册浏览器" autocomplete="off"></div>
+          <div class="agent-field"><label for="agent-name">设备名称（显示在作坊里）</label><input id="agent-name" type="text" placeholder="AI自动化浏览器" autocomplete="off"></div>
           <button id="agent-save-options" class="agent-btn agent-btn-ghost" type="button">保存选项</button>
           <div id="agent-options-feedback" class="agent-feedback"></div>
         </div>

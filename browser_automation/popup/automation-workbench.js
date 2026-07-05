@@ -1,11 +1,11 @@
 const shared = globalThis.CookieCaptureShared || {};
 const ACCOUNT_KEY = shared.STORAGE_KEYS.ACCOUNT_KEY;
 const PASSWORD_KEY = shared.STORAGE_KEYS.PASSWORD_KEY;
-const REGISTER_CARD_CACHE_KEY = shared.STORAGE_KEYS.REGISTER_CARD_CACHE_KEY;
-const REGISTER_CARD_CACHE_NAME_KEY = shared.STORAGE_KEYS.REGISTER_CARD_CACHE_NAME_KEY;
-const REGISTER_CARD_CACHE_TIME_KEY = shared.STORAGE_KEYS.REGISTER_CARD_CACHE_TIME_KEY;
-const REGISTER_CARD_CACHE_LIST_KEY = shared.STORAGE_KEYS.REGISTER_CARD_CACHE_LIST_KEY;
-const REGISTER_CARD_SELECTED_ID_KEY = shared.STORAGE_KEYS.REGISTER_CARD_SELECTED_ID_KEY;
+const AUTOMATION_CARD_CACHE_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_CACHE_KEY;
+const AUTOMATION_CARD_CACHE_NAME_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_CACHE_NAME_KEY;
+const AUTOMATION_CARD_CACHE_TIME_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_CACHE_TIME_KEY;
+const AUTOMATION_CARD_CACHE_LIST_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_CACHE_LIST_KEY;
+const AUTOMATION_CARD_SELECTED_ID_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_SELECTED_ID_KEY;
 const LAST_MAIN_PANEL_KEY = shared.STORAGE_KEYS.LAST_MAIN_PANEL_KEY;
 const STANDALONE_PROGRESS_STATE_KEY = shared.STORAGE_KEYS.STANDALONE_PROGRESS_STATE_KEY;
 const STANDALONE_DEBUG_CONTROL_STATE_KEY = shared.STORAGE_KEYS.STANDALONE_DEBUG_CONTROL_STATE_KEY;
@@ -14,18 +14,18 @@ const accountInput = document.getElementById('account');
 const passwordInput = document.getElementById('password');
 const copyAccountPasswordButton = document.getElementById('copy-account-password');
 const generateCookiePasswordButton = document.getElementById('generate-cookie-password');
-const registerCardFileInput = document.getElementById('register-card-file');
-const pickRegisterCardFileButton = document.getElementById('pick-register-card-file');
-const importRegisterCardButton = document.getElementById('import-register-card');
-const loopRegisterCardButton = document.getElementById('loop-register-card');
+const cardFileInput = document.getElementById('card-file');
+const pickCardFileButton = document.getElementById('pick-card-file');
+const importCardButton = document.getElementById('import-card');
+const loopCardButton = document.getElementById('loop-card');
 const cardFileNameNode = document.getElementById('card-file-name');
 const cardCacheBadgeNode = document.getElementById('card-cache-badge');
 const cardCacheListNode = document.getElementById('card-cache-list');
-const deleteRegisterCardButton = document.getElementById('delete-register-card');
-const registerCardEditor = document.getElementById('register-card-editor');
+const deleteCardButton = document.getElementById('delete-card');
+const cardEditor = document.getElementById('card-editor');
 const loadCardToEditorButton = document.getElementById('load-card-to-editor');
 const saveCardEditorButton = document.getElementById('save-card-editor');
-const exportRegisterCardButton = document.getElementById('export-register-card');
+const exportCardButton = document.getElementById('export-card');
 const appendStepButton = document.getElementById('append-step');
 const stepTypeSelect = document.getElementById('step-type');
 const stepNameInput = document.getElementById('step-name');
@@ -68,7 +68,7 @@ const sidebarAddStepButton = document.getElementById('sidebar-add-step');
 const sidebarLoadCardButton = document.getElementById('sidebar-load-card');
 const sidebarSaveCardButton = document.getElementById('sidebar-save-card');
 const sidebarExportCardButton = document.getElementById('sidebar-export-card');
-const sidebarLoopRegisterButton = document.getElementById('sidebar-loop-register-card');
+const sidebarLoopButton = document.getElementById('sidebar-loop-card');
 const sidebarRefreshCardButton = document.getElementById('sidebar-refresh-card');
 const sidebarCloseButton = document.getElementById('sidebar-close');
 const sidebarTutorialButton = document.getElementById('sidebar-tutorial');
@@ -103,7 +103,7 @@ const {
     downloadJsonFile,
     showToast,
     showActionToast,
-    buildRegisterCardExportFileName,
+    buildCardExportFileName,
     normalizeCardData,
     stringifyCardData,
     parseEditorCardData,
@@ -121,21 +121,21 @@ async function openTutorialPage() {
 async function loadLastMainPanel() {
     const stored = await chrome.storage.local.get([LAST_MAIN_PANEL_KEY]).catch(() => ({}));
     const value = stored && typeof stored === 'object' ? String(stored[LAST_MAIN_PANEL_KEY] || '').trim() : '';
-    return ['register', 'cookie'].includes(value) ? value : 'register';
+    return ['card', 'cookie'].includes(value) ? value : 'card';
 }
 
-async function saveLastMainPanel(panelName = 'register') {
-    const normalized = ['register', 'cookie'].includes(String(panelName || '').trim())
+async function saveLastMainPanel(panelName = 'card') {
+    const normalized = ['card', 'cookie'].includes(String(panelName || '').trim())
         ? String(panelName || '').trim()
-        : 'register';
+        : 'card';
     await chrome.storage.local.set({
         [LAST_MAIN_PANEL_KEY]: normalized
     }).catch(() => {});
     return normalized;
 }
 
-function activateMainPanel(panelName = 'register', options = {}) {
-    const normalized = String(panelName || 'register').trim() || 'register';
+function activateMainPanel(panelName = 'card', options = {}) {
+    const normalized = String(panelName || 'card').trim() || 'card';
 
     mainPanels.forEach((panel) => {
         const active = String(panel.dataset.mainPanel || '').trim() === normalized;
@@ -155,7 +155,7 @@ function activateMainPanel(panelName = 'register', options = {}) {
 
 mainTabButtons.forEach((button) => {
     button.addEventListener('click', () => {
-        activateMainPanel(String(button.dataset.mainTab || 'register').trim() || 'register');
+        activateMainPanel(String(button.dataset.mainTab || 'card').trim() || 'card');
     });
 });
 
@@ -166,17 +166,17 @@ function setCardCacheBadge(text = '') {
     cardCacheBadgeNode.textContent = text || '无';
 }
 
-function buildRegisterCardCacheId(cardData = {}, sourceName = '') {
-    const namePart = sanitizeFilePart(String(cardData?.name || sourceName || 'registration'));
+function buildCardCacheId(cardData = {}, sourceName = '') {
+    const namePart = sanitizeFilePart(String(cardData?.name || sourceName || 'automation'));
     const timePart = new Date().toISOString().replace(/[:.]/g, '-');
     const randomPart = Math.random().toString(36).slice(2, 8);
-    return `${namePart || 'registration'}_${timePart}_${randomPart}`;
+    return `${namePart || 'automation'}_${timePart}_${randomPart}`;
 }
 
-function normalizeRegisterCardCacheEntry(entry = {}, index = 0) {
+function normalizeCardCacheEntry(entry = {}, index = 0) {
     const source = entry && typeof entry === 'object' ? entry : {};
-    const cardData = normalizeCardData(source.cardData || source, source.cardName || source.name || `registration_${index + 1}`, { allowEmptySteps: true });
-    const id = String(source.id || source.cacheId || '').trim() || buildRegisterCardCacheId(cardData, source.sourceName || source.fileName || source.cardName || '');
+    const cardData = normalizeCardData(source.cardData || source, source.cardName || source.name || `automation_${index + 1}`, { allowEmptySteps: true });
+    const id = String(source.id || source.cacheId || '').trim() || buildCardCacheId(cardData, source.sourceName || source.fileName || source.cardName || '');
     return {
         id,
         cardData,
@@ -187,7 +187,7 @@ function normalizeRegisterCardCacheEntry(entry = {}, index = 0) {
     };
 }
 
-function buildRegisterCardListLabel(item = {}, isSelected = false) {
+function buildCardListLabel(item = {}, isSelected = false) {
     const savedAt = String(item.savedAt || '').trim();
     const stepsCount = Array.isArray(item.cardData?.steps) ? item.cardData.steps.length : 0;
     const savedAtText = savedAt ? (() => {
@@ -199,13 +199,13 @@ function buildRegisterCardListLabel(item = {}, isSelected = false) {
         savedAtText
     ].filter(Boolean);
     return {
-        title: String(item.cardData?.name || item.cardName || '未命名注册卡片').trim() || '未命名注册卡片',
+        title: String(item.cardData?.name || item.cardName || '未命名自动化卡片').trim() || '未命名自动化卡片',
         meta: metaParts.join(' · '),
         selected: isSelected
     };
 }
 
-function renderRegisterCardCacheList(state = { items: [], selectedId: '' }) {
+function renderCardCacheList(state = { items: [], selectedId: '' }) {
     if (!cardCacheListNode) {
         return;
     }
@@ -226,7 +226,7 @@ function renderRegisterCardCacheList(state = { items: [], selectedId: '' }) {
 
     cardCacheListNode.innerHTML = items.map((item, index) => {
         const active = String(item.id || '').trim() === selectedId;
-        const label = buildRegisterCardListLabel(item, active);
+        const label = buildCardListLabel(item, active);
         const timeText = label.meta ? `<div class="card-cache-item__meta">${escapeHtml(label.meta)}</div>` : '';
         return `
           <div class="card-cache-item${active ? ' is-active' : ''}" data-card-cache-item data-card-id="${escapeHtml(item.id)}">
@@ -244,7 +244,7 @@ function renderRegisterCardCacheList(state = { items: [], selectedId: '' }) {
 
     const selectedItem = items.find((item) => String(item.id || '').trim() === selectedId) || items[0] || null;
     if (cardFileNameNode) {
-        cardFileNameNode.textContent = selectedItem ? selectedItem.cardData?.name || selectedItem.cardName || '未命名注册卡片' : '未选择卡片';
+        cardFileNameNode.textContent = selectedItem ? selectedItem.cardData?.name || selectedItem.cardName || '未命名自动化卡片' : '未选择卡片';
     }
 }
 
@@ -352,7 +352,7 @@ async function loadStandaloneProgressState() {
         message: String(state.message || '等待开始').trim() || '等待开始',
         phase: String(state.phase || '').trim(),
         mode: String(state.mode || '').trim(),
-        loopRegistration: state.loopRegistration === true,
+        isLooping: state.isLooping === true,
         kind: String(state.kind || '').trim(),
         errorReason: String(state.errorReason || '').trim(),
         stepIndex: Number(state.stepIndex || 0) || 0,
@@ -434,26 +434,26 @@ function setDebugControlMode(mode = 'loop') {
 
 }
 
-function setRegisterLoopButtonState(isRunning = false) {
-    const label = isRunning ? '停止注册' : '循环注册';
-    if (loopRegisterCardButton) {
-        loopRegisterCardButton.textContent = label;
-        loopRegisterCardButton.setAttribute('aria-pressed', isRunning ? 'true' : 'false');
+function setLoopButtonState(isRunning = false) {
+    const label = isRunning ? '停止执行' : '循环执行';
+    if (loopCardButton) {
+        loopCardButton.textContent = label;
+        loopCardButton.setAttribute('aria-pressed', isRunning ? 'true' : 'false');
     }
-    if (sidebarLoopRegisterButton) {
-        sidebarLoopRegisterButton.textContent = label;
-        sidebarLoopRegisterButton.setAttribute('aria-pressed', isRunning ? 'true' : 'false');
+    if (sidebarLoopButton) {
+        sidebarLoopButton.textContent = label;
+        sidebarLoopButton.setAttribute('aria-pressed', isRunning ? 'true' : 'false');
     }
 }
 
-async function refreshRegisterLoopButtonState() {
+async function refreshLoopButtonState() {
     try {
         const state = await loadStandaloneProgressState();
         const isRunning = Boolean(state && state.running === true);
-        setRegisterLoopButtonState(isRunning);
+        setLoopButtonState(isRunning);
         return isRunning;
     } catch (_error) {
-        setRegisterLoopButtonState(false);
+        setLoopButtonState(false);
         return false;
     }
 }
@@ -474,7 +474,7 @@ async function refreshDebugControlUi() {
 async function sendDebugControlAction(mode) {
     const normalized = normalizeDebugControlMode(mode);
     const response = await chrome.runtime.sendMessage({
-        type: 'standalone-registration-control',
+        type: 'card-run-control',
         payload: {
             mode: normalized
         }
@@ -488,14 +488,14 @@ async function sendDebugControlAction(mode) {
     return response;
 }
 
-async function sendRegistrationStopAction() {
+async function sendStopAction() {
     const response = await chrome.runtime.sendMessage({
-        type: 'standalone-registration-stop',
+        type: 'card-run-stop',
         payload: {}
     });
 
     if (!response || response.success !== true) {
-        throw new Error(response?.error || '停止注册失败');
+        throw new Error(response?.error || '停止执行失败');
     }
 
     return response;
@@ -511,7 +511,7 @@ async function syncSidebarCardToRunningDebugSession() {
         return { synced: false };
     }
 
-    const normalizedCard = normalizeCardData(cardData, cardData?.name || 'registration', { allowEmptySteps: true });
+    const normalizedCard = normalizeCardData(cardData, cardData?.name || 'automation', { allowEmptySteps: true });
     const [progressState, controlState] = await Promise.all([
         loadStandaloneProgressState().catch(() => null),
         loadStandaloneDebugControlState().catch(() => null)
@@ -530,7 +530,7 @@ async function syncSidebarCardToRunningDebugSession() {
     }
 
     const response = await chrome.runtime.sendMessage({
-        type: 'standalone-registration-sync-card',
+        type: 'card-sync',
         payload: {
             tabId: runningTabId,
             cardData: normalizedCard
@@ -548,15 +548,15 @@ async function syncSidebarCardToRunningDebugSession() {
     };
 }
 
-function setRegisterCardEditorValue(cardData) {
-    if (!registerCardEditor) {
+function setCardEditorValue(cardData) {
+    if (!cardEditor) {
         return;
     }
-    registerCardEditor.value = stringifyCardData(cardData || {});
+    cardEditor.value = stringifyCardData(cardData || {});
 }
 
-function getRegisterCardEditorValue() {
-    return String(registerCardEditor?.value || '');
+function getCardEditorValue() {
+    return String(cardEditor?.value || '');
 }
 
 function isVerificationStepName(value = '') {
@@ -601,11 +601,11 @@ function createDebugStepTemplate() {
 }
 
 function insertDebugStepIntoEditor() {
-    const cardData = parseEditorCardData(getRegisterCardEditorValue(), { allowEmptySteps: true });
+    const cardData = parseEditorCardData(getCardEditorValue(), { allowEmptySteps: true });
     const steps = Array.isArray(cardData.steps) ? [...cardData.steps] : [];
     steps.push(createDebugStepTemplate());
     cardData.steps = steps;
-    setRegisterCardEditorValue(cardData);
+    setCardEditorValue(cardData);
     return cardData;
 }
 
@@ -823,7 +823,7 @@ function updateSidebarEditorMeta(cardData = null) {
     }
 
     const stepsCount = Array.isArray(cardData.steps) ? cardData.steps.length : 0;
-    const name = String(cardData.name || '未命名注册卡片').trim() || '未命名注册卡片';
+    const name = String(cardData.name || '未命名自动化卡片').trim() || '未命名自动化卡片';
     const website = String(cardData.website || '').trim();
     const chips = [
         `<span class="sidebar-editor-meta__chip">卡片: ${escapeHtml(name)}</span>`,
@@ -1095,7 +1095,7 @@ function syncSidebarEditorToHiddenJson() {
         return null;
     }
 
-    setRegisterCardEditorValue(cardData);
+    setCardEditorValue(cardData);
     return cardData;
 }
 
@@ -1120,7 +1120,7 @@ function collectSidebarCardDataFromForm() {
     const points = Number(sidebarCardPointsInput?.value || 0);
     const cardData = {
         ...base,
-        name: String(sidebarCardNameInput?.value || base.name || '').trim() || '未命名注册卡片',
+        name: String(sidebarCardNameInput?.value || base.name || '').trim() || '未命名自动化卡片',
         website: String(sidebarCardWebsiteInput?.value || base.website || '').trim(),
         description: String(sidebarCardDescriptionInput?.value || base.description || '').trim(),
         password: String(sidebarCardPasswordInput?.value || base.password || '').trim(),
@@ -1156,7 +1156,7 @@ function renderSidebarCardEditor(cardData) {
         return;
     }
 
-    const normalized = normalizeCardData(cardData || {}, cardData?.name || 'registration', { allowEmptySteps: true });
+    const normalized = normalizeCardData(cardData || {}, cardData?.name || 'automation', { allowEmptySteps: true });
     const previousExpandedStates = collectSidebarStepExpansionState();
     if (sidebarCardNameInput) sidebarCardNameInput.value = String(normalized.name || '');
     if (sidebarCardWebsiteInput) sidebarCardWebsiteInput.value = String(normalized.website || '');
@@ -1198,63 +1198,63 @@ function getSidebarCardDataFromEditor() {
     return collectSidebarCardDataFromForm();
 }
 
-async function getRegisterCardDataForExport() {
+async function getCardDataForExport() {
     if (isSidebarLayout()) {
         const sidebarCardData = getSidebarCardDataFromEditor();
         if (sidebarCardData) {
-            return normalizeCardData(sidebarCardData, sidebarCardData?.name || 'registration', { allowEmptySteps: true });
+            return normalizeCardData(sidebarCardData, sidebarCardData?.name || 'automation', { allowEmptySteps: true });
         }
     }
 
-    const editorText = String(getRegisterCardEditorValue() || '').trim();
+    const editorText = String(getCardEditorValue() || '').trim();
     if (editorText) {
         const cardData = parseEditorCardData(editorText, { allowEmptySteps: true });
-        return normalizeCardData(cardData, cardData?.name || 'registration', { allowEmptySteps: true });
+        return normalizeCardData(cardData, cardData?.name || 'automation', { allowEmptySteps: true });
     }
 
     const cachedCard = await loadCardCache().catch(() => null);
     if (cachedCard?.cardData) {
-        return normalizeCardData(cachedCard.cardData, cachedCard.cardName || cachedCard.cardData?.name || 'registration', { allowEmptySteps: true });
+        return normalizeCardData(cachedCard.cardData, cachedCard.cardName || cachedCard.cardData?.name || 'automation', { allowEmptySteps: true });
     }
 
-    throw new Error('注册卡片编辑器内容不能为空，请先导入、编辑或保存一次卡片');
+    throw new Error('自动化卡片编辑器内容不能为空，请先导入、编辑或保存一次卡片');
 }
 
-async function exportRegisterCard() {
-    const cardData = await getRegisterCardDataForExport();
-    const fileName = buildRegisterCardExportFileName(cardData.name);
-    await downloadJsonFile(`register_card/${fileName}`, cardData);
+async function exportCard() {
+    const cardData = await getCardDataForExport();
+    const fileName = buildCardExportFileName(cardData.name);
+    await downloadJsonFile(`automation_card/${fileName}`, cardData);
     setCardFileName(cardData.name);
     return { cardName: cardData.name, fileName };
 }
 
-async function loadRegisterCardCacheState() {
+async function loadCardCacheState() {
     const stored = await chrome.storage.local.get([
-        REGISTER_CARD_CACHE_LIST_KEY,
-        REGISTER_CARD_SELECTED_ID_KEY,
-        REGISTER_CARD_CACHE_KEY,
-        REGISTER_CARD_CACHE_NAME_KEY,
-        REGISTER_CARD_CACHE_TIME_KEY
+        AUTOMATION_CARD_CACHE_LIST_KEY,
+        AUTOMATION_CARD_SELECTED_ID_KEY,
+        AUTOMATION_CARD_CACHE_KEY,
+        AUTOMATION_CARD_CACHE_NAME_KEY,
+        AUTOMATION_CARD_CACHE_TIME_KEY
     ]);
 
-    const list = Array.isArray(stored[REGISTER_CARD_CACHE_LIST_KEY]) ? stored[REGISTER_CARD_CACHE_LIST_KEY] : [];
+    const list = Array.isArray(stored[AUTOMATION_CARD_CACHE_LIST_KEY]) ? stored[AUTOMATION_CARD_CACHE_LIST_KEY] : [];
     if (list.length > 0) {
-        const items = list.map((item, index) => normalizeRegisterCardCacheEntry(item, index));
-        let selectedId = String(stored[REGISTER_CARD_SELECTED_ID_KEY] || '').trim();
+        const items = list.map((item, index) => normalizeCardCacheEntry(item, index));
+        let selectedId = String(stored[AUTOMATION_CARD_SELECTED_ID_KEY] || '').trim();
         if (!selectedId || !items.some((item) => item.id === selectedId)) {
             selectedId = String(items[0]?.id || '').trim();
         }
         return { items, selectedId };
     }
 
-    const legacyCard = stored[REGISTER_CARD_CACHE_KEY];
+    const legacyCard = stored[AUTOMATION_CARD_CACHE_KEY];
     if (legacyCard && typeof legacyCard === 'object') {
-        const legacyItem = normalizeRegisterCardCacheEntry({
-            id: 'legacy-register-card',
+        const legacyItem = normalizeCardCacheEntry({
+            id: 'legacy-card',
             cardData: legacyCard,
-            cardName: stored[REGISTER_CARD_CACHE_NAME_KEY] || legacyCard.name || '',
-            savedAt: stored[REGISTER_CARD_CACHE_TIME_KEY] || new Date().toISOString(),
-            sourceName: stored[REGISTER_CARD_CACHE_NAME_KEY] || ''
+            cardName: stored[AUTOMATION_CARD_CACHE_NAME_KEY] || legacyCard.name || '',
+            savedAt: stored[AUTOMATION_CARD_CACHE_TIME_KEY] || new Date().toISOString(),
+            sourceName: stored[AUTOMATION_CARD_CACHE_NAME_KEY] || ''
         }, 0);
         return {
             items: [legacyItem],
@@ -1265,15 +1265,15 @@ async function loadRegisterCardCacheState() {
     return { items: [], selectedId: '' };
 }
 
-async function saveRegisterCardCacheState(items = [], selectedId = '') {
-    const normalizedItems = Array.isArray(items) ? items.map((item, index) => normalizeRegisterCardCacheEntry(item, index)) : [];
+async function saveCardCacheState(items = [], selectedId = '') {
+    const normalizedItems = Array.isArray(items) ? items.map((item, index) => normalizeCardCacheEntry(item, index)) : [];
     const normalizedSelectedId = String(selectedId || normalizedItems[0]?.id || '').trim();
     await chrome.storage.local.set({
-        [REGISTER_CARD_CACHE_LIST_KEY]: normalizedItems,
-        [REGISTER_CARD_SELECTED_ID_KEY]: normalizedSelectedId,
-        [REGISTER_CARD_CACHE_KEY]: normalizedItems.find((item) => item.id === normalizedSelectedId)?.cardData || normalizedItems[0]?.cardData || {},
-        [REGISTER_CARD_CACHE_NAME_KEY]: normalizedItems.find((item) => item.id === normalizedSelectedId)?.cardName || normalizedItems[0]?.cardName || '',
-        [REGISTER_CARD_CACHE_TIME_KEY]: normalizedItems.find((item) => item.id === normalizedSelectedId)?.savedAt || normalizedItems[0]?.savedAt || ''
+        [AUTOMATION_CARD_CACHE_LIST_KEY]: normalizedItems,
+        [AUTOMATION_CARD_SELECTED_ID_KEY]: normalizedSelectedId,
+        [AUTOMATION_CARD_CACHE_KEY]: normalizedItems.find((item) => item.id === normalizedSelectedId)?.cardData || normalizedItems[0]?.cardData || {},
+        [AUTOMATION_CARD_CACHE_NAME_KEY]: normalizedItems.find((item) => item.id === normalizedSelectedId)?.cardName || normalizedItems[0]?.cardName || '',
+        [AUTOMATION_CARD_CACHE_TIME_KEY]: normalizedItems.find((item) => item.id === normalizedSelectedId)?.savedAt || normalizedItems[0]?.savedAt || ''
     });
     return {
         items: normalizedItems,
@@ -1281,40 +1281,40 @@ async function saveRegisterCardCacheState(items = [], selectedId = '') {
     };
 }
 
-async function refreshRegisterCardCacheUi() {
-    const state = await loadRegisterCardCacheState().catch(() => ({ items: [], selectedId: '' }));
-    renderRegisterCardCacheList(state);
+async function refreshCardCacheUi() {
+    const state = await loadCardCacheState().catch(() => ({ items: [], selectedId: '' }));
+    renderCardCacheList(state);
     return state;
 }
 
-async function selectRegisterCardCacheItem(cardId) {
-    const state = await loadRegisterCardCacheState().catch(() => ({ items: [], selectedId: '' }));
+async function selectCardCacheItem(cardId) {
+    const state = await loadCardCacheState().catch(() => ({ items: [], selectedId: '' }));
     const selectedId = String(cardId || '').trim();
     const item = state.items.find((entry) => String(entry.id || '').trim() === selectedId) || null;
     if (!item) {
-        throw new Error('未找到可选中的注册卡片');
+        throw new Error('未找到可选中的自动化卡片');
     }
 
-    await saveRegisterCardCacheState(state.items, item.id);
+    await saveCardCacheState(state.items, item.id);
     if (isSidebarLayout()) {
         renderSidebarCardEditor(item.cardData);
         syncSidebarEditorToHiddenJson();
     } else {
-        setRegisterCardEditorValue(item.cardData);
+        setCardEditorValue(item.cardData);
     }
-    renderRegisterCardCacheList({
+    renderCardCacheList({
         items: state.items,
         selectedId: item.id
     });
     return item;
 }
 
-async function upsertRegisterCardCache(cardData, options = {}) {
-    const safeCardData = normalizeCardData(cardData, cardData?.name || options.fileName || 'registration', { allowEmptySteps: true });
-    const state = await loadRegisterCardCacheState().catch(() => ({ items: [], selectedId: '' }));
+async function upsertCardCache(cardData, options = {}) {
+    const safeCardData = normalizeCardData(cardData, cardData?.name || options.fileName || 'automation', { allowEmptySteps: true });
+    const state = await loadCardCacheState().catch(() => ({ items: [], selectedId: '' }));
     const existingIndex = state.items.findIndex((item) => item.id === (options.id || state.selectedId));
-    const nextItem = normalizeRegisterCardCacheEntry({
-        id: options.id || (options.append === true ? buildRegisterCardCacheId(safeCardData, options.fileName || safeCardData.name) : (state.selectedId || buildRegisterCardCacheId(safeCardData, options.fileName || safeCardData.name))),
+    const nextItem = normalizeCardCacheEntry({
+        id: options.id || (options.append === true ? buildCardCacheId(safeCardData, options.fileName || safeCardData.name) : (state.selectedId || buildCardCacheId(safeCardData, options.fileName || safeCardData.name))),
         cardData: safeCardData,
         cardName: safeCardData.name,
         sourceName: options.fileName || safeCardData.name,
@@ -1331,8 +1331,8 @@ async function upsertRegisterCardCache(cardData, options = {}) {
     }
 
     const nextSelectedId = options.select === false ? state.selectedId || nextItem.id : nextItem.id;
-    await saveRegisterCardCacheState(nextItems, nextSelectedId);
-    renderRegisterCardCacheList({ items: nextItems, selectedId: nextSelectedId });
+    await saveCardCacheState(nextItems, nextSelectedId);
+    renderCardCacheList({ items: nextItems, selectedId: nextSelectedId });
     return {
         cardData: safeCardData,
         cardName: safeCardData.name,
@@ -1347,32 +1347,32 @@ function renderSidebarEditorFromCurrentState() {
     }
 
     try {
-        const cardData = collectSidebarCardDataFromForm() || parseEditorCardData(getRegisterCardEditorValue() || '{}', { allowEmptySteps: true });
+        const cardData = collectSidebarCardDataFromForm() || parseEditorCardData(getCardEditorValue() || '{}', { allowEmptySteps: true });
         renderSidebarCardEditor(cardData);
         syncSidebarEditorToHiddenJson();
     } catch (_error) {
-        renderSidebarCardEditor({ name: '未命名注册卡片', steps: [] });
+        renderSidebarCardEditor({ name: '未命名自动化卡片', steps: [] });
         syncSidebarEditorToHiddenJson();
     }
 }
 
 async function saveCardCache(cardData) {
-    const result = await upsertRegisterCardCache(cardData, { select: true });
+    const result = await upsertCardCache(cardData, { select: true });
     return result.cardData;
 }
 
 async function saveEditorCardToCache() {
     const cardData = isSidebarLayout()
         ? getSidebarCardDataFromEditor()
-        : parseEditorCardData(getRegisterCardEditorValue(), { allowEmptySteps: true });
+        : parseEditorCardData(getCardEditorValue(), { allowEmptySteps: true });
     const saved = await saveCardCache(cardData);
-    const state = await loadRegisterCardCacheState().catch(() => ({ items: [], selectedId: '' }));
-    renderRegisterCardCacheList(state);
+    const state = await loadCardCacheState().catch(() => ({ items: [], selectedId: '' }));
+    renderCardCacheList(state);
     return saved;
 }
 
 
-globalThis.CookieCaptureRegisterWorkbench = {
+globalThis.CookieCaptureAutomationWorkbench = {
     clearDebugProgressAutoHideTimer,
     scheduleDebugProgressAutoHide,
     sanitizeFilePart,
@@ -1389,11 +1389,11 @@ globalThis.CookieCaptureRegisterWorkbench = {
     activateMainPanel,
     setCardFileName,
     setCardCacheBadge,
-    buildRegisterCardExportFileName,
-    buildRegisterCardCacheId,
-    normalizeRegisterCardCacheEntry,
-    buildRegisterCardListLabel,
-    renderRegisterCardCacheList,
+    buildCardExportFileName,
+    buildCardCacheId,
+    normalizeCardCacheEntry,
+    buildCardListLabel,
+    renderCardCacheList,
     normalizeProgressValue,
     setDebugProgress,
     resetDebugProgress,
@@ -1402,17 +1402,17 @@ globalThis.CookieCaptureRegisterWorkbench = {
     formatStepTypeLabel,
     normalizeDebugControlMode,
     setDebugControlMode,
-    setRegisterLoopButtonState,
-    refreshRegisterLoopButtonState,
+    setLoopButtonState,
+    refreshLoopButtonState,
     refreshDebugControlUi,
     sendDebugControlAction,
-    sendRegistrationStopAction,
+    sendStopAction,
     syncSidebarCardToRunningDebugSession,
     normalizeCardData,
     stringifyCardData,
     parseEditorCardData,
-    setRegisterCardEditorValue,
-    getRegisterCardEditorValue,
+    setCardEditorValue,
+    getCardEditorValue,
     isVerificationStepName,
     isEmailStepName,
     createDebugStepTemplate,
@@ -1442,13 +1442,13 @@ globalThis.CookieCaptureRegisterWorkbench = {
     collectSidebarCardDataFromForm,
     renderSidebarCardEditor,
     getSidebarCardDataFromEditor,
-    getRegisterCardDataForExport,
-    exportRegisterCard,
-    loadRegisterCardCacheState,
-    saveRegisterCardCacheState,
-    refreshRegisterCardCacheUi,
-    selectRegisterCardCacheItem,
-    upsertRegisterCardCache,
+    getCardDataForExport,
+    exportCard,
+    loadCardCacheState,
+    saveCardCacheState,
+    refreshCardCacheUi,
+    selectCardCacheItem,
+    upsertCardCache,
     renderSidebarEditorFromCurrentState,
     saveCardCache,
     saveEditorCardToCache

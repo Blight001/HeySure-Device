@@ -7,7 +7,7 @@ try {
 
 await import('./shared.js');
 await import('./cookie-credentials.js');
-await import('./register-workbench.js');
-await import('./registration-flow.js');
+await import('./automation-workbench.js');
+await import('./automation-flow.js');
 await import('./bindings.js');
 await import('./agent-account.js');

@@ -77,9 +77,9 @@
 
         if (connStatus) {
             connStatus.textContent = status === 'registered'
-                ? '已注册到服务器'
+                ? '已连接到服务器'
                 : status === 'connected'
-                    ? '已连接（注册中）'
+                    ? '已连接（同步中）'
                     : status === 'connecting'
                         ? '连接中…'
                         : status === 'error'

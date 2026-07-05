@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "注册插件",
+  "name": "AI自动化插件",
   "version": "1.1.0",
-  "description": "注册插件：支持导入注册卡片、本地执行注册流程、抓取 Cookie/localStorage/sessionStorage，并可登录 HeySure 软件端账号连接服务器、由网页端「作坊」分配 AI 后接受远程调度。",
+  "description": "AI自动化插件：支持导入自动化卡片、本地执行自动化流程、抓取 Cookie/localStorage/sessionStorage，并可登录 HeySure 软件端账号连接服务器、由网页端「作坊」分配 AI 后接受远程调度。",
   "icons": {
     "16": "icon16.png",
     "32": "icon32.png",

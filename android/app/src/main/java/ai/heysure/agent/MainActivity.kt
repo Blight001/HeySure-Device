@@ -28,6 +28,7 @@ import android.view.View
 import android.view.ViewOutlineProvider
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
@@ -178,6 +179,9 @@ class MainActivity : AppCompatActivity() {
                 settings.userAccount = account
                 settings.rememberLogin = remember
                 settings.userPassword = if (remember) password else ""
+                if (settings.agentName.isBlank()) {
+                    settings.agentName = "安卓设备"
+                }
                 appendLog("登录成功：${res.userName}")
                 updateSessionUi()
                 AgentService.start(this@MainActivity)
@@ -474,7 +478,8 @@ class MainActivity : AppCompatActivity() {
         val host = runCatching { URL(settings.serverUrl).host }.getOrNull().orEmpty()
             .ifBlank { settings.serverUrl.ifBlank { "—" } }
         binding.accountInfoText.text = listOf(
-            "名称：${settings.userName.ifBlank { "—" }}",
+            "设备名称：${settings.agentName.ifBlank { settings.userName.ifBlank { "—" } }}",
+            "用户名称：${settings.userName.ifBlank { "—" }}",
             "账号：${settings.userAccount.ifBlank { "—" }}",
             "服务器：$host",
             "设备 ID：${settings.deviceId}",
@@ -523,6 +528,32 @@ class MainActivity : AppCompatActivity() {
     private fun showSettingsDialog() {
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+        }
+
+        // 设备名称（对应 device:register 的 name，上报到作坊面板）
+        body.addView(sectionTitle("设备名称"))
+        val nameInput = EditText(this).apply {
+            setText(settings.agentName.ifBlank { "安卓设备" })
+            hint = "显示在网页作坊的设备名"
+            setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text))
+            textSize = 13f
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+            background = ContextCompat.getDrawable(this@MainActivity, R.drawable.pill_bg)
+        }
+        body.addView(nameInput)
+        body.addView(hintText("更改后会重新注册设备，网页端名称会更新。"))
+
+        nameInput.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                val newName = nameInput.text.toString().trim()
+                if (newName.isNotBlank() && newName != settings.agentName) {
+                    settings.agentName = newName
+                    // 停止 + 重启服务，强制用新名称重新注册（device:register）
+                    startService(Intent(this, AgentService::class.java).apply { action = AgentService.ACTION_STOP })
+                    AgentService.start(this@MainActivity)
+                    toast("设备名称已更新，将重新注册")
+                }
+            }
         }
 
         body.addView(sectionTitle(getString(R.string.card_permissions)))

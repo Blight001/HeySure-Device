@@ -11,7 +11,7 @@ export interface PlatformProfile {
   isCurrentPlatform: boolean
   // Prefix used when minting the device id, e.g. "win-desktop-".
   deviceIdPrefix: string
-  // Human label reported to the server / shown in logs, e.g. "Windows Agent".
+  // Human label reported to the server / shown in logs, e.g. "Windows 桌面".
   agentName: string
   // Application icon file name under the shell's local assets/ (or equivalent).
   // Example: "icon.ico" or "desktop.png".

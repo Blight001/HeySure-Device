@@ -45,7 +45,7 @@ export const defaults: AgentSettings = {
   agentSocketUrl: '',
   agentToken: '',
   deviceId: '',
-  agentName: 'Windows Agent (Tauri)',
+  agentName: 'Windows 桌面',
   agentGroup: '',
   workspaceRoot: '',
   theme: 'dark',

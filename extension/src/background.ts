@@ -182,7 +182,7 @@ async function emitRegisterOn(s: Socket): Promise<void> {
   s.emit('device:register', {
     id,
     aiConfigId: null,
-    name:            settings.agentName || 'Browser Agent',
+    name:            settings.agentName || '浏览器插件',
     group:           settings.agentGroup || '',
     platform:        `browser-extension (${navigator?.userAgent?.split(' ').pop() || 'chrome'})`,
     os:              { platform: 'browser', arch: 'unknown', release: '1.0', hostname: id },
@@ -265,7 +265,7 @@ async function doConnect(): Promise<void> {
     reconnectionDelay: 2000,
     reconnectionAttempts: Infinity,
   })
-  attachOperationalListeners(socket, settings.agentName || 'Browser Agent')
+  attachOperationalListeners(socket, settings.agentName || '浏览器插件')
 }
 
 function attachOperationalListeners(s: Socket, agentName: string) {

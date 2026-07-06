@@ -138,7 +138,7 @@ class SocketAgent(
     private fun register() {
         val payload = JSONObject().apply {
             put("id", settings.deviceId)
-            put("name", settings.userName.ifBlank { Build.MODEL })
+            put("name", settings.agentName.ifBlank { settings.userName.ifBlank { Build.MODEL } })
             put("group", "")
             put("platform", "android-mobile (${Build.MODEL})")
             put("os", "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")

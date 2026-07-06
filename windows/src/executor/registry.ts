@@ -4,7 +4,7 @@
 export type ToolPlatform = 'all' | 'windows' | 'linux' | 'mac'
 
 const PLATFORM: ToolPlatform = 'windows'
-export const AGENT_NAME = 'Windows Agent'
+export const AGENT_NAME = 'Windows 桌面'
 
 export interface ToolHandlerArgs {
   workspaceRoot: string
@@ -84,7 +84,7 @@ export function listToolDefs(): ToolDef[] {
     .filter(isToolAvailable)
     .map(t => ({
       name: t.id,
-      description: t.description || `Run desktop tool ${t.id} on the connected ${AGENT_NAME}.`,
+      description: t.description || `在连接的 ${AGENT_NAME} 上运行桌面工具 ${t.id}。`,
       input_schema: t.inputSchema || { type: 'object', properties: {}, additionalProperties: true },
       destructive: !!t.destructive,
       implementation: t.implementation || {

@@ -32,7 +32,7 @@ async function main(): Promise<void> {
     authToken: auth.accessToken,
     userId: auth.userId,
     deviceId: `android-adb-${serial.replace(/[^a-zA-Z0-9]/g, '-')}`,
-    agentName: process.env.HEYSURE_AGENT_NAME || `android-adb-${model}`,
+    agentName: process.env.HEYSURE_AGENT_NAME || `安卓设备 (ADB-${model})`,
     serial,
     model,
   }

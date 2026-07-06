@@ -22,7 +22,7 @@ export const SETTING_DEFAULTS: AgentSettings = {
   agentSocketUrl: '',
   agentToken:  '',
   deviceId:     '',
-  agentName:   'Browser Agent',
+  agentName:   '浏览器插件',
   agentGroup:  '',
   aiKey:       '',
   aiBaseUrl:   'https://api.anthropic.com',

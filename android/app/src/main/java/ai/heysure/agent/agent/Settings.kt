@@ -34,6 +34,11 @@ class Settings(context: Context) {
         get() = prefs.getString(KEY_USER_NAME, "") ?: ""
         set(value) = prefs.edit().putString(KEY_USER_NAME, value).apply()
 
+    /** 设备展示名称（上报给服务器的 device:register name），默认“安卓设备”。 */
+    var agentName: String
+        get() = prefs.getString(KEY_AGENT_NAME, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_AGENT_NAME, value).apply()
+
     var userAvatar: String
         get() = prefs.getString(KEY_USER_AVATAR, "") ?: ""
         set(value) = prefs.edit().putString(KEY_USER_AVATAR, value).apply()
@@ -111,6 +116,7 @@ class Settings(context: Context) {
         const val KEY_AUTH_TOKEN = "authToken"
         const val KEY_USER_ID = "userId"
         const val KEY_USER_NAME = "userName"
+        const val KEY_AGENT_NAME = "agentName"
         const val KEY_USER_AVATAR = "userAvatar"
         const val KEY_USER_ACCOUNT = "userAccount"
         const val KEY_USER_PASSWORD = "userPassword"

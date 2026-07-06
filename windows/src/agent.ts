@@ -11,6 +11,7 @@ import { applyServerDynamicMcp, clearServerDynamicMcp } from './executor/dynamic
 import { resetPermissionPolicy, setPermissionPolicy } from './runtime/permission-guard'
 import { probeRuntimes, cachedRuntimes } from './runtime/runtime-probe'
 import { handleRemoteControlSignal, handleRemoteControlDisconnect } from './remote-control'
+import { handleRemoteTerminalSignal, handleRemoteTerminalDisconnect } from './remote-terminal'
 import { normalizeServerUrl } from './server-url'
 import type { AgentSettings } from './settings'
 import type { HostInfo } from './native'
@@ -110,6 +111,7 @@ export class HeySureAgent {
       this.stopRegistrationHandshake()
       this.clearServerSyncedTools()
       handleRemoteControlDisconnect()
+      handleRemoteTerminalDisconnect()
       this.setStatus('disconnected', reason)
       this.log('warn', `连接断开: ${reason}`)
     })
@@ -155,6 +157,14 @@ export class HeySureAgent {
       this.socket.on(ev, (data: any) => { void handleRemoteControlSignal(ev, data, rcSend, this.events.onLog, rcConn) })
     }
 
+    // Remote terminal (命令行远程). No WebRTC — the PTY byte stream is relayed
+    // straight through this socket (rt:*), so it works across NAT with no TURN.
+    // The WebView owns the ConPTY sessions (remote-terminal.ts + src-tauri/src/pty.rs).
+    const rtSend = (event: string, payload: any) => { this.socket?.emit(event, payload) }
+    for (const ev of ['rt:open', 'rt:input', 'rt:resize', 'rt:close']) {
+      this.socket.on(ev, (data: any) => { void handleRemoteTerminalSignal(ev, data, rtSend, this.events.onLog) })
+    }
+
     // Web-authored dynamic MCP tools for this device type, pushed by the server
     // on register and whenever an operator edits them.
     this.socket.on('device:tool-config', (payload: any) => {
@@ -171,6 +181,7 @@ export class HeySureAgent {
   disconnect(): void {
     this.stopRegistrationHandshake()
     handleRemoteControlDisconnect()
+    handleRemoteTerminalDisconnect()
     this.socket?.disconnect()
     this.socket = null
     this.clearServerSyncedTools()
@@ -226,10 +237,12 @@ export class HeySureAgent {
           cpus: this.host.cpus,
           totalMem: '',
         },
-        // Advertise remote_control so the server gates live screen control on it
-        // (mirrors remote_control.RC_CAPABILITY server-side). The WebView peer
-        // (remote-control.ts) handles capture + WebRTC; input rides Rust enigo.
-        capabilities: [...getAvailableTools(), 'remote_control'],
+        // Advertise the two remote-connection transports (画面远程 + 命令行远程) so
+        // the server gates each on its capability (mirrors remote_control.RC_CAPABILITY
+        // / remote_terminal.RT_CAPABILITY). Both are reserved words, not MCP tools:
+        // remote_control → WebRTC screen mirror (remote-control.ts + enigo);
+        // remote_terminal → interactive PTY over rt:* relay (remote-terminal.ts + pty.rs).
+        capabilities: [...getAvailableTools(), 'remote_control', 'remote_terminal'],
         runtimes: cachedRuntimes() || undefined,
         toolDefs: this.effectiveToolDefs(),
         version: '2.0.0-tauri',

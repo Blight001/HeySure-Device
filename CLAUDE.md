@@ -4,12 +4,15 @@
 
 **本目录是独立仓库** `HeySure-Device`。各平台（windows / linux / mac / extension / android）代码与资产完全独立，不再共享 `shared/`。
 **桌面端已退化为受控运行器**：不再内置固定原生 MCP 工具，也没有任何设备本地的动态工具授权/管理入口——能力全部来自服务器下发的动态 MCP（`device:tool-config`，含 runtime 工具，Windows 仅支持 powershell/shell），由服务端编排/推理。静态自描述（`toolDefs`）与服务器下发动态 MCP 的边界见 [`read.md`](read.md) 第 5、6 节。
+**远程连接是另一条独立于 AI 任务循环的、由真人操作者驱动的实时数据面**，有两种形态——
+画面远程（`rc:*`，WebRTC P2P）与命令行远程（`rt:*`，PTY 走 Socket.IO relay，无需 TURN）——
+统一标准见 [`read.md`](read.md) 第 9 节。
 
 ## 六种形态
 
 | 子目录 | 形态 | 作用 |
 | --- | --- | --- |
-| `windows/` | Tauri 2 桌面（Windows） | 受控运行器（**原 Electron 壳已迁移为 Tauri**）：登录/注册 + 动态 MCP + runtime 执行（**仅 powershell / shell**）+ 远控（**原生抓屏 xcap→canvas→WebRTC，不走 getDisplayMedia、无屏幕共享弹窗** + enigo 键鼠注入，`src/remote-control.ts` / `src-tauri/src/rc.rs`）；见 `windows/README.md` 与 `doc/tauri2-migration-report.md` |
+| `windows/` | Tauri 2 桌面（Windows） | 受控运行器（**原 Electron 壳已迁移为 Tauri**）：登录/注册 + 动态 MCP + runtime 执行（**仅 powershell / shell**）+ **远程连接两条通道**：画面远程（`remote_control`，原生抓屏 xcap→canvas→WebRTC + enigo 键鼠注入，`src/remote-control.ts` / `src-tauri/src/rc.rs`）与命令行远程（`remote_terminal`，ConPTY 交互式终端走 rt:* Socket.IO relay，`src/remote-terminal.ts` / `src-tauri/src/pty.rs`）；见 `windows/README.md`、`doc/tauri2-migration-report.md` 与 [`read.md`](read.md) 第 9 节 |
 | `linux/` | Electron 桌面（X11） | 同上（shell 默认 bash；含 STT/git 独有工具） |
 | `mac/` | Electron 桌面（macOS） | 同上（需系统辅助功能 & 屏幕录制权限） |
 | `extension/` | Chrome MV3 扩展 | 浏览器自动化与轻量客户端（固定工具目录） |
@@ -98,6 +101,7 @@ Linux 独有：`tools/ear.ts`（STT）、`tools/git.ts`（如存在）。
 | Android 本机执行 | `device/android/`（独立 Kotlin 工程） |
 | Android ADB 控制 | `device/android/android-adb/` |
 | 工具执行底座（runner） | 各平台 `src/runtime/`（独立） |
+| 远程连接（画面 `rc:*` / 命令行 `rt:*`） | 设备端 Windows：`src/remote-control.ts`+`src-tauri/src/rc.rs`（画面）、`src/remote-terminal.ts`+`src-tauri/src/pty.rs`（命令行）；服务端 `connector_runtime/dispatch/remote_control.py` / `remote_terminal.py`；web `composables/useRemoteControl.ts` / `useRemoteTerminal.ts`；标准见 [`read.md`](read.md) 第 9 节 |
 | 服务端工具路由 | `server/main/mcp_runtime/mcp/registry.py` + 设备类型判断 `desktop_device_tools.py` |
 
 ## 常见问题排查

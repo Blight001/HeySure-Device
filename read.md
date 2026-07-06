@@ -299,7 +299,9 @@ Content-Type: application/json
 - **保留前缀，禁止使用**（它们会被服务器归类到别的通道或直接剥离）：
   - `browser_` / `card_` —— 浏览器扩展通道专用
   - `evolution.` / `librarian.` —— 知识与进化工坊专用
-  - `remote_control` / `remote.control` —— 传输层能力保留字（不是可调用工具）
+  - `remote_control` / `remote.control` —— 画面远程能力保留字（不是可调用工具，见第 9 节）
+  - `remote_terminal` / `remote.terminal` —— 命令行远程能力保留字（同上，见第 9 节）
+  - `rc:` / `rt:` —— 远程连接的 Socket.IO 事件前缀，勿用作工具名
 - 只出现在 `capabilities` 而没有 `toolDefs` 条目的工具也能被调用，但模型只能
   盲传参数（服务器为它兜底一个"任意对象"的宽松 schema）。**始终写全 toolDefs。**
 
@@ -456,7 +458,135 @@ Content-Type: application/json
 
 ---
 
-## 9. Node.js 最小示例
+## 9. 远程连接：画面远程 + 命令行远程（统一标准）
+
+前面第 8 节讲的是 **AI 任务循环**（`task:dispatch`：AI 编排、串行队列、结果入库）。
+**远程连接是另一条完全独立的实时数据面**：由**真人操作者**在网页控制台里实时
+驱动一台设备——不是 AI 调工具。它有两种形态，共享同一套「会话」模型，只是
+**传输不同**：
+
+| | **画面远程**（screen） | **命令行远程**（terminal） |
+| --- | --- | --- |
+| 用途 | 实时屏幕镜像 + 键鼠注入 | 交互式 shell（ANSI 颜色 / TUI / Ctrl-C / 窗口 resize） |
+| 能力字（`capabilities`） | `remote_control` | `remote_terminal` |
+| 事件前缀 | `rc:*` | `rt:*` |
+| 传输 | **WebRTC P2P**（视频轨 + `control` DataChannel），只有 SDP/ICE 信令过服务器 | **Socket.IO relay**：字节流本身经服务器转发，无 WebRTC |
+| 是否需要 TURN | **需要**（跨公网 NAT 打洞，见 9.4） | **不需要**（文本量小，直连中继即可，公网可用） |
+| 谁发起 SDP | 设备 offer，浏览器 answer | 无 SDP（不是 WebRTC） |
+| 官方参考实现 | 服务端 `connector_runtime/dispatch/remote_control.py`；Windows `src-tauri/src/rc.rs` + `src/remote-control.ts` | 服务端 `connector_runtime/dispatch/remote_terminal.py`；Windows `src-tauri/src/pty.rs` + `src/remote-terminal.ts` |
+
+两者都是**可选**能力：设备在 `device:register` 的 `capabilities` 里声明哪个，
+就解锁哪条通道；两个都不声明就都不开。`remote_control` / `remote_terminal`
+（含点分写法 `remote.control` / `remote.terminal`）是**传输层保留字，不是
+AI 可调用的 MCP 工具**——服务器会把它们从工具目录里剥掉（见 5.1）。
+
+### 9.1 会话所有权闸门（两通道通用）
+
+无论 `rc:*` 还是 `rt:*`，服务器在**开会话时**做同一套校验（`start_session` /
+`open_session`）：
+
+1. 控制端（网页）用**同一套用户 JWT** 证明身份（放在 `rc:start` / `rt:open`
+   的 `token` 字段）；
+2. 目标设备必须是**该用户名下的在线设备**；
+3. 且该设备**声明了对应能力**（`remote_control` / `remote_terminal`）。
+
+任何一条不满足，服务器直接回 `rc:error` / `rt:error`（带 `code`：`unauthorized`
+/ `offline` / `forbidden` / `unsupported`），不会把会话建起来。会话按
+`sessionId` 存在服务器内存里，控制端或设备**任一方断线**都会被清理（画面远程
+让设备停止采集；命令行远程杀掉对应 PTY）。
+
+### 9.2 命令行远程协议：`rt:*`
+
+低带宽字节流，**直接经服务器 relay**（`server → 另一端`），因此天生不依赖 TURN。
+`data` 字段是**「PTY 原始字节的 base64」**——base64 是为了让 ANSI/光标/控制序列
+原样穿过 JSON，服务器只做转发不解码。
+
+```
+控制端（web） → 服务器 → 设备
+    rt:open    {deviceId, token, shell?, cols?, rows?, cwd?}   开会话
+    rt:input   {sessionId, data}      键入写进 PTY（data=base64 字节）
+    rt:resize  {sessionId, cols, rows}   窗口尺寸变化，让 TUI 重排
+    rt:close   {sessionId}            关闭会话
+
+设备 → 服务器 → 控制端
+    rt:data    {sessionId, data}      PTY 输出（data=base64 字节）
+    rt:exit    {sessionId, code}      shell 进程退出（code 可能为 null）
+    rt:error   {sessionId, code, message}   本端失败
+
+服务器 → 控制端
+    rt:opened  {sessionId, deviceId, shell}   会话已受理（此时才开始发 rt:input）
+    rt:error   {code, message}                开会话被拒
+```
+
+**设备侧收到 `rt:open` 后应做的事**（官方 Windows 端 `pty.rs` + `remote-terminal.ts`
+的做法，第三方可用任意等价方式）：
+
+1. 按 `shell`（如 `powershell` / `pwsh` / `cmd`，缺省自选一个交互 shell）、
+   `cols`/`rows`、`cwd` 起一个**伪终端（PTY）**（Windows 走 ConPTY，
+   Linux/macOS 走 openpty）；
+2. 后台读 PTY 输出 → base64 → 持续发 `rt:data`；进程退出时发 `rt:exit`
+   带退出码；
+3. 收到 `rt:input` 把 base64 解码写进 PTY；收到 `rt:resize` 调整 PTY 行列；
+   收到 `rt:close` 杀掉进程回收会话；
+4. **一台设备可并存多个会话**（按 `sessionId` 路由）；agent socket 断线时把
+   自己所有 PTY 全部杀掉，避免留下孤儿 shell。
+
+> **安全**：命令行远程给的是**该用户对自己设备的完整 shell**，等价于本机
+> 终端，请确保只对设备属主开放（服务器已在 9.1 做所有权校验）。设备侧应把
+> PTY 跑在合适的工作目录/权限下，不要以超出预期的权限启动。
+
+### 9.3 画面远程协议：`rc:*`
+
+高带宽实时视频，走 **WebRTC 点对点**，只有 SDP/ICE 这几条小信令过服务器，
+**视频与键鼠事件本身不碰服务器**：
+
+```
+控制端（web） → 服务器 → 设备
+    rc:start   {deviceId, token}       开会话
+    rc:answer  {sessionId, sdp}        对 offer 的 SDP answer
+    rc:ice     {sessionId, candidate}  trickle ICE
+    rc:stop    {sessionId}             结束
+
+设备 → 服务器 → 控制端
+    rc:offer   {sessionId, sdp}        SDP offer（设备 offer）
+    rc:ice     {sessionId, candidate}  trickle ICE
+    rc:ready   {sessionId, width, height, rotation}
+    rc:error / rc:stopped
+
+服务器 → 控制端
+    rc:started {sessionId, deviceId}   会话已受理
+    rc:error   {code, message}         开会话被拒
+```
+
+**设备侧**负责：把屏幕采集成一条 WebRTC 视频轨（官方桌面端用**原生抓屏**
+→ canvas.captureStream，绕开 `getDisplayMedia` 的「屏幕共享」弹窗），开一个
+`control` DataChannel 接收归一化到 `[0,1]` 的鼠标/键盘事件并注入本机 OS。
+第三方设备若要接画面远程，需自备 WebRTC 端点与输入注入实现——比命令行远程
+重很多，**多数第三方设备只接命令行远程即可**。
+
+### 9.4 传输选型与 TURN（为什么两条通道不一样）
+
+- **命令行远程走 relay、不需要 TURN**：终端是文本，带宽极低，直接让服务器
+  在两端之间转发字节最简单也最稳——操作端与设备处在不同 NAT / 云安全组 /
+  CGNAT 下都能用。
+- **画面远程走 P2P、需要 TURN**：~30fps 视频太重，不能过服务器，只能点对点。
+  纯 STUN 打洞在同局域网/同机可用，但**公网跨 NAT 常常失败**，需要部署
+  **TURN 中继**。服务器会把 ICE 配置（STUN/TURN）随登录响应与
+  `GET /api/rtc/ice-servers` 下发，房主在**网页管理控制台 →「远程控制
+  （STUN/TURN）」**卡片填 TURN 凭据；设备侧只需照单使用，别写死。
+
+### 9.5 第三方设备接入清单
+
+- 只想要命令行远程：`capabilities` 加 `remote_terminal`，实现 9.2 的
+  `rt:*` 收发 + 本机 PTY 即可，无需任何 WebRTC。
+- 想要画面远程：`capabilities` 加 `remote_control`，实现 9.3 的 WebRTC 端点
+  与输入注入，并照 9.4 使用服务器下发的 ICE 配置。
+- 两条通道与第 8 节的 `task:dispatch` **互不干扰**，可同时存在；它们不进
+  任务队列、不入库、不走聊天管线。
+
+---
+
+## 10. Node.js 最小示例
 
 ```js
 // npm i socket.io-client axios
@@ -504,7 +634,7 @@ main()
 
 ---
 
-## 10. 辅助 REST 接口（Bearer `access_token` 认证）
+## 11. 辅助 REST 接口（Bearer `access_token` 认证）
 
 | 接口 | 用途 |
 | --- | --- |
@@ -517,7 +647,7 @@ main()
 
 ---
 
-## 11. 排查表
+## 12. 排查表
 
 | 症状 | 检查 |
 | --- | --- |
@@ -531,10 +661,13 @@ main()
 | 大结果发不出去 | 单帧 20 MB 上限；压缩图片或改为返回摘要 + 服务器路径 |
 | 工具改名/增删后授权丢失 | 正常行为：服务器按当前上报清单自动剪授权，去面板重新勾选 |
 | AI/网页说已创建动态 MCP 工具，设备侧一直调不到 | 见第 6 节：这是可选通道，先确认你的设备实现了 `device:tool-config` 监听与执行；未实现就不会响应，属预期行为 |
+| 命令行远程点开就报"不支持" | `capabilities` 里是否声明了 `remote_terminal`（见第 9 节）；旧客户端需更新后重连 |
+| 画面远程连上就断（公网） | 纯 STUN 打洞失败，需部署 TURN 中继并在管理台填凭据（见 9.4）；命令行远程无此问题 |
+| 命令行远程有回显但输入无效 | 确认 `rt:input` 的 `data` 是 base64；收到 `rt:open` 后先回 `rt:data` 再等 `rt:input` |
 
 ---
 
-## 12. 一致性承诺（服务器侧行为契约）
+## 13. 一致性承诺（服务器侧行为契约）
 
 服务器对遵循本手册的设备保证：
 
@@ -546,6 +679,11 @@ main()
 4. 绑定与授权记录按 `(用户, 设备id)` 持久化，跨重连、跨服务器重启保持；
 5. 第 6 节的动态 MCP 定义只由服务器（AI/网页操作）写入，设备重连时会收到
    当前完整集合的补发；设备不实现该通道不影响第 5 节静态 `toolDefs` 的正常调度。
+6. 第 9 节的两条远程连接通道（`rc:*` 画面 / `rt:*` 命令行）在**开会话时**统一做
+   所有权校验（用户 JWT + 设备属主 + 能力字），与第 8 节任务循环互不干扰；设备
+   声明哪个能力就解锁哪条，都不声明就都不开。
 
-协议如有演进，本文件与 `server/main/connector_runtime/dispatch/device_dispatch.py`
-头部的协议注释同步更新；以服务端实现为最终权威。
+协议如有演进，本文件与以下服务端协议注释同步更新，以服务端实现为最终权威：
+`connector_runtime/dispatch/device_dispatch.py`（任务分发）、
+`connector_runtime/dispatch/remote_control.py`（画面远程 `rc:*`）、
+`connector_runtime/dispatch/remote_terminal.py`（命令行远程 `rt:*`）。

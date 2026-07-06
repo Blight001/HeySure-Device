@@ -24,8 +24,61 @@ let agentConnectPromise = null;
 const agentTaskOutcomes = new Map();
 const MAX_AGENT_TASK_OUTCOMES = 100;
 
+// ── 自动化卡片编写规范（manage_card action=rules 返回给 AI）───────────────────
+// 与 06_automation_run.js 执行引擎、popup/automation-workbench.js 编辑器保持一致；
+// 改动步骤类型或字段时同步更新这里。
+const CARD_FORMAT_RULES = `# 自动化卡片 JSON 格式规范（cardData）
+
+## 顶层字段
+- name: string，卡片名称（为空时自动生成 automation_<时间戳>）
+- website: string，目标网址；若 steps 第一步不是 navigate，执行时会自动在最前插入跳转到 website 的 navigate 步骤
+- description: string，可选，卡片说明
+- password: string，可选，固定密码备注（执行时 {password} 变量来自 random.password 随机生成，不使用此字段）
+- points: number，可选，积分
+- random: { password: { length: number（默认 12，最小 4）, type: "mixed"|"lowercase"|"uppercase"|"numeric"|"alphanumeric" } }，决定执行时 {password} 的生成方式（mixed 含特殊字符）
+- popups: array，可选，弹窗关闭规则，形如 [{ "name": "关闭弹窗", "selector": ".modal-close" }]
+- steps: array，必填且非空，按顺序执行
+
+## 步骤通用字段
+- name: string，步骤名；type 步骤的 name/selector/text 中含「验证码/code/otp」会自动填入已获取的验证码，含「邮箱/email」会自动填入临时邮箱地址
+- type: string，必填，见下方步骤类型
+- selector: string，目标元素定位
+- by: "css_selector"（默认）| "text"（按可见文本，等价 selector 写 "text=xxx"）| "auto"（先 CSS 再按文本兜底）
+- nth: number，可选，同 selector 命中多个时取第几个
+- timeout: number，毫秒，可选
+- poll_interval_ms: number，毫秒，可选，轮询间隔
+- optional: true 时该步骤失败直接跳过，不中断流程
+
+## 步骤类型（type）
+- navigate: 跳转 url（省略 url 时用卡片 website；timeout 默认 30000）
+- click: 点击 selector 元素
+- type: 向 selector 输入 text；clear_first 输入前清空，click_before_type 输入前先点击
+- wait: 等待元素出现（selector + timeout，默认 3000）；也支持 wait_for_text / wait_for_element_hidden / wait_for_text_hidden
+- wait_verification_code: 等待临时邮箱验证码（timeout 默认 300000，poll_interval_ms 默认 1500），结果写入 {code}
+- save_cookies: 抓取并保存当前页 Cookie（需要上下文中已有账号与验证码/密码）
+- clear_current_page_cache: 清理当前页 Cookie/localStorage/sessionStorage/CacheStorage/IndexedDB
+- get_credits: 读取 selector 元素文本作为积分写入结果
+- external_script: 在页面执行 script 字段中的 JS 代码
+- screenshot: 占位步骤，当前不实际截图
+
+## 模板变量
+url/selector/text/script/wait_for_* 等字符串字段支持占位符：{account} {password} {email} {code}，执行时替换为运行上下文的值。
+
+## 最小示例
+{
+  "name": "示例注册",
+  "website": "https://example.com/signup",
+  "steps": [
+    { "name": "输入邮箱", "type": "type", "selector": "#email", "text": "{email}" },
+    { "name": "输入密码", "type": "type", "selector": "#password", "text": "{password}" },
+    { "name": "提交", "type": "click", "selector": "button[type=submit]" },
+    { "name": "等待验证码", "type": "wait_verification_code" },
+    { "name": "输入验证码", "type": "type", "selector": "#otp", "text": "{code}" }
+  ]
+}`;
+
 // ── 工具目录（上报给服务器，AI 据此调用）────────────────────────────────────
-// 与原 MCP Server 暴露的四个工具一致（get_status / write_card / run_card / save_cookies），
+// 与原 MCP Server 暴露的工具对齐（get_status / manage_card / run_card / save_cookies），
 // 服务器存储这些 schema 并在 mcp.list_tools / describe_tool 中呈现。
 function effectiveAgentToolDefs() {
     return [
@@ -35,14 +88,14 @@ function effectiveAgentToolDefs() {
             input_schema: { type: 'object', properties: {} }
         },
         {
-            name: 'write_card',
-            description: '创建新的自动化卡片、用同一个 id 覆盖已有卡片，或删除一个已有卡片。action=create/overwrite 时需要提供 cardData（完整卡片 JSON，至少包含 name/website/steps）；action=delete 时需要提供 id。',
+            name: 'manage_card',
+            description: '自动化卡片管理：action=rules 返回卡片 JSON 的编写格式规范（字段、步骤类型、模板变量，首次写卡片前先看）；action=write 创建新卡片或用同一个 id 覆盖已有卡片（需提供 cardData，完整卡片 JSON，至少包含 name/website/steps）；action=get 获取指定卡片的完整规则 JSON；action=delete 删除指定卡片。',
             input_schema: {
                 type: 'object',
                 properties: {
-                    action: { type: 'string', enum: ['create', 'overwrite', 'delete'], description: '操作类型。' },
-                    id: { type: 'string', description: '目标卡片 id；create 可省略（自动生成），overwrite/delete 必填。' },
-                    cardData: { type: 'object', description: '完整的卡片 JSON，仅 create/overwrite 需要。' }
+                    action: { type: 'string', enum: ['rules', 'write', 'get', 'delete'], description: 'rules 查看卡片编写格式规范；write 写入/覆盖卡片；get 读取卡片完整 JSON；delete 删除卡片。' },
+                    id: { type: 'string', description: '目标卡片 id；write 省略则按卡片名新建（同名覆盖），get 省略则返回当前选中卡片，delete 必填。' },
+                    cardData: { type: 'object', description: '完整的卡片 JSON，仅 action=write 需要；格式见 action=rules。' }
                 },
                 required: ['action']
             }
@@ -437,18 +490,54 @@ async function runAgentToolCommand(tool, args) {
     switch (tool) {
         case 'get_status': {
             const state = await loadCardCacheState();
-            return { items: state.items, selectedId: state.selectedId };
+            // 只回基本信息（与工具描述一致）；完整卡片 JSON 用 manage_card action=get 获取。
+            return {
+                items: state.items.map((item) => ({
+                    id: item.id,
+                    cardName: item.cardName,
+                    stepCount: Array.isArray(item.cardData && item.cardData.steps) ? item.cardData.steps.length : 0,
+                    savedAt: item.savedAt,
+                    selected: item.id === state.selectedId
+                })),
+                selectedId: state.selectedId
+            };
         }
-        case 'write_card': {
-            const action = String(payload.action || '').trim();
+        case 'manage_card':
+        case 'write_card': { // write_card 为旧名兼容（服务器可能仍缓存旧 toolDefs）
+            const action = String(payload.action || '').trim().toLowerCase();
+            if (action === 'rules' || action === 'get_rules') {
+                return { rules: CARD_FORMAT_RULES };
+            }
+            if (action === 'get') {
+                const state = await loadCardCacheState();
+                const targetId = String(payload.id || '').trim() || state.selectedId;
+                const entry = state.items.find((item) => item.id === targetId);
+                if (!entry) {
+                    throw new Error(targetId ? `未找到自动化卡片: ${targetId}` : '当前没有已保存的自动化卡片');
+                }
+                return {
+                    id: entry.id,
+                    cardName: entry.cardName,
+                    savedAt: entry.savedAt,
+                    selected: entry.id === state.selectedId,
+                    cardData: entry.cardData
+                };
+            }
             if (action === 'delete') {
                 return await deleteCardCacheEntry(String(payload.id || '').trim());
             }
-            if (action === 'create' || action === 'overwrite') {
-                const saved = await saveCardCacheState(payload.cardData, String(payload.id || '').trim());
-                return { action, id: saved.selectedId, items: saved.items, selectedId: saved.selectedId };
+            if (action === 'write' || action === 'create' || action === 'overwrite') {
+                // id 省略时按卡片名生成，避免落到 saveCardCacheState 的
+                // selectedId 兜底而覆盖当前选中的卡片。
+                const targetId = String(payload.id || '').trim()
+                    || String((payload.cardData && payload.cardData.name) || '').trim()
+                    || `automation_${Date.now()}`;
+                const state = await loadCardCacheState().catch(() => ({ items: [], selectedId: '' }));
+                const overwritten = state.items.some((item) => item.id === targetId);
+                const saved = await saveCardCacheState(payload.cardData, targetId);
+                return { action: 'write', id: saved.selectedId, overwritten, cardCount: saved.items.length };
             }
-            throw new Error(`未知的 write_card action: ${action || '(空)'}`);
+            throw new Error(`未知的 manage_card action: ${action || '(空)'}`);
         }
         case 'run_card': {
             const state = await loadCardCacheState();
@@ -522,6 +611,20 @@ function summarizeAgentResult(tool, result) {
         }
         if (tool === 'get_status' && Array.isArray(result.items)) {
             return `共 ${result.items.length} 张自动化卡片`;
+        }
+        if (tool === 'manage_card' || tool === 'write_card') {
+            if (result.rules) {
+                return '已返回自动化卡片编写格式规范';
+            }
+            if (result.deleted) {
+                return `已删除自动化卡片: ${result.id}`;
+            }
+            if (result.cardData) {
+                return `已获取自动化卡片: ${result.cardName || result.id}`;
+            }
+            if (result.action === 'write') {
+                return `${result.overwritten ? '已覆盖' : '已创建'}自动化卡片: ${result.id}（现共 ${result.cardCount} 张）`;
+            }
         }
         if (tool === 'browser_tab') {
             return `browser_tab ${result.action || ''} 完成${result.url ? `: ${result.url}` : ''}`;

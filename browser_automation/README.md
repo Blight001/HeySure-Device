@@ -60,7 +60,7 @@
 | 分类 | 工具 | 功能说明 |
 |------|------|----------|
 | 自动化卡片 | `get_status`    | 列出所有已保存的自动化卡片（id、名称、步骤数、保存时间等） |
-| 自动化卡片 | `write_card`    | 创建新卡片、覆盖已有卡片或删除卡片 |
+| 自动化卡片 | `manage_card`   | 卡片管理：rules 查看卡片编写格式规范、write 创建/覆盖卡片、get 获取卡片完整规则 JSON、delete 删除卡片（原 `write_card` 扩展而来，旧名仍兼容执行） |
 | 自动化卡片 | `run_card`      | 在当前活动标签页执行自动化卡片流程（可指定账号/邮箱，耗时操作） |
 | 自动化卡片 | `save_cookies`  | 抓取当前页面的 Cookie + localStorage + sessionStorage，可选上传到指定服务器 |
 | 导航与搜索 | `browser_tab`   | 标签页管理与导航：list / switch / replace / navigate / close / back / forward |

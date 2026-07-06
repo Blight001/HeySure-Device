@@ -22,6 +22,11 @@ xcap = "0.4"
 windows = { version = "0.56", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging"] }
 # 帧编码：把捕获到的 RgbaImage 压成 JPEG（仅需 jpeg 编码器）。
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
+# 命令行远程（PTY）：跨平台伪终端，Windows 下走 ConPTY。承载「统一远程连接」
+# 的 rt:* 交互式终端（src/remote-terminal.ts），见 device/read.md。
+portable-pty = "0.8"
+# PTY 字节流经 Socket.IO relay 传输，用 base64 装进 rt:data / rt:input 的 data 字段。
+base64 = "0.22"
 # 开机自启支持（写入注册表实现 Windows 开机启动，默认启用）。
 tauri-plugin-autostart = "2"
 

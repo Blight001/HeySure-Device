@@ -8,6 +8,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod guard;
+mod pty;
 mod rc;
 
 use serde_json::{json, Value};
@@ -277,6 +278,34 @@ async fn rc_capture_frame(quality: u8) -> tauri::ipc::Response {
     tauri::ipc::Response::new(bytes)
 }
 
+// --- 命令行远程（PTY）：为 rt:* 交互式终端提供本机 shell 底座（见 src/pty.rs）---
+#[tauri::command]
+fn pty_open(
+    app: AppHandle,
+    session_id: String,
+    shell: Option<String>,
+    cols: Option<u16>,
+    rows: Option<u16>,
+    cwd: Option<String>,
+) -> Result<(), String> {
+    pty::open(app, session_id, shell, cols, rows, cwd)
+}
+
+#[tauri::command]
+fn pty_write(session_id: String, data: String) -> Result<(), String> {
+    pty::write(&session_id, &data)
+}
+
+#[tauri::command]
+fn pty_resize(session_id: String, cols: Option<u16>, rows: Option<u16>) -> Result<(), String> {
+    pty::resize(&session_id, cols, rows)
+}
+
+#[tauri::command]
+fn pty_close(session_id: String) {
+    pty::close(&session_id)
+}
+
 #[tauri::command]
 fn set_tray_status<R: Runtime>(app: AppHandle<R>, status: String, paused: bool) -> Result<(), String> {
     let tray = app.tray_by_id("main-tray").ok_or_else(|| "tray not found".to_string())?;
@@ -380,6 +409,10 @@ fn main() {
             remove_temp_dir,
             rc_inject_input,
             rc_capture_frame,
+            pty_open,
+            pty_write,
+            pty_resize,
+            pty_close,
             set_tray_status,
         ])
         .run(tauri::generate_context!())

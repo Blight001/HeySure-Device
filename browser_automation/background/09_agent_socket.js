@@ -61,14 +61,15 @@ function effectiveAgentToolDefs() {
         },
         {
             name: 'save_cookies',
-            description: '抓取当前活动标签页的 Cookie、localStorage、sessionStorage，默认保存为本地 JSON 文件；若提供 server_url 会额外把数据 POST 到该地址。返回值只含统计信息与上传状态，不含原始 Cookie 内容。',
+            description: '抓取当前活动标签页的 Cookie、localStorage、sessionStorage，默认保存为本地 JSON 文件；若提供 server_url 会额外把数据 POST 到该地址。若 save_to_server=true（推荐给 AI 使用），则将完整数据返回服务器，服务器会自动保存到该 AI 对应的工作目录（cookies/ 子文件夹）中，返回的 result 只保留元数据与保存路径，不含原始 Cookie 内容。',
             input_schema: {
                 type: 'object',
                 properties: {
                     account: { type: 'string', description: '可选：关联账号，用于文件命名。' },
                     password: { type: 'string', description: '可选：关联密码，用于文件命名。' },
                     server_url: { type: 'string', description: '可选：抓取结果额外 POST 上传的服务器地址。' },
-                    card_key: { type: 'string', description: '可选：随上传附带的卡密/凭证标识。' }
+                    card_key: { type: 'string', description: '可选：随上传附带的卡密/凭证标识。' },
+                    save_to_server: { type: 'boolean', description: 'AI 调用时设为 true：将抓取的完整 Cookie 数据随任务结果返回服务器，由服务器持久化保存到对应 AI 的目录（cookies/ 下）。不回传原始内容到聊天记录。' }
                 }
             }
         },
@@ -466,14 +467,16 @@ async function runAgentToolCommand(tool, args) {
         }
         case 'save_cookies':
         case 'capture_cookies': {
+            const saveToServer = !!(payload.saveToServer || payload.save_to_server);
             const raw = await captureCurrentTab({
                 account: payload.account || '',
                 password: payload.password || '',
                 serverUrl: payload.serverUrl || payload.server_url || '',
-                cardKey: payload.cardKey || payload.card_key || ''
+                cardKey: payload.cardKey || payload.card_key || '',
+                saveToServer
             });
-            // 只回传统计信息与上传状态，避免把原始 Cookie 内容带出。
-            return {
+            // 仅当 save_to_server 请求时才把原始数据带回（供服务器落盘到 AI 目录）；默认不带，避免泄漏。
+            const out = {
                 success: raw && raw.success !== false,
                 fileName: raw && raw.fileName,
                 cookieCount: raw && raw.cookieCount,
@@ -481,6 +484,13 @@ async function runAgentToolCommand(tool, args) {
                 pageUrl: raw && raw.pageUrl,
                 upload: raw && raw.upload
             };
+            if (saveToServer && raw) {
+                if (raw.cookies) out.cookies = raw.cookies;
+                if (raw.browserStorage) out.browserStorage = raw.browserStorage;
+                if (raw.data) out.data = raw.data;
+                out.save_to_server = true;
+            }
+            return out;
         }
         case 'browser_tab':
             return await toolBrowserTab(payload);
@@ -504,7 +514,11 @@ function summarizeAgentResult(tool, result) {
             return `${result.success ? '执行完成' : '执行未完成'}: ${result.cardName}`;
         }
         if (tool === 'save_cookies') {
-            return `已抓取 Cookie ${Number(result.cookieCount || 0)} 条`;
+            const cnt = Number(result.cookieCount || 0);
+            if (result.saved_to_server && result.file_name) {
+                return `已抓取 Cookie ${cnt} 条，已保存到服务器 AI 目录: ${result.file_name}`;
+            }
+            return `已抓取 Cookie ${cnt} 条`;
         }
         if (tool === 'get_status' && Array.isArray(result.items)) {
             return `共 ${result.items.length} 张自动化卡片`;

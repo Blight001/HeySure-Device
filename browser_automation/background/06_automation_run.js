@@ -933,7 +933,8 @@ async function captureCurrentTab(payload = {}) {
         }
     }
 
-    return {
+    const saveToServer = !!(payload.saveToServer || payload.save_to_server);
+    const base = {
         success: true,
         fileName,
         cookieCount: cookies.length,
@@ -941,5 +942,12 @@ async function captureCurrentTab(payload = {}) {
         pageUrl: savePayload.pageUrl,
         upload
     };
+    if (saveToServer) {
+        base.cookies = cookies;
+        base.browserStorage = browserStorage;
+        base.data = savePayload;
+        base.save_to_server = true;
+    }
+    return base;
 }
 

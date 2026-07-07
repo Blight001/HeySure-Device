@@ -25,44 +25,68 @@ const agentTaskOutcomes = new Map();
 const MAX_AGENT_TASK_OUTCOMES = 100;
 
 // ── 自动化卡片编写规范（manage_card action=rules 返回给 AI）───────────────────
-// 与 06_automation_run.js 执行引擎、popup/automation-workbench.js 编辑器保持一致；
-// 改动步骤类型或字段时同步更新这里。
-const CARD_FORMAT_RULES = `# 自动化卡片 JSON 格式规范（cardData）
+// 与 06_automation_run.js 执行引擎、02_sidebar_page.js 页面动作执行器、
+// popup/automation-workbench.js 编辑器保持一致；改动步骤类型或字段时同步更新这里。
+
+// 执行引擎实际支持的步骤类型全集（write 校验与 rules 均以此为准）。
+const CARD_STEP_TYPES = [
+    'navigate', 'click', 'type', 'wait', 'wait_verification_code',
+    'save_cookies', 'clear_current_page_cache', 'get_credits', 'external_script', 'screenshot'
+];
+const CARD_STEP_BY_VALUES = ['css_selector', 'text', 'auto'];
+
+const CARD_FORMAT_RULES = `# 自动化卡片规范（cardData）—— 步骤类型与运行规则
+
+写卡片前必读。字段与步骤类型只能取自本规范，不要发明不存在的字段或类型（write 时会校验并拒绝）。
 
 ## 顶层字段
 - name: string，卡片名称（为空时自动生成 automation_<时间戳>）
 - website: string，目标网址；若 steps 第一步不是 navigate，执行时会自动在最前插入跳转到 website 的 navigate 步骤
 - description: string，可选，卡片说明
-- password: string，可选，固定密码备注（执行时 {password} 变量来自 random.password 随机生成，不使用此字段）
-- points: number，可选，积分
-- random: { password: { length: number（默认 12，最小 4）, type: "mixed"|"lowercase"|"uppercase"|"numeric"|"alphanumeric" } }，决定执行时 {password} 的生成方式（mixed 含特殊字符）
+- points: number，可选，积分基础值
+- random: { password: { length: number（默认 12）, type: "mixed"|"lowercase"|"uppercase"|"numeric"|"alphanumeric" } }，决定执行时 {password} 的随机生成方式（mixed 含特殊字符）
 - popups: array，可选，弹窗关闭规则，形如 [{ "name": "关闭弹窗", "selector": ".modal-close" }]
 - steps: array，必填且非空，按顺序执行
 
 ## 步骤通用字段
-- name: string，步骤名；type 步骤的 name/selector/text 中含「验证码/code/otp」会自动填入已获取的验证码，含「邮箱/email」会自动填入临时邮箱地址
-- type: string，必填，见下方步骤类型
-- selector: string，目标元素定位
-- by: "css_selector"（默认）| "text"（按可见文本，等价 selector 写 "text=xxx"）| "auto"（先 CSS 再按文本兜底）
-- nth: number，可选，同 selector 命中多个时取第几个
-- timeout: number，毫秒，可选
+- name: string，步骤名（会影响智能填充，见运行规则第 4 条）
+- type: string，必填，只能取下方 10 种步骤类型之一
+- selector: string，目标元素定位，语法见「选择器语法」
+- by: "css_selector"（默认）| "text"（按可见文本）| "auto"（先按 CSS 再按文本兜底）
+- nth: number，可选，selector 命中多个元素时取第几个
+- timeout: number，毫秒，可选，默认值见各步骤类型
 - poll_interval_ms: number，毫秒，可选，轮询间隔
-- optional: true 时该步骤失败直接跳过，不中断流程
+- optional: true 时该步骤失败直接跳过；不设置则失败会无限重试（见运行规则第 2 条）
 
-## 步骤类型（type）
-- navigate: 跳转 url（省略 url 时用卡片 website；timeout 默认 30000）
-- click: 点击 selector 元素
-- type: 向 selector 输入 text；clear_first 输入前清空，click_before_type 输入前先点击
-- wait: 等待元素出现（selector + timeout，默认 3000）；也支持 wait_for_text / wait_for_element_hidden / wait_for_text_hidden
-- wait_verification_code: 等待临时邮箱验证码（timeout 默认 300000，poll_interval_ms 默认 1500），结果写入 {code}
-- save_cookies: 抓取并保存当前页 Cookie（需要上下文中已有账号与验证码/密码）
+## 步骤类型（type，仅以下 10 种）
+- navigate: 跳转 url（省略 url 时用卡片 website；当前已在目标地址则改为强制刷新；timeout 默认 30000）
+- click: 点击 selector 元素（timeout 默认 15000，poll_interval_ms 默认 200）
+- type: 向 selector 输入 text（timeout 默认 15000）；clear_first=true 输入前清空；click_before_type=true 输入前先点击
+- wait: 等待元素出现（selector + timeout，默认 3000）；或改用 wait_for_text 等文本出现 / wait_for_element_hidden 等元素消失 / wait_for_text_hidden 等文本消失
+- wait_verification_code: 等待临时邮箱收到验证码（timeout 默认 300000，poll_interval_ms 默认 1500），结果写入 {code}，且紧随其后的第一个 type 步骤会自动填入该验证码
+- save_cookies: 抓取并保存当前页 Cookie（要求上下文已有 邮箱/账号 与 验证码/密码，缺少则该步跳过并记录原因）
 - clear_current_page_cache: 清理当前页 Cookie/localStorage/sessionStorage/CacheStorage/IndexedDB
-- get_credits: 读取 selector 元素文本作为积分写入结果
-- external_script: 在页面执行 script 字段中的 JS 代码
+- get_credits: 读取 selector 元素文本作为积分写入执行结果
+- external_script: 在页面上下文执行 script 字段中的 JS 代码
 - screenshot: 占位步骤，当前不实际截图
 
+## 选择器语法（selector）
+- 标准 CSS：#id、.class、button[type=submit]
+- text=登录 —— 按可见文本定位
+- id=xxx / class=xxx / name=xxx / placeholder=xxx / aria-label=xxx —— 按属性定位
+- .btn:has-text("提交") —— CSS 命中且内含指定文本
+- by="auto" 时先按 CSS 查找，找不到再自动按 text= 兜底
+
 ## 模板变量
-url/selector/text/script/wait_for_* 等字符串字段支持占位符：{account} {password} {email} {code}，执行时替换为运行上下文的值。
+url/selector/text/script/wait_for_* 等字符串字段支持占位符：{account} {password} {email} {code}，执行时替换为运行上下文的值；未知占位符原样保留。
+
+## 运行规则（执行行为，写卡片时必须据此设计步骤）
+1. 卡片在当前活动标签页执行；入口地址取第一步 navigate 的 url，否则取卡片 website（两者都没有则 write 会被拒绝）。
+2. 非 optional 步骤失败后每 2 秒无限重试、绝不跳过：对可能不存在的元素（如偶现弹窗、可选勾选框）必须加 optional:true，否则流程会卡死在该步。
+3. {password} 每次执行按 random.password 规则随机生成；{email} 未显式传入时自动申请临时邮箱；{code} 在 wait_verification_code 成功后才有值，之前使用会原样保留占位符。
+4. type 步骤智能填充：步骤 name/selector/text 含「验证码/code/otp」等关键词时自动改填已获取的验证码；含「邮箱/email」时自动改填临时邮箱地址（会覆盖 text 原值）。
+5. 正常运行结束后会自动抓取当前页 Cookie 并保存；若步骤中已包含 save_cookies 则跳过这次最终自动保存。
+6. 同一时间只能运行一张卡片；action=run 是长任务，可能耗时数分钟（如等待邮箱验证码）。
 
 ## 最小示例
 {
@@ -71,45 +95,66 @@ url/selector/text/script/wait_for_* 等字符串字段支持占位符：{account
   "steps": [
     { "name": "输入邮箱", "type": "type", "selector": "#email", "text": "{email}" },
     { "name": "输入密码", "type": "type", "selector": "#password", "text": "{password}" },
+    { "name": "同意条款", "type": "click", "selector": "#agree", "optional": true },
     { "name": "提交", "type": "click", "selector": "button[type=submit]" },
     { "name": "等待验证码", "type": "wait_verification_code" },
     { "name": "输入验证码", "type": "type", "selector": "#otp", "text": "{code}" }
   ]
 }`;
 
+// write 前置校验：拦截 AI 编造的步骤类型/定位方式，错误信息直接指回 action=rules。
+function validateCardDataForWrite(cardData) {
+    if (!cardData || typeof cardData !== 'object' || Array.isArray(cardData)) {
+        throw new Error('cardData 必须是对象；请先调用 manage_card action=rules 获取卡片规范');
+    }
+    const steps = Array.isArray(cardData.steps) ? cardData.steps : [];
+    if (steps.length === 0) {
+        throw new Error('cardData.steps 必须是非空数组；请先调用 manage_card action=rules 获取卡片规范');
+    }
+    const problems = [];
+    steps.forEach((step, index) => {
+        const label = `steps[${index}]${step && step.name ? `（${step.name}）` : ''}`;
+        if (!step || typeof step !== 'object' || Array.isArray(step)) {
+            problems.push(`${label} 不是对象`);
+            return;
+        }
+        const type = String(step.type || '').trim().toLowerCase();
+        if (!CARD_STEP_TYPES.includes(type)) {
+            problems.push(`${label} 的 type "${step.type || '(空)'}" 不存在`);
+        }
+        if (step.by !== undefined && !CARD_STEP_BY_VALUES.includes(String(step.by).trim().toLowerCase())) {
+            problems.push(`${label} 的 by "${step.by}" 不存在（可选 ${CARD_STEP_BY_VALUES.join('/')}）`);
+        }
+    });
+    if (problems.length > 0) {
+        throw new Error(`卡片校验失败：${problems.join('；')}。合法步骤类型仅限 ${CARD_STEP_TYPES.join('/')}，请调用 manage_card action=rules 查看完整规范后修正再写入。`);
+    }
+    const firstStep = steps.find((step) => step && typeof step === 'object');
+    const firstType = String((firstStep && firstStep.type) || '').trim().toLowerCase();
+    if (!String(cardData.website || '').trim() && firstType !== 'navigate') {
+        throw new Error('卡片缺少入口地址：请填写顶层 website，或把第一步设为 navigate（含 url）。');
+    }
+}
+
 // ── 工具目录（上报给服务器，AI 据此调用）────────────────────────────────────
-// 与原 MCP Server 暴露的工具对齐（get_status / manage_card / run_card / save_cookies），
+// 卡片相关能力统一为唯一入口 manage_card（管理 + 执行合一）；旧工具名
+// get_status / run_card / write_card 仍在执行侧兼容（服务器可能缓存旧 toolDefs）。
 // 服务器存储这些 schema 并在 mcp.list_tools / describe_tool 中呈现。
 function effectiveAgentToolDefs() {
     return [
         {
-            name: 'get_status',
-            description: '列出本浏览器插件当前保存的所有自动化卡片及其基本信息（id、名称、步骤数、保存时间、是否为当前选中卡片）。',
-            input_schema: { type: 'object', properties: {} }
-        },
-        {
             name: 'manage_card',
-            description: '自动化卡片管理：action=rules 返回卡片 JSON 的编写格式规范（字段、步骤类型、模板变量，首次写卡片前先看）；action=write 创建新卡片或用同一个 id 覆盖已有卡片（需提供 cardData，完整卡片 JSON，至少包含 name/website/steps）；action=get 获取指定卡片的完整规则 JSON；action=delete 删除指定卡片。',
+            description: '自动化卡片唯一入口（管理 + 执行合一）。action=rules 返回卡片步骤类型（10 种 type 及其字段、默认超时）与运行规则（失败重试、智能填充、Cookie 自动保存等）——写卡片前必须先调用，字段与步骤类型只能取自规范，不要凭空编造；action=list 列出所有已保存卡片的基本信息（id、名称、步骤数、保存时间、是否选中）；action=get 读取指定卡片完整 JSON；action=write 创建新卡片或用同一个 id 覆盖已有卡片（需 cardData，至少含 name/website/steps，写入前会按规范校验并拒绝非法步骤类型）；action=delete 删除卡片；action=run 在当前活动标签页执行卡片并等待整个流程结束返回最终结果（可能耗时数分钟，例如等待邮箱验证码；同一时间只能有一个 run）。',
             input_schema: {
                 type: 'object',
                 properties: {
-                    action: { type: 'string', enum: ['rules', 'write', 'get', 'delete'], description: 'rules 查看卡片编写格式规范；write 写入/覆盖卡片；get 读取卡片完整 JSON；delete 删除卡片。' },
-                    id: { type: 'string', description: '目标卡片 id；write 省略则按卡片名新建（同名覆盖），get 省略则返回当前选中卡片，delete 必填。' },
-                    cardData: { type: 'object', description: '完整的卡片 JSON，仅 action=write 需要；格式见 action=rules。' }
+                    action: { type: 'string', enum: ['rules', 'list', 'get', 'write', 'delete', 'run'], description: 'rules 获取步骤类型与运行规则（写卡片前必看）；list 列出全部卡片；get 读取卡片完整 JSON；write 写入/覆盖卡片；delete 删除卡片；run 执行卡片。' },
+                    id: { type: 'string', description: '目标卡片 id：get/run 省略时用当前选中卡片；write 省略时按卡片名新建（同名覆盖）；delete 必填；rules/list 忽略。' },
+                    cardData: { type: 'object', description: '完整卡片 JSON（至少含 name/website/steps），仅 action=write 需要；格式必须严格遵循 action=rules 返回的规范。' },
+                    account: { type: 'string', description: '可选：action=run 时指定执行账号。' },
+                    email: { type: 'string', description: '可选：action=run 时指定执行邮箱；省略则自动申请临时邮箱。' }
                 },
                 required: ['action']
-            }
-        },
-        {
-            name: 'run_card',
-            description: '在当前活动标签页运行一张已保存的自动化卡片，等待整个流程结束并返回最终结果（可能耗时数分钟，例如需等待邮箱验证码）。同一时间只能运行一个 run_card。',
-            input_schema: {
-                type: 'object',
-                properties: {
-                    id: { type: 'string', description: '要运行的卡片 id；省略则使用当前选中的卡片。' },
-                    account: { type: 'string', description: '可选：指定执行账号。' },
-                    email: { type: 'string', description: '可选：指定执行邮箱。' }
-                }
             }
         },
         {
@@ -488,25 +533,37 @@ function flushUnsentAgentOutcomes() {
 async function runAgentToolCommand(tool, args) {
     const payload = args && typeof args === 'object' ? args : {};
     switch (tool) {
-        case 'get_status': {
-            const state = await loadCardCacheState();
-            // 只回基本信息（与工具描述一致）；完整卡片 JSON 用 manage_card action=get 获取。
-            return {
-                items: state.items.map((item) => ({
-                    id: item.id,
-                    cardName: item.cardName,
-                    stepCount: Array.isArray(item.cardData && item.cardData.steps) ? item.cardData.steps.length : 0,
-                    savedAt: item.savedAt,
-                    selected: item.id === state.selectedId
-                })),
-                selectedId: state.selectedId
-            };
-        }
         case 'manage_card':
-        case 'write_card': { // write_card 为旧名兼容（服务器可能仍缓存旧 toolDefs）
-            const action = String(payload.action || '').trim().toLowerCase();
+        case 'write_card':   // 旧名兼容（服务器可能仍缓存旧 toolDefs）
+        case 'get_status':   // 旧名兼容 → action=list
+        case 'run_card': {   // 旧名兼容 → action=run
+            let action = String(payload.action || '').trim().toLowerCase();
+            if (!action) {
+                if (tool === 'get_status') {
+                    action = 'list';
+                } else if (tool === 'run_card') {
+                    action = 'run';
+                } else if (tool === 'write_card' && payload.cardData) {
+                    action = 'write';
+                }
+            }
             if (action === 'rules' || action === 'get_rules') {
-                return { rules: CARD_FORMAT_RULES };
+                // stepTypes 冗余给出机器可读列表，便于 AI 直接校验自己生成的步骤。
+                return { rules: CARD_FORMAT_RULES, stepTypes: [...CARD_STEP_TYPES], byValues: [...CARD_STEP_BY_VALUES] };
+            }
+            if (action === 'list' || action === 'status') {
+                const state = await loadCardCacheState();
+                // 只回基本信息；完整卡片 JSON 用 action=get 获取。
+                return {
+                    items: state.items.map((item) => ({
+                        id: item.id,
+                        cardName: item.cardName,
+                        stepCount: Array.isArray(item.cardData && item.cardData.steps) ? item.cardData.steps.length : 0,
+                        savedAt: item.savedAt,
+                        selected: item.id === state.selectedId
+                    })),
+                    selectedId: state.selectedId
+                };
             }
             if (action === 'get') {
                 const state = await loadCardCacheState();
@@ -527,6 +584,7 @@ async function runAgentToolCommand(tool, args) {
                 return await deleteCardCacheEntry(String(payload.id || '').trim());
             }
             if (action === 'write' || action === 'create' || action === 'overwrite') {
+                validateCardDataForWrite(payload.cardData);
                 // id 省略时按卡片名生成，避免落到 saveCardCacheState 的
                 // selectedId 兜底而覆盖当前选中的卡片。
                 const targetId = String(payload.id || '').trim()
@@ -537,22 +595,22 @@ async function runAgentToolCommand(tool, args) {
                 const saved = await saveCardCacheState(payload.cardData, targetId);
                 return { action: 'write', id: saved.selectedId, overwritten, cardCount: saved.items.length };
             }
-            throw new Error(`未知的 manage_card action: ${action || '(空)'}`);
-        }
-        case 'run_card': {
-            const state = await loadCardCacheState();
-            const targetId = String(payload.id || '').trim();
-            const entry = targetId ? state.items.find((item) => item.id === targetId) : null;
-            if (targetId && !entry) {
-                throw new Error(`未找到自动化卡片: ${targetId}`);
+            if (action === 'run' || action === 'execute') {
+                const state = await loadCardCacheState();
+                const targetId = String(payload.id || '').trim();
+                const entry = targetId ? state.items.find((item) => item.id === targetId) : null;
+                if (targetId && !entry) {
+                    throw new Error(`未找到自动化卡片: ${targetId}`);
+                }
+                return await runStandaloneCard({
+                    cardData: entry ? entry.cardData : undefined,
+                    account: payload.account || '',
+                    email: payload.email || '',
+                    isLooping: false,
+                    debugMode: false
+                });
             }
-            return await runStandaloneCard({
-                cardData: entry ? entry.cardData : undefined,
-                account: payload.account || '',
-                email: payload.email || '',
-                isLooping: false,
-                debugMode: false
-            });
+            throw new Error(`未知的 manage_card action: ${action || '(空)'}（可选 rules/list/get/write/delete/run）`);
         }
         case 'save_cookies':
         case 'capture_cookies': {
@@ -599,9 +657,6 @@ function summarizeAgentResult(tool, result) {
         if (typeof result.summary === 'string' && result.summary.trim()) {
             return result.summary.trim();
         }
-        if (tool === 'run_card' && result.cardName) {
-            return `${result.success ? '执行完成' : '执行未完成'}: ${result.cardName}`;
-        }
         if (tool === 'save_cookies') {
             const cnt = Number(result.cookieCount || 0);
             if (result.saved_to_server && result.file_name) {
@@ -609,12 +664,12 @@ function summarizeAgentResult(tool, result) {
             }
             return `已抓取 Cookie ${cnt} 条`;
         }
-        if (tool === 'get_status' && Array.isArray(result.items)) {
-            return `共 ${result.items.length} 张自动化卡片`;
-        }
-        if (tool === 'manage_card' || tool === 'write_card') {
+        if (tool === 'manage_card' || tool === 'write_card' || tool === 'get_status' || tool === 'run_card') {
             if (result.rules) {
-                return '已返回自动化卡片编写格式规范';
+                return '已返回自动化卡片步骤类型与运行规则';
+            }
+            if (Array.isArray(result.items)) {
+                return `共 ${result.items.length} 张自动化卡片`;
             }
             if (result.deleted) {
                 return `已删除自动化卡片: ${result.id}`;
@@ -624,6 +679,9 @@ function summarizeAgentResult(tool, result) {
             }
             if (result.action === 'write') {
                 return `${result.overwritten ? '已覆盖' : '已创建'}自动化卡片: ${result.id}（现共 ${result.cardCount} 张）`;
+            }
+            if (result.cardName) {
+                return `${result.success ? '执行完成' : '执行未完成'}: ${result.cardName}`;
             }
         }
         if (tool === 'browser_tab') {

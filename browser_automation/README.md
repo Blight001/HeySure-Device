@@ -59,9 +59,7 @@
 
 | 分类 | 工具 | 功能说明 |
 |------|------|----------|
-| 自动化卡片 | `get_status`    | 列出所有已保存的自动化卡片（id、名称、步骤数、保存时间等） |
-| 自动化卡片 | `manage_card`   | 卡片管理：rules 查看卡片编写格式规范、write 创建/覆盖卡片、get 获取卡片完整规则 JSON、delete 删除卡片（原 `write_card` 扩展而来，旧名仍兼容执行） |
-| 自动化卡片 | `run_card`      | 在当前活动标签页执行自动化卡片流程（可指定账号/邮箱，耗时操作） |
+| 自动化卡片 | `manage_card`   | 卡片唯一入口（管理 + 执行合一）：rules 获取步骤类型与运行规则（写卡片前必看，write 会按规范校验拒绝非法步骤类型）、list 列出全部卡片、get 获取卡片完整 JSON、write 创建/覆盖卡片、delete 删除卡片、run 在当前活动标签页执行卡片（可指定账号/邮箱，耗时操作）。旧工具名 `get_status`/`run_card`/`write_card` 仍兼容执行（分别等价 list/run/write） |
 | 自动化卡片 | `save_cookies`  | 抓取当前页面的 Cookie + localStorage + sessionStorage，可选上传到指定服务器 |
 | 导航与搜索 | `browser_tab`   | 标签页管理与导航：list / switch / replace / navigate / close / back / forward |
 | 页面观察   | `browser_observe`    | 感知当前视口的可交互元素、媒体、可见文本与 iframe 边界，返回带 id 的 items 列表供 `browser_action` 用 `ref` 精确点击 |

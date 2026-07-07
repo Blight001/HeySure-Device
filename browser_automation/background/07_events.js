@@ -251,16 +251,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             } catch (error) {
                 try {
                     const lastState = await loadStandaloneProgressState().catch(() => null);
+                    const baseErr = error && error.message ? error.message : '执行失败';
+                    // 优先使用进度中保存的详细错误原因（步骤+selector+尝试次数等）
+                    const detailedErr = (lastState && (lastState.errorReason || lastState.message)) || baseErr;
                     await saveStandaloneProgressState({
                         ...(lastState && typeof lastState === 'object' ? lastState : {}),
                         tabId: lastState?.tabId || null,
                         cardName: String(message.payload?.cardData?.name || lastState?.cardName || '').trim(),
-                        message: error && error.message ? error.message : '执行失败',
+                        message: detailedErr,
                         phase: 'failed',
                         mode: '',
                         isLooping: false,
                         kind: 'error',
-                        errorReason: error && error.message ? error.message : '执行失败',
+                        errorReason: detailedErr,
                         progress: Number.isFinite(Number(lastState?.progress)) ? Number(lastState.progress) : 0,
                         running: false,
                         visible: true
@@ -275,20 +278,25 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                     });
                 } catch (_error) {
                 }
+                let detailedForFinished = error && error.message ? error.message : '执行失败';
                 try {
+                    const pstate = await loadStandaloneProgressState().catch(() => null);
+                    if (pstate && (pstate.errorReason || pstate.message)) {
+                        detailedForFinished = pstate.errorReason || pstate.message;
+                    }
                     await chrome.runtime.sendMessage({
                         type: 'card-run-finished',
                         success: false,
                         progress: 0,
                         mode: message.payload?.debugMode === true ? 'debug' : 'run',
-                        errorReason: error && error.message ? error.message : '执行失败',
-                        message: error && error.message ? error.message : '执行失败'
+                        errorReason: detailedForFinished,
+                        message: detailedForFinished
                     });
                 } catch (_error) {
                 }
                 sendResponse({
                     success: false,
-                    error: error && error.message ? error.message : '执行失败'
+                    error: detailedForFinished
                 });
             }
         })();

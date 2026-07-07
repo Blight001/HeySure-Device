@@ -55,6 +55,7 @@ const sidebarEditorShell = document.getElementById('sidebar-editor-shell');
 const sidebarCardNameInput = document.getElementById('sidebar-card-name');
 const sidebarCardWebsiteInput = document.getElementById('sidebar-card-website');
 const sidebarCardDescriptionInput = document.getElementById('sidebar-card-description');
+const sidebarCardAccountInput = document.getElementById('sidebar-card-account');
 const sidebarCardPasswordInput = document.getElementById('sidebar-card-password');
 const sidebarCardPointsInput = document.getElementById('sidebar-card-points');
 const sidebarCardRandomLengthInput = document.getElementById('sidebar-card-random-length');
@@ -1123,6 +1124,7 @@ function collectSidebarCardDataFromForm() {
         name: String(sidebarCardNameInput?.value || base.name || '').trim() || '未命名自动化卡片',
         website: String(sidebarCardWebsiteInput?.value || base.website || '').trim(),
         description: String(sidebarCardDescriptionInput?.value || base.description || '').trim(),
+        account: String(sidebarCardAccountInput?.value || base.account || '').trim(),
         password: String(sidebarCardPasswordInput?.value || base.password || '').trim(),
         points: Number.isFinite(points) ? points : 0,
         random: {
@@ -1161,6 +1163,7 @@ function renderSidebarCardEditor(cardData) {
     if (sidebarCardNameInput) sidebarCardNameInput.value = String(normalized.name || '');
     if (sidebarCardWebsiteInput) sidebarCardWebsiteInput.value = String(normalized.website || '');
     if (sidebarCardDescriptionInput) sidebarCardDescriptionInput.value = String(normalized.description || '');
+    if (sidebarCardAccountInput) sidebarCardAccountInput.value = String(normalized.account || '');
     if (sidebarCardPasswordInput) sidebarCardPasswordInput.value = String(normalized.password || '');
     if (sidebarCardPointsInput) sidebarCardPointsInput.value = String(normalized.points ?? 0);
     if (sidebarCardRandomLengthInput) sidebarCardRandomLengthInput.value = String(normalized.random?.password?.length || 12);

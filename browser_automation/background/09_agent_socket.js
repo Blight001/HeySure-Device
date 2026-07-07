@@ -24,6 +24,9 @@ let agentConnectPromise = null;
 const agentTaskOutcomes = new Map();
 const MAX_AGENT_TASK_OUTCOMES = 100;
 
+// 用于 MCP / agent 调用 manage_card run 时，将 card-run-progress 实时转发为 task:progress
+let activeMcpCardTask = null;
+
 // ── 自动化卡片编写规范（manage_card action=rules 返回给 AI）───────────────────
 // 与 06_automation_run.js 执行引擎、02_sidebar_page.js 页面动作执行器、
 // popup/automation-workbench.js 编辑器保持一致；改动步骤类型或字段时同步更新这里。
@@ -43,8 +46,10 @@ const CARD_FORMAT_RULES = `# 自动化卡片规范（cardData）—— 步骤类
 - name: string，卡片名称（为空时自动生成 automation_<时间戳>）
 - website: string，目标网址；若 steps 第一步不是 navigate，执行时会自动在最前插入跳转到 website 的 navigate 步骤
 - description: string，可选，卡片说明
+- account: string，可选，执行账号（{account} 模板、Cookie 文件名；MCP run 时可覆盖）
+- password: string，可选，执行密码（{password} 模板、Cookie 文件名；MCP run 时可覆盖，否则按 random 生成）
 - points: number，可选，积分基础值
-- random: { password: { length: number（默认 12）, type: "mixed"|"lowercase"|"uppercase"|"numeric"|"alphanumeric" } }，决定执行时 {password} 的随机生成方式（mixed 含特殊字符）
+- random: { password: { length: number（默认 12）, type: "mixed"|"lowercase"|"uppercase"|"numeric"|"alphanumeric" } }，决定 {password} 未提供时的随机生成方式
 - popups: array，可选，弹窗关闭规则，形如 [{ "name": "关闭弹窗", "selector": ".modal-close" }]
 - steps: array，必填且非空，按顺序执行
 
@@ -82,11 +87,11 @@ url/selector/text/script/wait_for_* 等字符串字段支持占位符：{account
 
 ## 运行规则（执行行为，写卡片时必须据此设计步骤）
 1. 卡片在当前活动标签页执行；入口地址取第一步 navigate 的 url，否则取卡片 website（两者都没有则 write 会被拒绝）。
-2. 非 optional 步骤失败后每 2 秒无限重试、绝不跳过：对可能不存在的元素（如偶现弹窗、可选勾选框）必须加 optional:true，否则流程会卡死在该步。
-3. {password} 每次执行按 random.password 规则随机生成；{email} 未显式传入时自动申请临时邮箱；{code} 在 wait_verification_code 成功后才有值，之前使用会原样保留占位符。
+2. 非 optional 步骤失败后最多重试 3 次（间隔约 2 秒），超过上限则失败并结束；对可能不存在的元素（如偶现弹窗、可选勾选框）必须加 optional:true，否则流程可能因重试耗尽失败。
+3. account/password 优先使用 run(payload) 传入值，其次卡片顶层 account/password，否则 password 随机生成（按 random 配置）；email 由 run 传入或卡片顶层提供（不再自动通过软件 HTTP 打开临时邮箱浏览器）；{code} 在 wait_verification_code 成功后才有值，之前使用会原样保留占位符。
 4. type 步骤智能填充：步骤 name/selector/text 含「验证码/code/otp」等关键词时自动改填已获取的验证码；含「邮箱/email」时自动改填临时邮箱地址（会覆盖 text 原值）。
 5. 正常运行结束后会自动抓取当前页 Cookie 并保存；若步骤中已包含 save_cookies 则跳过这次最终自动保存。
-6. 同一时间只能运行一张卡片；action=run 是长任务，可能耗时数分钟（如等待邮箱验证码）。
+6. 同一时间只能运行一张卡片；action=run 是长任务，可能耗时数分钟（如等待邮箱验证码）。执行期间会通过 task:progress 及时反馈每步开始/完成/重试/错误等完整过程，而非仅返回最终结果。
 
 ## 最小示例
 {
@@ -144,15 +149,16 @@ function effectiveAgentToolDefs() {
     return [
         {
             name: 'manage_card',
-            description: '自动化卡片唯一入口（管理 + 执行合一）。action=rules 返回卡片步骤类型（10 种 type 及其字段、默认超时）与运行规则（失败重试、智能填充、Cookie 自动保存等）——写卡片前必须先调用，字段与步骤类型只能取自规范，不要凭空编造；action=list 列出所有已保存卡片的基本信息（id、名称、步骤数、保存时间、是否选中）；action=get 读取指定卡片完整 JSON；action=write 创建新卡片或用同一个 id 覆盖已有卡片（需 cardData，至少含 name/website/steps，写入前会按规范校验并拒绝非法步骤类型）；action=delete 删除卡片；action=run 在当前活动标签页执行卡片并等待整个流程结束返回最终结果（可能耗时数分钟，例如等待邮箱验证码；同一时间只能有一个 run）。',
+            description: '自动化卡片唯一入口（管理 + 执行合一）。action=rules 返回卡片步骤类型（10 种 type 及其字段、默认超时）与运行规则（失败重试、智能填充、Cookie 自动保存等）——写卡片前必须先调用，字段与步骤类型只能取自规范，不要凭空编造；action=list 列出所有已保存卡片的基本信息（id、名称、步骤数、保存时间、是否选中）；action=get 读取指定卡片完整 JSON；action=write 创建新卡片或用同一个 id 覆盖已有卡片（需 cardData，至少含 name/website/steps，写入前会按规范校验并拒绝非法步骤类型）；action=delete 删除卡片；action=run 在当前活动标签页执行卡片，执行中通过 task:progress 及时反馈完整过程（每步开始/完成/重试/错误），最终返回结果（可能耗时数分钟，例如等待邮箱验证码；同一时间只能有一个 run；失败操作最多重试 3 次）。',
             input_schema: {
                 type: 'object',
                 properties: {
                     action: { type: 'string', enum: ['rules', 'list', 'get', 'write', 'delete', 'run'], description: 'rules 获取步骤类型与运行规则（写卡片前必看）；list 列出全部卡片；get 读取卡片完整 JSON；write 写入/覆盖卡片；delete 删除卡片；run 执行卡片。' },
                     id: { type: 'string', description: '目标卡片 id：get/run 省略时用当前选中卡片；write 省略时按卡片名新建（同名覆盖）；delete 必填；rules/list 忽略。' },
                     cardData: { type: 'object', description: '完整卡片 JSON（至少含 name/website/steps），仅 action=write 需要；格式必须严格遵循 action=rules 返回的规范。' },
-                    account: { type: 'string', description: '可选：action=run 时指定执行账号。' },
-                    email: { type: 'string', description: '可选：action=run 时指定执行邮箱；省略则自动申请临时邮箱。' }
+                    account: { type: 'string', description: '可选：action=run 时指定执行账号（用于 {account} 模板及 Cookie 命名；优先于卡片顶层 account）。' },
+                    password: { type: 'string', description: '可选：action=run 时指定执行密码（用于 {password} 模板及 Cookie 命名；优先于卡片顶层 password，否则随机生成）。' },
+                    email: { type: 'string', description: '可选：action=run 时指定执行邮箱（用于 {email} 模板；省略则不自动打开邮箱浏览器）。' }
                 },
                 required: ['action']
             }
@@ -190,7 +196,7 @@ function effectiveAgentToolDefs() {
         // ── 页面观察 ───────────────────────────────────────────────────────
         {
             name: 'browser_observe',
-            description: '感知当前视口里用户能看到的内容：返回 items 单一混排列表（按位置排序、已去重），kind=interactive 是最顶层、未被遮挡的按钮/链接/输入框/下拉/菜单项等（每项带 id，用于 browser_action 的 ref 参数），kind=text 是普通可见文本，kind=media 是图片/视频/音频（category=image/video/audio，不可点击），kind=frame 是页面内 iframe 边界（accessible=true 表示同源已扫描，其子元素以 inFrame=true 的 interactive 返回）。会扫描主文档、同源（含嵌套）iframe 内部内容以及 Shadow DOM（开放与被强制开放的封闭 root），并识别 img/video/audio 媒体元素；跨域 iframe 内部仍不可访问。除固定的按钮/链接/表单控件外，还会识别 cursor:pointer 或类名/ID 以 btn/button/link 结尾的自定义控件。若匹配条目超过 limit/max_items，默认不返回 items，只返回 tooMany=true 与 categoryCounts，提示继续用 filter/tag/keyword 缩小范围；也可传 frame（iframe 的 frameSelector）或 frame_path 只观察某个 iframe 内部。默认会在页面上绘制描边标记：绿色=可点击、红色=被遮挡/禁用/不可点、紫色虚线=iframe 边界。用途：点击/输入前的首选观察手段。场景：先 observe 拿到 id，再用 browser_action {action:"click", ref:id} 精确点击；页面变化后重新 observe 以刷新 id（id 只在下一次 observe 前有效）。',
+            description: '感知当前视口里用户能看到的内容：返回 items 单一混排列表（按位置排序、已去重），kind=interactive 是最顶层、未被遮挡的按钮/链接/输入框/下拉/菜单项等（每项带临时 id + tag/selector/name/placeholder/ariaLabel/value/optionsSample 等基本信息），kind=text 是普通可见文本，kind=media 是图片/视频/音频（category=image/video/audio，不可点击），kind=frame 是页面内 iframe 边界（accessible=true 表示同源已扫描，其子元素以 inFrame=true 的 interactive 返回）。会扫描主文档、同源（含嵌套）iframe 内部内容以及 Shadow DOM（开放与被强制开放的封闭 root），并识别 img/video/audio 媒体元素；跨域 iframe 内部仍不可访问。除固定的按钮/链接/表单控件外，还会识别 cursor:pointer 或类名/ID 以 btn/button/link 结尾的自定义控件。若匹配条目超过 limit/max_items，默认不返回 items，只返回 tooMany=true 与 categoryCounts，提示继续用 filter/tag/keyword 缩小范围；也可传 frame（iframe 的 frameSelector）或 frame_path 只观察某个 iframe 内部。默认会在页面上绘制描边标记：绿色=可点击、红色=被遮挡/禁用/不可点、紫色虚线=iframe 边界。用途：点击/输入前的首选观察手段 + 卡片信息收集。场景：observe 后优先使用返回的 selector 或 text+tag 构造自动化卡片步骤（持久化推荐）；ref 可用于临时 browser_action 操作；页面变化后重新 observe（id 只在下一次 observe 前有效）。',
             input_schema: {
                 type: 'object',
                 properties: {
@@ -218,17 +224,17 @@ function effectiveAgentToolDefs() {
         // ── 页面交互 ───────────────────────────────────────────────────────
         {
             name: 'browser_action',
-            description: '页面交互聚合工具：用 action 指定要做的动作——点击 click（单击）、双击 double_click、右键 right_click、滚动 scroll、输入文本 type、键盘按键 press_key。定位优先级 ref（browser_observe 返回的 id，最稳）> selector > text > 坐标；非坐标点击会先做遮挡检测，被遮挡时返回 occluded 诊断（需穿透点击传 force:true）。\n' +
+            description: '页面交互聚合工具：用 action 指定要做的动作——点击 click（单击）、双击 double_click、右键 right_click、滚动 scroll、输入文本 type、键盘按键 press_key。定位优先级：selector（observe 返回的稳定 CSS）或 text > ref（临时 id，仅本次有效） > 坐标；非坐标点击会先做遮挡检测，被遮挡时返回 occluded 诊断（需穿透点击传 force:true）。\n' +
                 '· click / double_click / right_click：派发 pointer+mouse 合成事件序列（非 CDP trusted 事件，多数站点的框架事件监听能覆盖，但个别依赖真实用户手势的场景可能无效）。\n' +
                 '· scroll：滚动页面，返回滚动前后位置与移动像素数。\n' +
                 '· type：向 input/textarea/可编辑区输入文本（单字段；多字段请多次 type）；submit:true 时优先调用所在表单的 requestSubmit()（合成键盘事件不会触发浏览器原生 Enter 提交，这里用等效方式兜底）。\n' +
                 '· press_key：在焦点元素或指定 selector 上派发合成键盘事件，可带 Ctrl/Shift/Alt/Meta 修饰键；同样不是 CDP trusted 事件，按 Enter 时会尝试兜底 requestSubmit()。\n' +
-                '用途：统一的点击/滚动/输入/键盘入口。场景：先 browser_observe 拿到 id，再 browser_action {action:"click", ref:id} 点击；页面变化后如需查看结果，自行再调用一次 browser_observe（本工具不会自动附带增量观察）。',
+                '用途：统一的点击/滚动/输入/键盘入口。场景：先 browser_observe 获取元素基本信息（含 selector），用 selector/text 构造卡片步骤或用 ref 做临时 browser_action；页面变化后自行再 observe。',
             input_schema: {
                 type: 'object',
                 properties: {
                     action: { type: 'string', enum: ['click', 'double_click', 'right_click', 'scroll', 'type', 'press_key'], description: '要执行的交互动作。' },
-                    ref: { type: ['number', 'string'], description: 'browser_observe 返回的元素 id（click/double_click/right_click/type 均可用），最稳的定位方式，优先使用；仅在下一次 browser_observe 之前有效。' },
+                    ref: { type: ['number', 'string'], description: 'browser_observe 返回的元素临时 id（click/double_click/right_click/type 均可用）；仅本次 observe 有效。优先推荐使用 observe 返回的 selector 或 text（现包含 tag/name/placeholder 等基本信息），适合构造持久化自动化卡片步骤。' },
                     selector: { type: 'string', description: '目标元素的 CSS selector（click/double_click/right_click 定位；type 指定输入框；press_key 指定先聚焦的元素；scroll 可指定滚动进视口的元素）。' },
                     text: { type: 'string', description: 'action=click/double_click/right_click 时用可见文本定位元素；action=type 时为「要输入的文本」。' },
                     x: { type: 'number', description: 'click/double_click/right_click 的 X 坐标（像素，视口坐标）。' },
@@ -602,13 +608,69 @@ async function runAgentToolCommand(tool, args) {
                 if (targetId && !entry) {
                     throw new Error(`未找到自动化卡片: ${targetId}`);
                 }
-                return await runStandaloneCard({
-                    cardData: entry ? entry.cardData : undefined,
-                    account: payload.account || '',
-                    email: payload.email || '',
-                    isLooping: false,
-                    debugMode: false
-                });
+                activeMcpCardTask = { taskId };
+                try {
+                    if (agentSocket && agentSocket.connected) {
+                        agentSocket.emit('task:progress', { taskId, progress: 3, message: '开始执行自动化卡片（MCP）' });
+                    }
+                    return await runStandaloneCard({
+                        cardData: entry ? entry.cardData : undefined,
+                        account: payload.account || '',
+                        password: payload.password || '',
+                        email: payload.email || '',
+                        isLooping: false,
+                        debugMode: false
+                    });
+                } catch (runErr) {
+                    // 捕获执行失败，返回带详细原因的结构化结果（而非抛错），让 MCP 返回详细的 error / errorReason
+                    let detailedError = (runErr && runErr.message) ? runErr.message : String(runErr || '卡片执行失败');
+                    let stepInfo = '';
+                    try {
+                        const lastProg = await loadStandaloneProgressState().catch(() => null);
+                        if (lastProg && typeof lastProg === 'object') {
+                            const progErr = String(lastProg.errorReason || lastProg.message || '').trim();
+                            if (progErr) {
+                                detailedError = progErr;
+                            }
+                            const sIdx = lastProg.stepIndex != null ? lastProg.stepIndex : '';
+                            const sName = String(lastProg.stepName || '').trim();
+                            if (sName || sIdx) {
+                                stepInfo = `[步骤 ${sIdx}${sName ? ` ${sName}` : ''}] `;
+                            }
+                            if (lastProg.cardName && !detailedError.includes(lastProg.cardName)) {
+                                // 确保卡片名可见
+                            }
+                        }
+                    } catch (_) {}
+                    const finalErr = stepInfo + detailedError;
+                    // 尽量从最后进度状态带出更多上下文
+                    let extra = {};
+                    try {
+                        const lp = await loadStandaloneProgressState().catch(() => null);
+                        if (lp) {
+                            extra = {
+                                stepIndex: lp.stepIndex,
+                                stepTotal: lp.stepTotal,
+                                stepName: lp.stepName,
+                                phase: lp.phase
+                            };
+                        }
+                    } catch (_) {}
+                    return {
+                        success: false,
+                        cardName: (entry && entry.cardName) || '',
+                        error: finalErr,
+                        errorReason: finalErr,
+                        account: payload.account || '',
+                        password: payload.password || '',
+                        email: payload.email || '',
+                        cookiesSaved: false,
+                        stopped: false,
+                        ...extra
+                    };
+                } finally {
+                    activeMcpCardTask = null;
+                }
             }
             throw new Error(`未知的 manage_card action: ${action || '(空)'}（可选 rules/list/get/write/delete/run）`);
         }
@@ -681,7 +743,11 @@ function summarizeAgentResult(tool, result) {
                 return `${result.overwritten ? '已覆盖' : '已创建'}自动化卡片: ${result.id}（现共 ${result.cardCount} 张）`;
             }
             if (result.cardName) {
-                return `${result.success ? '执行完成' : '执行未完成'}: ${result.cardName}`;
+                if (result.success === false) {
+                    const reason = String(result.error || result.errorReason || result.message || '未知原因').trim();
+                    return `执行失败: ${result.cardName} - ${reason}`;
+                }
+                return `执行完成: ${result.cardName}`;
             }
         }
         if (tool === 'browser_tab') {
@@ -742,7 +808,9 @@ async function handleAgentTask(task) {
         emitAgentOutcome(taskId, entry);
     } catch (error) {
         const errMsg = error && error.message ? error.message : String(error);
-        const entry = { kind: 'error', error: errMsg, userId: task.userId };
+        // 尽量保留更多上下文（例如卡片相关）
+        const detailedErr = (task && task.args && task.args.id) ? `${errMsg} (卡片ID: ${task.args.id})` : errMsg;
+        const entry = { kind: 'error', error: detailedErr, userId: task.userId };
         rememberAgentOutcome(taskId, entry);
         emitAgentOutcome(taskId, entry);
     }
@@ -937,6 +1005,35 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     })();
 
     return true; // async sendResponse
+});
+
+// ── MCP 卡片执行进度转发（使 manage_card run 能及时反馈完整过程，而非仅最终结果）────
+chrome.runtime.onMessage.addListener((message, _sender, _sendResponse) => {
+    if (!message || message.type !== 'card-run-progress' || !activeMcpCardTask || !agentSocket || !agentSocket.connected) {
+        return false;
+    }
+    try {
+        const p = message;
+        const progNum = Number.isFinite(Number(p.progress)) ? Math.max(0, Math.min(100, Number(p.progress))) : 0;
+        const progressPayload = {
+            taskId: activeMcpCardTask.taskId,
+            progress: progNum,
+            message: p.message || `卡片执行进度 ${progNum}%`,
+            phase: p.phase || '',
+            stepIndex: p.stepIndex,
+            stepTotal: p.stepTotal,
+            stepName: p.stepName,
+            kind: p.kind || '',
+            retrying: !!p.retrying,
+            cardName: p.cardName || '',
+            mode: p.mode,
+            errorReason: p.errorReason || p.error || '',
+            previousStepName: p.previousStepName || '',
+            nextStepName: p.nextStepName || ''
+        };
+        agentSocket.emit('task:progress', progressPayload);
+    } catch (_e) {}
+    return false;
 });
 
 // 模块加载即尝试恢复连接（SW 被唤醒时）。

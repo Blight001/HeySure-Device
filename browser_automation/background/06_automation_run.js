@@ -6,6 +6,35 @@ function isEmailStepName(value = '') {
     return /邮箱|email|mail|电子邮箱|邮箱地址|e-mail/i.test(String(value || '').trim());
 }
 
+// 构建详细的失败原因（用于进度、最终错误、MCP 返回）
+function buildDetailedFailureReason({
+    stepIndex = 0,
+    stepName = '',
+    stepType = '',
+    reason = '',
+    attempt = 1,
+    maxAttempts = 3,
+    selector = '',
+    extra = ''
+} = {}) {
+    const parts = [];
+    const idx = Number(stepIndex) || 0;
+    if (idx > 0) parts.push(`步骤 ${idx}`);
+    if (stepName) parts.push(`「${String(stepName).trim()}」`);
+    if (stepType) parts.push(`(${stepType})`);
+    let head = parts.join(' ');
+    if (selector) {
+        const shortSel = String(selector).trim().slice(0, 100);
+        head += ` selector=${shortSel}${String(selector).length > 100 ? '...' : ''}`;
+    }
+    if (attempt > 1) {
+        head += ` [尝试 ${attempt}/${maxAttempts}]`;
+    }
+    let msg = reason ? String(reason).trim() : '执行失败';
+    if (extra) msg += ` ${String(extra).trim()}`;
+    return head ? `${head} 失败: ${msg}` : msg;
+}
+
 async function runStandaloneCard(payload = {}) {
     const providedCardData = payload.cardData && typeof payload.cardData === 'object'
         ? payload.cardData
@@ -14,12 +43,20 @@ async function runStandaloneCard(payload = {}) {
     const cachedCard = providedCardData ? null : await loadCardCache().catch(() => null);
     const cardData = normalizeStandaloneSteps(providedCardData || cachedCard?.cardData || {});
     const progressMode = payload.debugMode === true ? 'debug' : isLooping ? 'loop' : 'run';
+
+    // Credential precedence: payload (MCP/UI override) > cardData (editor "账号密码栏目") > random (password only)
+    const providedAccount = String(payload.account || cardData.account || '').trim();
+    const providedPassword = String(payload.password || cardData.password || '').trim();
+    const useRandomPassword = !providedPassword;
+    const computedPassword = providedPassword || generateRandomString(cardData.random?.password?.length || 12, cardData.random?.password?.type || 'mixed');
+    const providedEmail = String(payload.email || cardData.email || '').trim();
     const totalSteps = Array.isArray(cardData.steps) ? cardData.steps.length : 0;
     const stepProgressStart = 40;
     const stepProgressEnd = payload.debugMode === true ? 96 : 94;
     const stepProgressSpan = totalSteps > 0 ? (stepProgressEnd - stepProgressStart) / totalSteps : 0;
     const retryFailedStepInRunMode = payload.debugMode !== true;
     const stepRetryDelayMs = Math.max(1000, Number(payload.step_retry_delay_ms || payload.stepRetryDelayMs || payload.retryDelayMs || 2000));
+    const MAX_STEP_RETRIES = 3;
     let tabId = 0;
     let currentCardName = '';
     let pendingVerificationCodeInput = false;
@@ -52,10 +89,10 @@ async function runStandaloneCard(payload = {}) {
     };
 
     const context = {
-        account: String(payload.account || '').trim(),
-        password: generateRandomString(cardData.random?.password?.length || 12, cardData.random?.password?.type || 'mixed'),
+        account: providedAccount,
+        password: computedPassword,
         code: '',
-        email: String(payload.email || '').trim(),
+        email: providedEmail,
         tempEmailCardName: '',
         tempEmailProviderName: '',
         tempEmailAddress: ''
@@ -63,7 +100,7 @@ async function runStandaloneCard(payload = {}) {
 
     const tab = await getOrFindActiveTab(cardData.website || '');
     if (!tab || !Number.isFinite(Number(tab.id || 0))) {
-        throw new Error('未找到可用的当前标签页');
+        throw new Error('卡片执行失败：未找到可用的当前标签页');
     }
 
     tabId = Number(tab.id);
@@ -78,6 +115,12 @@ async function runStandaloneCard(payload = {}) {
     };
     standaloneSessions.set(tabId, executionState);
     let tempEmailContext = null;
+
+    // 重试控制：执行失败最多尝试 3 次，避免无限循环
+    let stepAttempt = 1;
+    let lastFailedStepIndex = -1;
+    let maxRetriesExceeded = false;
+    let lastDetailedError = '';  // 记录最后一次详细失败原因，用于最终返回/MCP
     try {
         if (payload.debugMode === true) {
             await saveStandaloneDebugControlState({
@@ -134,7 +177,9 @@ async function runStandaloneCard(payload = {}) {
         }, emitProgress, 8);
         await throwIfStopped(tabId);
         await emitProgress({
-            message: `已生成随机密码: ${context.password.length} 位`,
+            message: useRandomPassword
+                ? `已生成随机密码: ${context.password.length} 位`
+                : `使用卡片/传入密码（长度 ${context.password.length}）`,
             progress: 38,
             phase: 'password_ready'
         });
@@ -165,8 +210,20 @@ async function runStandaloneCard(payload = {}) {
 
         const step = steps[index];
         if (!step || typeof step !== 'object') {
-            throw new Error(`步骤 ${index + 1} 配置无效`);
+            const invErr = buildDetailedFailureReason({ stepIndex: index + 1, stepName: `步骤${index + 1}`, stepType: 'invalid', reason: '步骤配置无效' });
+            lastDetailedError = invErr;
+            throw new Error(invErr);
         }
+
+        // 计算当前步骤尝试次数（仅在 retry 模式下递增）
+        if (index !== lastFailedStepIndex) {
+            stepAttempt = 1;
+            lastFailedStepIndex = index;
+        } else if (retryFailedStepInRunMode) {
+            stepAttempt++;
+        }
+        const currentAttempt = stepAttempt;
+        const maxAttempts = MAX_STEP_RETRIES;
 
         const stepType = String(step.type || '').trim().toLowerCase();
         const stepName = String(step.name || `步骤${index + 1}`).trim() || `步骤${index + 1}`;
@@ -174,7 +231,8 @@ async function runStandaloneCard(payload = {}) {
         const liveStepSpan = liveTotalSteps > 0 ? (stepProgressEnd - stepProgressStart) / liveTotalSteps : 0;
         const stepStartProgress = Math.min(stepProgressEnd, stepProgressStart + (index * liveStepSpan));
         const stepEndProgress = Math.min(stepProgressEnd, stepProgressStart + ((index + 1) * liveStepSpan));
-        const stepLabel = formatStepProgressLabel(index + 1, liveTotalSteps, stepName);
+        const attemptInfo = (retryFailedStepInRunMode && currentAttempt > 1) ? ` (尝试 ${currentAttempt}/${maxAttempts})` : '';
+        const stepLabel = formatStepProgressLabel(index + 1, liveTotalSteps, stepName) + attemptInfo;
         const previousStepName = index > 0 ? String(steps[index - 1]?.name || `步骤${index}`).trim() || `步骤${index}` : '';
         const nextStepName = index + 1 < liveTotalSteps
             ? String(steps[index + 1]?.name || `步骤${index + 2}`).trim() || `步骤${index + 2}`
@@ -184,12 +242,44 @@ async function runStandaloneCard(payload = {}) {
             message = '',
             retryMessage = '',
             errorReason = '',
-            phase = 'step_retry'
+            phase = 'step_retry',
+            stepType = '',
+            selector = ''
         } = {}) => {
-            const reason = String(errorReason || error?.message || '').trim();
+            const rawReason = String(errorReason || error?.message || error || '').trim();
+            const detailed = buildDetailedFailureReason({
+                stepIndex: index + 1,
+                stepName,
+                stepType,
+                reason: rawReason,
+                attempt: currentAttempt,
+                maxAttempts,
+                selector
+            });
+            lastDetailedError = detailed;
+
             if (retryFailedStepInRunMode) {
+                if (currentAttempt >= maxAttempts) {
+                    await emitProgress({
+                        message: retryMessage || detailed,
+                        progress: stepStartProgress,
+                        kind: 'error',
+                        mode: progressMode,
+                        phase,
+                        stepIndex: index + 1,
+                        stepTotal: liveTotalSteps,
+                        stepName,
+                        previousStepName,
+                        nextStepName,
+                        errorReason: detailed,
+                        running: false,
+                        retrying: false
+                    });
+                    maxRetriesExceeded = true;
+                    return 'max_reached';
+                }
                 await emitProgress({
-                    message: retryMessage || `${stepLabel} · 执行失败，正在重试`,
+                    message: retryMessage || `${stepLabel} · 执行失败，正在重试 (${currentAttempt}/${maxAttempts})`,
                     progress: stepStartProgress,
                     kind: 'error',
                     mode: progressMode,
@@ -199,12 +289,12 @@ async function runStandaloneCard(payload = {}) {
                     stepName,
                     previousStepName,
                     nextStepName,
-                    errorReason: reason,
+                    errorReason: detailed,
                     running: true,
                     retrying: true
                 });
                 await sleepWithStandaloneStopCheck(stepRetryDelayMs, tabId);
-                return;
+                return 'retrying';
             }
 
             executionState.currentStepIndex = index;
@@ -218,8 +308,8 @@ async function runStandaloneCard(payload = {}) {
                 stepIndex: index + 1,
                 stepTotal: liveTotalSteps,
                 progress: stepStartProgress,
-                errorReason: reason || String(message || '').trim(),
-                message: message || error?.message || `${stepLabel} · 执行失败，已暂停等待修改`,
+                errorReason: detailed,
+                message: message || detailed,
                 previousStepName,
                 nextStepName
             }, emitProgress);
@@ -232,6 +322,7 @@ async function runStandaloneCard(payload = {}) {
                 previousStepName,
                 nextStepName
             });
+            return 'paused';
         };
         await emitProgress({
             message: `${stepLabel} · 开始执行`,
@@ -265,7 +356,9 @@ async function runStandaloneCard(payload = {}) {
                         error: new Error(`步骤 ${stepName} 缺少有效 URL`),
                         message: `${stepLabel} · 缺少有效 URL`,
                         retryMessage: `${stepLabel} · 缺少有效 URL，正在重试`,
-                        errorReason: `步骤 ${stepName} 缺少有效 URL`
+                        errorReason: `步骤 ${stepName} 缺少有效 URL`,
+                        stepType: 'navigate',
+                        selector: ''
                     });
                     continue;
                 }
@@ -299,12 +392,18 @@ async function runStandaloneCard(payload = {}) {
                 index += 1;
                 continue;
             } catch (error) {
-                await handleStepFailure({
+                const handled = await handleStepFailure({
                     error,
                     message: error && error.message ? error.message : `${stepLabel} · 导航失败，已暂停等待修改`,
                     retryMessage: error && error.message ? `${stepLabel} · ${error.message}，正在重试` : `${stepLabel} · 导航失败，正在重试`,
-                    errorReason: error && error.message ? error.message : `步骤 ${stepName} 导航失败`
+                    errorReason: error && error.message ? error.message : `步骤 ${stepName} 导航失败`,
+                    stepType: 'navigate',
+                    selector: step.url || activeCardData.website || ''
                 });
+                if (handled === 'max_reached') {
+                    const d = lastDetailedError || `${stepLabel} 失败（已重试 ${currentAttempt} 次达到上限）`;
+                    throw new Error(d);
+                }
                 continue;
             }
         }
@@ -327,12 +426,17 @@ async function runStandaloneCard(payload = {}) {
                 }, tempEmailContext, emitProgress));
                 const code = String(codeResult.code || '').trim();
                 if (!code) {
-                    await handleStepFailure({
+                    const handled = await handleStepFailure({
                         error: new Error('等待验证码超时'),
                         message: `${stepLabel} · 等待验证码超时，已暂停`,
                         retryMessage: `${stepLabel} · 等待验证码超时，正在重试`,
-                        errorReason: '等待验证码超时'
+                        errorReason: '等待验证码超时',
+                        stepType: 'wait_verification_code'
                     });
+                    if (handled === 'max_reached') {
+                        const d = lastDetailedError || `${stepLabel} 失败（已重试 ${currentAttempt} 次达到上限）`;
+                        throw new Error(d);
+                    }
                     continue;
                 }
 
@@ -355,12 +459,17 @@ async function runStandaloneCard(payload = {}) {
                 index += 1;
                 continue;
             } catch (error) {
-                await handleStepFailure({
+                const handled = await handleStepFailure({
                     error,
                     message: error && error.message ? error.message : `${stepLabel} · 等待验证码失败，已暂停等待修改`,
                     retryMessage: error && error.message ? `${stepLabel} · ${error.message}，正在重试` : `${stepLabel} · 等待验证码失败，正在重试`,
-                    errorReason: error && error.message ? error.message : '等待验证码失败'
+                    errorReason: error && error.message ? error.message : '等待验证码失败',
+                    stepType: 'wait_verification_code'
                 });
+                if (handled === 'max_reached') {
+                    const d = lastDetailedError || `${stepLabel} 失败（已重试 ${currentAttempt} 次达到上限）`;
+                    throw new Error(d);
+                }
                 continue;
             }
         }
@@ -443,12 +552,17 @@ async function runStandaloneCard(payload = {}) {
                 index += 1;
                 continue;
             } catch (error) {
-                await handleStepFailure({
+                const handled = await handleStepFailure({
                     error,
                     message: error && error.message ? error.message : `${stepLabel} · 清理当前页缓存失败，已暂停等待修改`,
                     retryMessage: error && error.message ? `${stepLabel} · ${error.message}，正在重试` : `${stepLabel} · 清理当前页缓存失败，正在重试`,
-                    errorReason: error && error.message ? error.message : '清理当前页缓存失败'
+                    errorReason: error && error.message ? error.message : '清理当前页缓存失败',
+                    stepType: 'clear_current_page_cache'
                 });
+                if (handled === 'max_reached') {
+                    const d = lastDetailedError || `${stepLabel} 失败（已重试 ${currentAttempt} 次达到上限）`;
+                    throw new Error(d);
+                }
                 continue;
             }
         }
@@ -526,12 +640,18 @@ async function runStandaloneCard(payload = {}) {
                 index += 1;
                 continue;
             } catch (error) {
-                await handleStepFailure({
+                const handled = await handleStepFailure({
                     error,
                     message: error && error.message ? error.message : `${stepLabel} · 等待步骤失败，已暂停等待修改`,
                     retryMessage: error && error.message ? `${stepLabel} · ${error.message}，正在重试` : `${stepLabel} · 等待步骤失败，正在重试`,
-                    errorReason: error && error.message ? error.message : `等待步骤失败: ${stepName}`
+                    errorReason: error && error.message ? error.message : `等待步骤失败: ${stepName}`,
+                    stepType: 'wait',
+                    selector: resolvedSelector
                 });
+                if (handled === 'max_reached') {
+                    const d = lastDetailedError || `${stepLabel} 失败（已重试 ${currentAttempt} 次达到上限）`;
+                    throw new Error(d);
+                }
                 continue;
             }
         }
@@ -556,12 +676,18 @@ async function runStandaloneCard(payload = {}) {
                 index += 1;
                 continue;
             } catch (error) {
-                await handleStepFailure({
+                const handled = await handleStepFailure({
                     error,
                     message: error && error.message ? error.message : `${stepLabel} · 获取积分失败，已暂停等待修改`,
                     retryMessage: error && error.message ? `${stepLabel} · ${error.message}，正在重试` : `${stepLabel} · 获取积分失败，正在重试`,
-                    errorReason: error && error.message ? error.message : `获取积分失败: ${stepName}`
+                    errorReason: error && error.message ? error.message : `获取积分失败: ${stepName}`,
+                    stepType: 'get_credits',
+                    selector: resolvedSelector
                 });
+                if (handled === 'max_reached') {
+                    const d = lastDetailedError || `${stepLabel} 失败（已重试 ${currentAttempt} 次达到上限）`;
+                    throw new Error(d);
+                }
                 continue;
             }
         }
@@ -583,12 +709,18 @@ async function runStandaloneCard(payload = {}) {
                 index += 1;
                 continue;
             } catch (error) {
-                await handleStepFailure({
+                const handled = await handleStepFailure({
                     error,
                     message: error && error.message ? error.message : `${stepLabel} · 脚本步骤失败，已暂停等待修改`,
                     retryMessage: error && error.message ? `${stepLabel} · ${error.message}，正在重试` : `${stepLabel} · 脚本步骤失败，正在重试`,
-                    errorReason: error && error.message ? error.message : `脚本步骤失败: ${stepName}`
+                    errorReason: error && error.message ? error.message : `脚本步骤失败: ${stepName}`,
+                    stepType: 'external_script',
+                    selector: resolvedSelector
                 });
+                if (handled === 'max_reached') {
+                    const d = lastDetailedError || `${stepLabel} 失败（已重试 ${currentAttempt} 次达到上限）`;
+                    throw new Error(d);
+                }
                 continue;
             }
         }
@@ -644,12 +776,18 @@ async function runStandaloneCard(payload = {}) {
                 continue;
             }
 
-            await handleStepFailure({
+            const handled = await handleStepFailure({
                 error: new Error(lastError || '步骤执行失败'),
                 message: lastError || `${stepLabel} · 执行失败，已暂停等待修改`,
                 retryMessage: lastError ? `${stepLabel} · ${lastError}，正在重试` : `${stepLabel} · 执行失败，正在重试`,
-                errorReason: lastError || '步骤执行失败'
+                errorReason: lastError || '步骤执行失败',
+                stepType,
+                selector
             });
+            if (handled === 'max_reached') {
+                const d = lastDetailedError || `${stepLabel} 失败（已重试 ${currentAttempt} 次达到上限）`;
+                throw new Error(d);
+            }
             continue;
         }
 
@@ -666,6 +804,11 @@ async function runStandaloneCard(payload = {}) {
             stepName
         });
         index += 1;
+    }
+
+    if (maxRetriesExceeded) {
+        const finalDetail = lastDetailedError || '卡片执行失败：步骤重试已达 3 次上限';
+        throw new Error(finalDetail);
     }
 
     result.success = true;
@@ -806,6 +949,50 @@ async function runStandaloneCard(payload = {}) {
             error: '执行已停止'
             };
         }
+
+        // 卡片执行失败时主动释放状态（设置 running:false、清控制状态、发失败进度），
+        // 避免卡在注册流程等场景（尤其是 MCP/agent 直接调用 runStandaloneCard 时，不会经过 card-run-start 的 catch）。
+        // 使用 lastDetailedError 提供更详细的原因（含步骤、selector、尝试次数等）
+        try {
+            const lastState = await loadStandaloneProgressState().catch(() => null);
+            const failProgress = Number.isFinite(Number(lastState?.progress))
+                ? Number(lastState.progress)
+                : 0;
+            const baseMsg = (error && error.message ? error.message : '卡片执行失败');
+            const failMessage = lastDetailedError || baseMsg;
+            await saveStandaloneProgressState({
+                ...(lastState && typeof lastState === 'object' ? lastState : {}),
+                tabId,
+                cardName: currentCardName,
+                message: failMessage,
+                phase: 'failed',
+                mode: '',
+                isLooping: false,
+                kind: 'error',
+                errorReason: failMessage,
+                progress: failProgress,
+                running: false,
+                visible: true
+            }).catch(() => {});
+            await saveStandaloneDebugControlState({
+                tabId,
+                cardName: currentCardName,
+                mode: 'pause',
+                stepBudget: 0,
+                running: false,
+                isLooping: false,
+                stopRequested: false
+            }).catch(() => {});
+            await emitProgress({
+                message: failMessage,
+                progress: failProgress,
+                phase: 'failed',
+                kind: 'error',
+                errorReason: failMessage,
+                running: false
+            }).catch(() => {});
+        } catch (_e) {}
+
         throw error;
     } finally {
         if (tempEmailContext) {

@@ -143,6 +143,7 @@ const sidebarEditorShell = document.getElementById('sidebar-editor-shell');
 const sidebarCardNameInput = document.getElementById('sidebar-card-name');
 const sidebarCardWebsiteInput = document.getElementById('sidebar-card-website');
 const sidebarCardDescriptionInput = document.getElementById('sidebar-card-description');
+const sidebarCardAccountInput = document.getElementById('sidebar-card-account');
 const sidebarCardPasswordInput = document.getElementById('sidebar-card-password');
 const sidebarCardPointsInput = document.getElementById('sidebar-card-points');
 const sidebarCardRandomLengthInput = document.getElementById('sidebar-card-random-length');

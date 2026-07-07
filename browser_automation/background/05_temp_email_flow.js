@@ -403,39 +403,6 @@ function extractVerificationCodeFromEmailRecord(record = {}) {
     return '';
 }
 
-async function openTempEmailDesktopWindow(payload = {}, context = null) {
-    const providerId = await resolveTempEmailProviderId(payload, context, {
-        tabId: payload.tabId || context?.tabId || 0,
-        forceRefresh: payload.forceRefresh === true
-    });
-    const controlPayload = {
-        ...payload,
-        providerId,
-        sessionId: payload.sessionId || context?.sessionId || 'default'
-    };
-    const response = await invokeTempEmailControlWithRetry('temp-email-open-provider', controlPayload, {
-        tabId: payload.tabId || context?.tabId || 0,
-        forceRefresh: payload.forceRefresh === true
-    }, {
-        label: '打开临时邮箱浏览器',
-        validate: (result) => {
-            if (!result || result.success === false) {
-                return '打开临时邮箱浏览器失败';
-            }
-            const openedUrl = String(result?.url || result?.state?.url || '').trim();
-            const browserId = String(result?.browserId || result?.state?.browserId || '').trim();
-            return openedUrl || browserId ? true : '打开临时邮箱浏览器未返回有效信息';
-        },
-        emptyMessage: '打开临时邮箱浏览器未返回有效信息'
-    });
-    return {
-        success: response?.success !== false,
-        url: String(response?.url || response?.state?.url || '').trim(),
-        browserId: String(response?.browserId || response?.state?.browserId || '').trim(),
-        raw: response
-    };
-}
-
 async function closeTempEmailDesktopWindow(payload = {}, context = null) {
     const response = await invokeTempEmailControlWithRetry('temp-email-close-provider', {
         ...payload,
@@ -602,24 +569,18 @@ async function ensureTempEmailContext(tempEmailPayload = {}, emitProgress = asyn
         webControlUrl
     };
 
-    if (!context.email) {
+    if (context.email) {
         await emitProgress({
-            message: '正在通过软件 HTTP 控制打开临时邮箱浏览器...',
+            message: `已使用提供/缓存的临时邮箱地址: ${context.email}`,
             progress: progressBase,
             mode: tempEmailPayload.debugMode === true ? 'debug' : 'run',
-            phase: 'open_temp_email'
+            phase: 'temp_email_ready'
         });
-        if (!runtimeContext || !String(runtimeContext.browserId || runtimeContext.url || '').trim()) {
-            const openResult = await openTempEmailDesktopWindow(tempEmailPayload, context);
-            context.browserId = String(openResult.browserId || '').trim();
-            context.url = String(openResult.url || '').trim();
-        } else {
-            context.browserId = String(runtimeContext.browserId || '').trim();
-            context.url = String(runtimeContext.url || '').trim();
-        }
     } else {
+        // No auto open via software HTTP control (removed per requirement).
+        // Email must be provided via card account/password flow or MCP run payload (or cardData.email).
         await emitProgress({
-            message: `已使用现有临时邮箱地址: ${context.email}`,
+            message: '未提供邮箱，将跳过自动临时邮箱打开（使用传入的 email 或 {email} 占位符）',
             progress: progressBase,
             mode: tempEmailPayload.debugMode === true ? 'debug' : 'run',
             phase: 'temp_email_ready'
@@ -628,8 +589,8 @@ async function ensureTempEmailContext(tempEmailPayload = {}, emitProgress = asyn
 
     await emitProgress({
         message: context.email
-            ? `已获取临时邮箱地址: ${context.email}`
-            : '已打开临时邮箱浏览器，等待获取邮箱',
+            ? `邮箱就绪: ${context.email}`
+            : '邮箱未提供（后续 email 步骤或验证码将依赖显式传入值）',
         progress: Math.min(35, progressBase + 25),
         mode: tempEmailPayload.debugMode === true ? 'debug' : 'run',
         phase: 'temp_email_ready'

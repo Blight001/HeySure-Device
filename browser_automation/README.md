@@ -62,7 +62,7 @@
 | 自动化卡片 | `manage_card`   | 卡片唯一入口（管理 + 执行合一）：rules 获取步骤类型与运行规则（写卡片前必看，write 会按规范校验拒绝非法步骤类型）、list 列出全部卡片、get 获取卡片完整 JSON、write 创建/覆盖卡片、delete 删除卡片、run 在当前活动标签页执行卡片（可指定账号/邮箱，耗时操作）。旧工具名 `get_status`/`run_card`/`write_card` 仍兼容执行（分别等价 list/run/write） |
 | 自动化卡片 | `save_cookies`  | 抓取当前页面的 Cookie + localStorage + sessionStorage，可选上传到指定服务器 |
 | 导航与搜索 | `browser_tab`   | 标签页管理与导航：list / switch / replace / navigate / close / back / forward |
-| 页面观察   | `browser_observe`    | 感知当前视口的可交互元素、媒体、可见文本与 iframe 边界，返回带 id 的 items 列表供 `browser_action` 用 `ref` 精确点击 |
+| 页面观察   | `browser_observe`    | 感知当前视口的可交互元素、媒体、可见文本与 iframe 边界，返回带 tag/selector/name/placeholder/ariaLabel 等基本信息的 items 列表（含临时 id）；支持用 selector/text 定位构造卡片步骤或 ref 快速操作，便于卡片创建/修改与表单信息填入 |
 | 页面交互   | `browser_action`     | 点击 / 双击 / 右键 / 滚动 / 输入文本 / 键盘按键的聚合工具 |
 | 页面交互   | `browser_wait`       | 等待某个 CSS selector 出现，或固定等待一段时间 |
 
@@ -74,6 +74,7 @@
 > 同源（含嵌套）iframe 内部、Shadow DOM（开放 root，封闭 root 由 `content/shadow-patch.js` 强制转开放），
 > 识别 img/video/audio 媒体元素及 `cursor:pointer` / 类名或 ID 以 btn/button/link 结尾的自定义控件，
 > 并支持 `frame`/`frame_path` 钻取单个 iframe；跨域 iframe 内部仍不可访问。
+> observe 现返回元素基本信息（tag/selector/attrs），AI 推荐用 selector/text 进行卡片步骤定位（不再依赖临时 id），便于自动化卡片的修改和创建。
 > 执行逻辑见 `background/10_browser_tools.js` + `content/observe.js`（+ `content/shadow-patch.js`）。
 
 ## 项目结构

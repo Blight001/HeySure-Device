@@ -6,13 +6,14 @@
 //     在 document_start 的 MAIN world 强制转开放后可扫描）。
 //   · 识别可交互控件（含 cursor:pointer / 类名或 ID 以 btn/button/link 结尾的自定义控件）、
 //     img/video/audio 媒体元素、可见文本、iframe 边界。
-//   · 返回 items 单一混排列表（按位置排序、已去重），interactive 项带 1 起的 id，供 browser_action
-//     用 ref 精确定位；id 在下一次 browser_observe 前有效。
+//   · 返回 items 单一混排列表（按位置排序、已去重），interactive 项带 tag/selector + name/placeholder/ariaLabel 等基本信息，
+//     同时提供临时 id 供 browser_action ref 使用（id 在下一次 browser_observe 前有效）；推荐用 selector/text 构造持久化卡片步骤。
 //   · 默认绘制描边标记：绿色=可点击、红色=被遮挡/禁用/不可点、紫色虚线=iframe 边界。
 //
 // 与 content/fx.js 同样常驻内容脚本，把 API 幂等挂到 window.__hsObserve 上，供 background 用一次性
 // chrome.scripting.executeScript(...).func 调用；window 在同一文档生命周期内持久，因此 observe 生成的
 // id → 元素映射能被后续 browser_action 复用（并带自愈：节点被重渲染后按 selector/text/坐标重新定位）。
+// observe 现返回元素基本信息，便于 AI 分析表单并为自动化卡片（create/modify）提供稳定定位器，不再依赖仅 id。
 
 (() => {
     'use strict';
@@ -820,7 +821,26 @@
         };
         if (rec.frame) { item.inFrame = true; item.frameSelector = rec.frame.frameSelector; item.framePath = buildFramePath(rec.frame); }
         if (rec.type) item.type = rec.type;
-        if (rec.el.value) item.value = String(rec.el.value).slice(0, 60);
+        if (rec.el.value != null) item.value = String(rec.el.value).slice(0, 60);
+
+        // 新增基本元素信息：name/placeholder/ariaLabel 等，便于 AI 识别表单字段、构造稳定的 selector/text 用于卡片步骤（不再仅靠临时 id/ref）
+        const el = rec.el;
+        const get = (a) => (el.getAttribute ? el.getAttribute(a) : null);
+        const nm = get('name'); if (nm) item.name = String(nm).slice(0, 60);
+        const ph = get('placeholder'); if (ph) item.placeholder = String(ph).slice(0, 80);
+        const al = get('aria-label') || get('aria-labelledby'); if (al) item.ariaLabel = String(al).slice(0, 80);
+        const ti = get('title'); if (ti && String(ti).trim() && String(ti).trim() !== (item.text || '')) item.title = String(ti).slice(0, 60);
+        if (el.disabled || get('aria-disabled') === 'true') item.disabled = true;
+        if (el.readOnly) item.readOnly = true;
+        if ((rec.tag === 'a' || rec.category === 'link') && el.href) item.href = String(el.href).slice(0, 200);
+        if (rec.category === 'checkbox' || rec.category === 'radio') item.checked = !!el.checked;
+        if (rec.tag === 'select') {
+            try {
+                const opts = Array.from(el.options || []).slice(0, 6).map(o => String(o.text || '').replace(/\s+/g, ' ').trim().slice(0, 30)).filter(Boolean);
+                if (opts.length) item.optionsSample = opts;
+                item.optionCount = (el.options && el.options.length) || 0;
+            } catch (_) {}
+        }
         return item;
     }
     function mediaRecord(el, frame) {
@@ -955,8 +975,8 @@
         startMarksAutoClear(marksList);
     }
 
-    // ── 精简 item（interactive 用 ref 点击，省去 selector/rect/tag）──────────────
-    const ITEM_DROP_KEYS = new Set(['selector', 'rect', 'tag']);
+    // ── 精简 item（保留 selector/tag + 基本属性以便卡片构造，仅省去较重的 rect）──────────────
+    const ITEM_DROP_KEYS = new Set(['rect']);
     function slimItem(item) {
         const out = {};
         for (const k of Object.keys(item)) { if (ITEM_DROP_KEYS.has(k)) continue; out[k] = item[k]; }
@@ -1159,9 +1179,9 @@
             hint: '返回 items 单一混排列表（按位置排序、已去重，用 kind 区分）：kind=text 可见文本（不可点击），' +
                 'kind=media 图片/视频/音频（不可点击；category=image/video/audio），kind=frame 页面内 iframe 边界' +
                 '（accessible=true 表示同源已扫描，子元素见 inFrame=true 的 interactive；accessible=false 为跨域），' +
-                'kind=interactive 可点击元素（每个带独立 id，用 browser_action {action:"click", ref:id} 点击）。' +
-                ' 为节省上下文每条已省略 selector/rect/tag，仅保留 role/category/text/center；inFrame=true 表示元素在同源 iframe 内。' +
-                ' 勿使用 Playwright 语法（如 :has-text）；用 text 参数或 observe 返回的 ref 定位。' +
+                'kind=interactive 可点击元素（带临时 id 供 ref，同时返回 tag/selector/name/placeholder/ariaLabel/value/optionsSample 等基本信息）。' +
+                ' 为便于自动化卡片创建/修改，推荐使用 selector 或 text+tag 构造持久步骤（卡片 runner 使用这些而非临时 ref）；ref:id 仅本次 observe 有效，用于 browser_action 快速操作。' +
+                ' inFrame=true 表示元素在同源 iframe 内。勿使用 Playwright 语法（如 :has-text）；可用 text/selector/ref 定位。' +
                 filterHint + (queryHint ? ` 已按 ${queryHint} 筛选。` : '') + markHint
         };
     }

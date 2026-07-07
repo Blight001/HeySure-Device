@@ -17,7 +17,9 @@ function normalizeSelectorCandidates(by = 'css_selector', selector = '') {
         return [`text=${normalizedSelector}`];
     }
 
-    return [normalizedSelector];
+    // css_selector (default): for robustness on type/click, include a text fallback candidate
+    // This helps when CSS selector is brittle after page redesigns (e.g. Baidu #kw -> textarea change)
+    return [normalizedSelector, `text=${normalizedSelector}`];
 }
 
 function resolveTemplate(value, variables = {}) {

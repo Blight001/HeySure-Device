@@ -227,6 +227,8 @@ async function runStandaloneCard(payload = {}) {
 
         const stepType = String(step.type || '').trim().toLowerCase();
         const stepName = String(step.name || `步骤${index + 1}`).trim() || `步骤${index + 1}`;
+        // 智能填充提示，需在 step_start 进度上报（下方）之前声明，避免 TDZ 崩溃
+        let magicFillNote = '';
         const liveTotalSteps = steps.length;
         const liveStepSpan = liveTotalSteps > 0 ? (stepProgressEnd - stepProgressStart) / liveTotalSteps : 0;
         const stepStartProgress = Math.min(stepProgressEnd, stepProgressStart + (index * liveStepSpan));
@@ -325,7 +327,7 @@ async function runStandaloneCard(payload = {}) {
             return 'paused';
         };
         await emitProgress({
-            message: `${stepLabel} · 开始执行`,
+            message: `${stepLabel} · 开始执行${magicFillNote}`,
             progress: stepStartProgress,
             phase: 'step_start',
             stepIndex: index + 1,
@@ -580,7 +582,11 @@ async function runStandaloneCard(payload = {}) {
                 || isEmailStepName(step.text);
 
             if (verificationStep) {
-                rawText = String(context.code || result.code || payload.code || '').trim() || rawText;
+                const filled = String(context.code || result.code || payload.code || '').trim();
+                if (filled) {
+                    rawText = filled;
+                    magicFillNote = '（智能填充验证码）';
+                }
             } else if (emailStep) {
                 let emailValue = String(context.email || tempEmailContext?.email || payload.email || result.email || '').trim();
                 if (!emailValue) {
@@ -596,7 +602,10 @@ async function runStandaloneCard(payload = {}) {
                         }
                     }
                 }
-                rawText = emailValue || rawText;
+                if (emailValue) {
+                    rawText = emailValue;
+                    magicFillNote = '（智能填充邮箱）';
+                }
             }
         }
         const actionPayload = {
@@ -694,7 +703,36 @@ async function runStandaloneCard(payload = {}) {
 
         if (stepType === 'external_script') {
             try {
-                const scriptResult = await executePageActionWithStandaloneStopCheck(tabId, actionPayload);
+                // Try MAIN world injection for external_script to maximize access and sometimes reduce isolated-world eval friction.
+                // Note: page CSP (script-src without 'unsafe-eval') can still block new Function / eval inside the provided script.
+                const scriptCode = String(actionPayload.script || '').trim();
+                let scriptResult;
+                if (scriptCode) {
+                    const results = await chrome.scripting.executeScript({
+                        target: { tabId },
+                        world: 'MAIN',
+                        func: (code) => {
+                            try {
+                                // Execute user code in page MAIN world (still subject to page CSP for eval constructs)
+                                const fn = new Function('return (async () => { ' + code + ' })();');
+                                return fn();
+                            } catch (e) {
+                                return { __error: true, message: e && e.message ? e.message : String(e) };
+                            }
+                        },
+                        args: [scriptCode]
+                    });
+                    const r = Array.isArray(results) ? results[0] : null;
+                    const val = r && r.result;
+                    if (val && val.__error) {
+                        scriptResult = { success: false, error: val.message };
+                    } else {
+                        scriptResult = { success: true, result: val };
+                    }
+                } else {
+                    scriptResult = { success: true };
+                }
+
                 if (!scriptResult || scriptResult.success !== true) {
                     throw new Error(scriptResult?.error || `脚本步骤失败: ${stepName}`);
                 }
@@ -726,14 +764,33 @@ async function runStandaloneCard(payload = {}) {
         }
 
         if (stepType === 'screenshot') {
-            await emitProgress({
-                message: `${stepLabel} · 已处理`,
-                progress: stepEndProgress,
-                phase: 'step_complete',
-                stepIndex: index + 1,
-                stepTotal: liveTotalSteps,
-                stepName
-            });
+            try {
+                const tabInfo = await chrome.tabs.get(tabId).catch(() => null);
+                const winId = tabInfo && Number.isFinite(Number(tabInfo.windowId)) ? tabInfo.windowId : chrome.windows.WINDOW_ID_CURRENT;
+                const dataUrl = await chrome.tabs.captureVisibleTab(winId, { format: 'png' });
+                const ts = new Date().toISOString().replace(/[:.]/g, '-');
+                const safeName = (currentCardName || 'card').replace(/[^\w\u4e00-\u9fa5-]/g, '_').slice(0, 40) || 'card';
+                const filename = `automation_screenshots/${safeName}_${ts}.png`;
+                await chrome.downloads.download({ url: dataUrl, filename, saveAs: false, conflictAction: 'uniquify' });
+                await emitProgress({
+                    message: `${stepLabel} · 截图已保存（${filename}）`,
+                    progress: stepEndProgress,
+                    phase: 'step_complete',
+                    stepIndex: index + 1,
+                    stepTotal: liveTotalSteps,
+                    stepName
+                });
+            } catch (err) {
+                await emitProgress({
+                    message: `${stepLabel} · 截图失败（${err && err.message ? err.message : '未知错误'}），已跳过`,
+                    progress: stepEndProgress,
+                    kind: 'error',
+                    phase: 'step_complete',
+                    stepIndex: index + 1,
+                    stepTotal: liveTotalSteps,
+                    stepName
+                });
+            }
             index += 1;
             continue;
         }
@@ -741,8 +798,10 @@ async function runStandaloneCard(payload = {}) {
         const selectors = normalizeSelectorCandidates(step.by || 'css_selector', resolvedSelector);
         let stepExecuted = false;
         let lastError = '';
+        let lastTriedSelector = String(resolvedSelector || '').trim();
 
         for (const selector of selectors) {
+            lastTriedSelector = selector;
             await throwIfStopped(tabId);
             try {
                 const actionResult = await executePageActionWithStandaloneStopCheck(tabId, {
@@ -782,7 +841,7 @@ async function runStandaloneCard(payload = {}) {
                 retryMessage: lastError ? `${stepLabel} · ${lastError}，正在重试` : `${stepLabel} · 执行失败，正在重试`,
                 errorReason: lastError || '步骤执行失败',
                 stepType,
-                selector
+                selector: lastTriedSelector
             });
             if (handled === 'max_reached') {
                 const d = lastDetailedError || `${stepLabel} 失败（已重试 ${currentAttempt} 次达到上限）`;
@@ -861,7 +920,7 @@ async function runStandaloneCard(payload = {}) {
     }
 
     await emitProgress({
-        message: '自动化步骤执行完成，正在保存 Cookie',
+        message: '自动化步骤执行完成，正在保存 Cookie（隐式自动保存，可在卡片中用 save_cookies 步骤显式控制）',
         progress: 97,
         phase: 'save_cookies'
     });
@@ -874,6 +933,11 @@ async function runStandaloneCard(payload = {}) {
         result.browserStorageCount = saveResult.browserStorageCount;
         result.pageUrl = saveResult.pageUrl;
         result.pageTitle = saveResult.pageTitle;
+        await emitProgress({
+            message: `Cookie 已自动保存（${saveResult.cookieCount || 0} cookies + ${saveResult.browserStorageCount || 0} storage）`,
+            progress: 99,
+            phase: 'save_cookies'
+        });
     } catch (error) {
         result.cookiesSaved = false;
         result.cookieSaveError = error.message;

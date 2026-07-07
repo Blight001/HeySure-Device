@@ -1262,18 +1262,54 @@
     // ── browser_action：type ──────────────────────────────────────────────────
     function setNativeValue(el, value) {
         const win = ownerWindow(el);
-        const proto = el.tagName === 'TEXTAREA' ? win.HTMLTextAreaElement.prototype : win.HTMLInputElement.prototype;
-        const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
-        if (descriptor && descriptor.set) descriptor.set.call(el, value);
-        else el.value = value;
+        const tag = String(el && el.tagName || '').toLowerCase();
+        let proto = null;
+        if (tag === 'textarea') {
+            proto = win.HTMLTextAreaElement.prototype;
+        } else if (tag === 'input') {
+            proto = win.HTMLInputElement.prototype;
+        }
+        if (proto) {
+            const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
+            if (descriptor && descriptor.set) descriptor.set.call(el, value);
+            else el.value = value;
+        } else if ('value' in el) {
+            el.value = value;
+        }
         el.dispatchEvent(new Event('input', { bubbles: true }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
+        try { el.dispatchEvent(new InputEvent('input', { bubbles: true, data: String(value || '') })); } catch (_) {}
+    }
+
+    function isTypeableElement(el) {
+        if (!el) return false;
+        const tag = String(el.tagName || '').toLowerCase();
+        if (tag === 'textarea') return true;
+        if (tag === 'input') {
+            const t = String(el.type || 'text').toLowerCase();
+            const blocked = ['hidden', 'submit', 'button', 'reset', 'image', 'checkbox', 'radio', 'file', 'color', 'range'];
+            return !blocked.includes(t);
+        }
+        if (el.isContentEditable === true) return true;
+        const role = String(el.getAttribute && el.getAttribute('role') || '').toLowerCase();
+        if (role === 'textbox' || role === 'searchbox' || role === 'combobox') return true;
+        return false;
     }
 
     async function typeInto(msg = {}) {
         const resolved = resolveTarget(msg);
         const el = resolved.el;
         if (!el) return { success: false, error: '未找到目标输入元素', code: 'TARGET_NOT_FOUND' };
+
+        if (!isTypeableElement(el)) {
+            const tag = String(el.tagName || '').toLowerCase();
+            const role = String(el.getAttribute && el.getAttribute('role') || '').toLowerCase();
+            return {
+                success: false,
+                error: `元素类型不支持 type（tag=<${tag}> role="${role || 'none'}"），仅支持 input/textarea/contenteditable/role=textbox 等`,
+                code: 'UNSUPPORTED_ELEMENT_TYPE'
+            };
+        }
 
         try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch (_error) { /* ignore */ }
         await playFx(el, 'left');

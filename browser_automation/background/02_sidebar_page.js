@@ -416,15 +416,45 @@ async function executePageAction(tabId, action) {
             };
 
             const setNativeValue = (element, value) => {
-                const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')
-                    || Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value');
-                if (descriptor && descriptor.set) {
-                    descriptor.set.call(element, value);
+                const tag = String(element && element.tagName || '').toLowerCase();
+                let proto = null;
+                if (tag === 'textarea') {
+                    proto = HTMLTextAreaElement.prototype;
+                } else if (tag === 'input') {
+                    proto = HTMLInputElement.prototype;
+                }
+                if (proto) {
+                    const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
+                    if (descriptor && descriptor.set) {
+                        descriptor.set.call(element, value);
+                    } else {
+                        element.value = value;
+                    }
                 } else {
-                    element.value = value;
+                    // Fallback (e.g. contenteditable handled separately)
+                    if ('value' in element) element.value = value;
                 }
                 element.dispatchEvent(new Event('input', { bubbles: true }));
                 element.dispatchEvent(new Event('change', { bubbles: true }));
+                try {
+                    // Modern InputEvent helps some frameworks
+                    element.dispatchEvent(new InputEvent('input', { bubbles: true, data: String(value || '') }));
+                } catch (_) {}
+            };
+
+            const isTypeableElement = (el) => {
+                if (!el) return false;
+                const tag = String(el.tagName || '').toLowerCase();
+                if (tag === 'textarea') return true;
+                if (tag === 'input') {
+                    const t = String(el.type || 'text').toLowerCase();
+                    const blocked = ['hidden', 'submit', 'button', 'reset', 'image', 'checkbox', 'radio', 'file', 'color', 'range'];
+                    return !blocked.includes(t);
+                }
+                if (el.isContentEditable === true) return true;
+                const role = String(el.getAttribute && el.getAttribute('role') || '').toLowerCase();
+                if (role === 'textbox' || role === 'searchbox' || role === 'combobox') return true;
+                return false;
             };
 
             const actionType = normalize(payload.type || '');
@@ -473,6 +503,16 @@ async function executePageAction(tabId, action) {
                 const element = await waitForElement(selector, timeoutMs, intervalMs, true);
                 if (!element) {
                     return { success: false, error: `未找到可输入元素: ${selector}` };
+                }
+
+                // P0 fix: pre-validate element type to fail fast with actionable error (no silent 3x retry waste)
+                if (!isTypeableElement(element)) {
+                    const tag = String(element.tagName || '').toLowerCase();
+                    const role = String(element.getAttribute && element.getAttribute('role') || '').toLowerCase();
+                    return {
+                        success: false,
+                        error: `元素类型不支持 type 输入（tag=<${tag}> role="${role || 'none'}"），Card Runner 的 type 仅支持 <input type=text/search/email 等>、<textarea>、contenteditable 元素、role=textbox/searchbox。建议：更换 selector 到实际输入框，或改用 external_script 降级。`
+                    };
                 }
 
                 try {

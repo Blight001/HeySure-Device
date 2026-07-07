@@ -30,6 +30,7 @@ let activeMcpCardTask = null;
 // ── 自动化卡片编写规范（manage_card action=rules 返回给 AI）───────────────────
 // 与 06_automation_run.js 执行引擎、02_sidebar_page.js 页面动作执行器、
 // popup/automation-workbench.js 编辑器保持一致；改动步骤类型或字段时同步更新这里。
+// 注意：type 步骤现已显式支持 textarea（根因修复百度等站点改版后 #kw -> textarea 失效）。
 
 // 执行引擎实际支持的步骤类型全集（write 校验与 rules 均以此为准）。
 const CARD_STEP_TYPES = [
@@ -66,14 +67,14 @@ const CARD_FORMAT_RULES = `# 自动化卡片规范（cardData）—— 步骤类
 ## 步骤类型（type，仅以下 10 种）
 - navigate: 跳转 url（省略 url 时用卡片 website；当前已在目标地址则改为强制刷新；timeout 默认 30000）
 - click: 点击 selector 元素（timeout 默认 15000，poll_interval_ms 默认 200）
-- type: 向 selector 输入 text（timeout 默认 15000）；clear_first=true 输入前清空；click_before_type=true 输入前先点击
+- type: 向 selector 输入 text（支持 <input>（非 button/checkbox 等）、<textarea>、[contenteditable]、role=textbox/searchbox 等可编辑元素；timeout 默认 15000）；clear_first=true 输入前清空；click_before_type=true 输入前先点击。找到非输入元素会立即报错（不再盲目重试 3 次）
 - wait: 等待元素出现（selector + timeout，默认 3000）；或改用 wait_for_text 等文本出现 / wait_for_element_hidden 等元素消失 / wait_for_text_hidden 等文本消失
 - wait_verification_code: 等待临时邮箱收到验证码（timeout 默认 300000，poll_interval_ms 默认 1500），结果写入 {code}，且紧随其后的第一个 type 步骤会自动填入该验证码
 - save_cookies: 抓取并保存当前页 Cookie（要求上下文已有 邮箱/账号 与 验证码/密码，缺少则该步跳过并记录原因）
 - clear_current_page_cache: 清理当前页 Cookie/localStorage/sessionStorage/CacheStorage/IndexedDB
 - get_credits: 读取 selector 元素文本作为积分写入执行结果
-- external_script: 在页面上下文执行 script 字段中的 JS 代码
-- screenshot: 占位步骤，当前不实际截图
+- external_script: 在页面上下文执行 script 字段中的 JS 代码（CSP 严格站点可能被拦截，此时建议使用 browser_action 或调整卡片避免依赖 eval）
+- screenshot: 截图步骤（当前实现会捕获当前标签页可见区域并下载 PNG）
 
 ## 选择器语法（selector）
 - 标准 CSS：#id、.class、button[type=submit]
@@ -89,7 +90,7 @@ url/selector/text/script/wait_for_* 等字符串字段支持占位符：{account
 1. 卡片在当前活动标签页执行；入口地址取第一步 navigate 的 url，否则取卡片 website（两者都没有则 write 会被拒绝）。
 2. 非 optional 步骤失败后最多重试 3 次（间隔约 2 秒），超过上限则失败并结束；对可能不存在的元素（如偶现弹窗、可选勾选框）必须加 optional:true，否则流程可能因重试耗尽失败。
 3. account/password 优先使用 run(payload) 传入值，其次卡片顶层 account/password，否则 password 随机生成（按 random 配置）；email 由 run 传入或卡片顶层提供（不再自动通过软件 HTTP 打开临时邮箱浏览器）；{code} 在 wait_verification_code 成功后才有值，之前使用会原样保留占位符。
-4. type 步骤智能填充：步骤 name/selector/text 含「验证码/code/otp」等关键词时自动改填已获取的验证码；含「邮箱/email」时自动改填临时邮箱地址（会覆盖 text 原值）。
+4. type 步骤智能填充：步骤 name/selector/text 含「验证码/code/otp」等关键词时自动改填已获取的验证码；含「邮箱/email」时自动改填临时邮箱地址（会覆盖 text 原值）。type 支持的元素类型见「步骤类型」说明，命中非输入元素会立即清晰报错。
 5. 正常运行结束后会自动抓取当前页 Cookie 并保存；若步骤中已包含 save_cookies 则跳过这次最终自动保存。
 6. 同一时间只能运行一张卡片；action=run 是长任务，可能耗时数分钟（如等待邮箱验证码）。执行期间会通过 task:progress 及时反馈每步开始/完成/重试/错误等完整过程，而非仅返回最终结果。
 
@@ -536,7 +537,10 @@ function flushUnsentAgentOutcomes() {
 }
 
 // ── 工具命令执行（task.tool → 自动化卡片 / Cookie 抓取实现）────────────────────
-async function runAgentToolCommand(tool, args) {
+// taskId is threaded only for the long-running 'run' action so that activeMcpCardTask
+// can be populated; this enables the card-run-progress listener to forward live
+// step progress back as task:progress to the agent/MCP caller.
+async function runAgentToolCommand(tool, args, taskId = null) {
     const payload = args && typeof args === 'object' ? args : {};
     switch (tool) {
         case 'manage_card':
@@ -608,9 +612,9 @@ async function runAgentToolCommand(tool, args) {
                 if (targetId && !entry) {
                     throw new Error(`未找到自动化卡片: ${targetId}`);
                 }
-                activeMcpCardTask = { taskId };
+                activeMcpCardTask = taskId ? { taskId } : null;
                 try {
-                    if (agentSocket && agentSocket.connected) {
+                    if (taskId && agentSocket && agentSocket.connected) {
                         agentSocket.emit('task:progress', { taskId, progress: 3, message: '开始执行自动化卡片（MCP）' });
                     }
                     return await runStandaloneCard({
@@ -791,7 +795,7 @@ async function handleAgentTask(task) {
     }
 
     try {
-        const result = await runAgentToolCommand(tool, task.args || {});
+        const result = await runAgentToolCommand(tool, task.args || {}, taskId);
         const success = !(result && result.success === false);
         const payload = {
             taskId,

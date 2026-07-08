@@ -185,35 +185,6 @@ async function loadTempEmailCardCache() {
     };
 }
 
-async function getRuntimeTempEmailContext() {
-    if (!tempEmailRuntimeContext || typeof tempEmailRuntimeContext !== 'object') {
-        return null;
-    }
-
-    if (tempEmailRuntimeContext.desktopMode === true) {
-        return {
-            ...tempEmailRuntimeContext,
-            tabId: Number(tempEmailRuntimeContext.tabId || 0) || 0
-        };
-    }
-
-    const normalizedTabId = Number(tempEmailRuntimeContext.tabId || 0) || 0;
-    if (!normalizedTabId) {
-        return null;
-    }
-
-    const tab = await chrome.tabs.get(normalizedTabId).catch(() => null);
-    if (!tab) {
-        tempEmailRuntimeContext = null;
-        return null;
-    }
-
-    return {
-        ...tempEmailRuntimeContext,
-        tabId: normalizedTabId
-    };
-}
-
 function normalizeStandaloneSteps(cardData) {
     const normalizedCard = normalizeCardData(cardData);
     const steps = Array.isArray(normalizedCard.steps) ? [...normalizedCard.steps] : [];

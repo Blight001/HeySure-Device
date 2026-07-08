@@ -5,7 +5,6 @@ importScripts(
     'background/02_sidebar_page.js',
     'background/03_formatting.js',
     'background/04_cache.js',
-    'background/05_temp_email_flow.js',
     'background/06_automation_run.js',
     'background/07_events.js',
     'background/08_agent_auth.js',

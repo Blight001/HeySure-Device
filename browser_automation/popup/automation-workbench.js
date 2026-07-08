@@ -251,6 +251,7 @@ function renderCardRunInputs(cardData) {
         // 未选中卡片 / 卡片无步骤：隐藏面板
         cardRunInputsNode.hidden = true;
         cardRunInputsNode.innerHTML = '';
+        delete cardRunInputsNode.dataset.cardSignature;
         return;
     }
 
@@ -261,15 +262,37 @@ function renderCardRunInputs(cardData) {
           <div class="card-run-inputs__empty">该卡片没有「输入内容(type)」步骤，无需变量输入。</div>
         `;
         cardRunInputsNode.hidden = false;
+        delete cardRunInputsNode.dataset.cardSignature;
         return;
     }
 
-    const rows = uniqueVariables.map((item) => `
+    // 保留用户已填写的值：运行/保存会触发 renderCardCacheList → 本函数重渲染，
+    // 若每次都重置为默认文本，用户刚填的覆盖值会在框里"闪回"默认，造成"填了又没了"的错觉。
+    // 仅当仍是同一张卡片（变量键+默认文本+卡名签名一致）时保留；切换到别的卡片则回到该卡默认值。
+    const signature = `${String(cardData.name || '')}::${uniqueVariables.map((item) => `${item.key}=${item.defaultText}`).join('|')}`;
+    const sameCard = cardRunInputsNode.dataset.cardSignature === signature;
+    const previousValues = {};
+    if (sameCard) {
+        cardRunInputsNode.querySelectorAll('[data-run-input-key]').forEach((node) => {
+            const key = String(node.dataset.runInputKey || '').trim();
+            if (key) {
+                previousValues[key] = String(node.value || '');
+            }
+        });
+    }
+
+    const rows = uniqueVariables.map((item) => {
+        const currentValue = Object.prototype.hasOwnProperty.call(previousValues, item.key)
+            ? previousValues[item.key]
+            : item.defaultText;
+        return `
       <div class="card-run-input">
         <label>步骤${item.stepIndex} · ${escapeHtml(item.label)} · <code>${escapeHtml(item.key)}</code></label>
-        <input type="text" data-run-input-key="${escapeHtml(item.key)}" value="${escapeHtml(item.defaultText)}" placeholder="默认: ${escapeHtml(item.defaultText || '(空)')}">
+        <input type="text" data-run-input-key="${escapeHtml(item.key)}" value="${escapeHtml(currentValue)}" placeholder="默认: ${escapeHtml(item.defaultText || '(空)')}">
       </div>
-    `).join('');
+    `;
+    }).join('');
+    cardRunInputsNode.dataset.cardSignature = signature;
 
     cardRunInputsNode.innerHTML = `
       <div class="card-run-inputs__title">变量输入（运行前可覆盖，共 ${uniqueVariables.length} 项）</div>

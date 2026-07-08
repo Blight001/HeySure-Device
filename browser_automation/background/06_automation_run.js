@@ -1,11 +1,3 @@
-function isVerificationStepName(value = '') {
-    return /验证码|verification|verify|verification code|verification_code|code|otp|校验码|确认码|动态码/i.test(String(value || '').trim());
-}
-
-function isEmailStepName(value = '') {
-    return /邮箱|email|mail|电子邮箱|邮箱地址|e-mail/i.test(String(value || '').trim());
-}
-
 // 构建详细的失败原因（用于进度、最终错误、MCP 返回）
 function buildDetailedFailureReason({
     stepIndex = 0,
@@ -80,6 +72,41 @@ async function captureCardFailureSnapshot(tabId, { selector = '', stepName = '' 
         }
     } catch (_error) {}
     return snapshot;
+}
+
+// 非重试模式下步骤失败时上报「已暂停等待修改」进度（run 模式默认走重试，不会触及；保留以兼容 debug 暂停分支）。
+async function pauseAtStep({
+    tabId = 0,
+    cardName = '',
+    stepName = '',
+    stepIndex = 0,
+    stepTotal = 0,
+    previousStepName = '',
+    nextStepName = '',
+    progress = undefined,
+    errorReason = '',
+    message = '步骤执行失败，已暂停等待修改',
+    phase = 'step_failed_pause'
+} = {}, emitProgress = async () => {}) {
+    const normalizedTabId = Number(tabId || 0) || 0;
+    if (!normalizedTabId) {
+        return;
+    }
+
+    await emitProgress({
+        message: stepName ? `${message}: ${stepName}` : message,
+        progress,
+        kind: 'error',
+        mode: 'debug',
+        phase,
+        stepIndex,
+        stepTotal,
+        stepName,
+        previousStepName: String(previousStepName || '').trim(),
+        nextStepName: String(nextStepName || '').trim(),
+        errorReason: String(errorReason || '').trim(),
+        running: true
+    });
 }
 
 async function runStandaloneCard(payload = {}) {
@@ -233,12 +260,9 @@ async function runStandaloneCard(payload = {}) {
         ...runInputs,
         account: providedAccount,
         password: providedPassword,
-        // 允许 run 预置验证码（失败续跑时回传上次已获取的 code，{code} 模板直接可用；wait_verification_code 成功后会写入）
+        // 通用变量 code：可由 run payload / inputs 预置，供 {code} 模板与 save_cookies 使用
         code: String(payload.code || runInputs.code || '').trim(),
-        email: providedEmail,
-        tempEmailCardName: '',
-        tempEmailProviderName: '',
-        tempEmailAddress: ''
+        email: providedEmail
     };
 
     const tab = await getOrFindActiveTab(cardData.website || '');
@@ -248,6 +272,11 @@ async function runStandaloneCard(payload = {}) {
 
     tabId = Number(tab.id);
     currentCardName = String(cardData.name || '').trim();
+    // 清除该标签页上一轮遗留的「已停止」标记：card-run-stop 会 markTabStopped(tabId)，
+    // 而这个标记只在真正在跑的卡片 finally 里删除。若上次是在无运行时点了停止（或运行已结束后才点），
+    // 标记会永久残留，导致下一次在同一标签页运行时被 line 260 的 isTabStopped 立刻判定为已停止。
+    // 新的一轮运行必须从干净状态开始，故先清掉残留标记，再放入本轮 session。
+    stoppedTabs.delete(tabId);
     const executionState = {
         tabId,
         cardData,
@@ -260,7 +289,6 @@ async function runStandaloneCard(payload = {}) {
     if (isTabStopped(tabId)) {
         throw createStopError();
     }
-    let tempEmailContext = null;
 
     // 重试控制：执行失败最多尝试 3 次，避免无限循环
     let stepAttempt = 1;
@@ -290,15 +318,6 @@ async function runStandaloneCard(payload = {}) {
             phase: 'start'
         });
 
-        tempEmailContext = await ensureTempEmailContext({
-            openTempEmailTab: payload.openTempEmailTab === true,
-            refreshExistingTab: true,
-            pageLoadTimeoutMs: Number(payload.tempEmailPageLoadTimeoutMs || payload.pageLoadTimeoutMs || 30000),
-            tabId,
-            runTabId: tabId,
-            account: context.account,
-            email: context.email
-        }, emitProgress, 10);
         const overrideKeyCount = Object.keys(runInputs).length;
         await emitProgress({
             message: overrideKeyCount > 0
@@ -314,8 +333,6 @@ async function runStandaloneCard(payload = {}) {
             account: context.account,
             password: context.password,
             email: context.email,
-            tempEmailCardName: context.tempEmailCardName,
-            tempEmailProviderName: context.tempEmailProviderName,
             codeTime: '',
             code_time: '',
             points: Number(cardData.points || 0) || 0,
@@ -553,72 +570,6 @@ async function runStandaloneCard(payload = {}) {
             }
         }
 
-        if (stepType === 'wait_verification_code') {
-            try {
-                const codeResult = normalizeVerificationCodeResult(await waitForVerificationCode({
-                    timeoutMs: Number(step.timeout || 300000),
-                    intervalMs: Number(step.poll_interval_ms || 1500),
-                    progressBase: stepStartProgress,
-                    progressSpan: Math.max(1, stepEndProgress - stepStartProgress),
-                    mode: progressMode,
-                    tabId,
-                    stepIndex: index + 1,
-                    stepTotal: liveTotalSteps,
-                    stepName,
-                    tabId,
-                    runTabId: tabId,
-                    retryForever: step.retry_forever === true
-                }, tempEmailContext, emitProgress));
-                const code = String(codeResult.code || '').trim();
-                if (!code) {
-                    const handled = await handleStepFailure({
-                        error: new Error('等待验证码超时'),
-                        message: `${stepLabel} · 等待验证码超时，已暂停`,
-                        retryMessage: `${stepLabel} · 等待验证码超时，正在重试`,
-                        errorReason: '等待验证码超时',
-                        stepType: 'wait_verification_code',
-                        errorCode: 'VERIFICATION_CODE_TIMEOUT'
-                    });
-                    if (handled === 'max_reached') {
-                        const d = lastDetailedError || `${stepLabel} 失败（已重试 ${currentAttempt} 次达到上限）`;
-                        throw new Error(d);
-                    }
-                    continue;
-                }
-
-                context.code = code;
-                if (codeResult.verificationTime) {
-                    context.codeTime = codeResult.verificationTime;
-                    context.code_time = codeResult.verificationTime;
-                    result.codeTime = codeResult.verificationTime;
-                    result.code_time = codeResult.verificationTime;
-                }
-                await emitProgress({
-                    message: `${stepLabel} · 已获取验证码${codeResult.verificationTime ? `（时间: ${codeResult.verificationTime}）` : ''}（后续步骤用 {code} 模板引用）`,
-                    progress: stepEndProgress,
-                    phase: 'step_complete',
-                    stepIndex: index + 1,
-                    stepTotal: liveTotalSteps,
-                    stepName
-                });
-                index += 1;
-                continue;
-            } catch (error) {
-                const handled = await handleStepFailure({
-                    error,
-                    message: error && error.message ? error.message : `${stepLabel} · 等待验证码失败，已暂停等待修改`,
-                    retryMessage: error && error.message ? `${stepLabel} · ${error.message}，正在重试` : `${stepLabel} · 等待验证码失败，正在重试`,
-                    errorReason: error && error.message ? error.message : '等待验证码失败',
-                    stepType: 'wait_verification_code',
-                    errorCode: 'VERIFICATION_CODE_FAILED'
-                });
-                if (handled === 'max_reached') {
-                    throw makeStepFailureError(`${stepLabel} 失败（已重试 ${currentAttempt} 次达到上限）`);
-                }
-                continue;
-            }
-        }
-
         if (stepType === 'save_cookies') {
             const captureAccount = String(context.email || context.account || result.account || payload.account || '').trim();
             const capturePassword = String(context.code || result.password || payload.password || '').trim();
@@ -715,7 +666,7 @@ async function runStandaloneCard(payload = {}) {
         let rawText = resolveTemplate(step.text || '', context);
         if (stepType === 'type') {
             // 每个 type 步骤 = 一个变量槽。默认取步骤 text，运行前可按变量键覆盖（MCP inputs / 注册面板）。
-            // 不再按步骤名智能识别验证码/邮箱：验证码请把默认文本写成 {code} 模板（wait_verification_code 会注入）。
+            // 需要运行期赋值的输入用自定义变量键 + inputs 覆盖（不再有基于步骤名的智能识别）。
             // 变量键的顺序回退（var1/var2/...）按 type 步骤在整卡中的绝对序号计算，
             // 这样 start_step 续跑跳过前面步骤时，同一步骤仍拿到相同的 varN 键。
             let typeOrdinal = 0;
@@ -1087,13 +1038,6 @@ async function runStandaloneCard(payload = {}) {
 
         throw error;
     } finally {
-        if (tempEmailContext) {
-            await closeTempEmailDesktopWindow({
-                sessionId: tempEmailContext.sessionId || payload.sessionId || payload.taskId || payload.browserSessionId || 'default',
-                tabId,
-                email: tempEmailContext.email || context.email || ''
-            }, tempEmailContext).catch(() => {});
-        }
         stoppedTabs.delete(tabId);
         standaloneSessions.delete(tabId);
     }

@@ -461,13 +461,16 @@ async function importAndStartCard() {
     showActionToast('正在启动自动化流程...', 'info');
 
     try {
+        // 先收集用户在变量输入框里填写的值：后续 saveCardCache/importSelectedCardFilesToCache
+        // 会触发 renderCardCacheList → renderCardRunInputs 重渲染，把输入框重置回默认值，
+        // 所以必须在任何重渲染之前采集，否则运行时拿到的又是初始默认值。
+        const runInputs = typeof collectCardRunInputs === 'function' ? collectCardRunInputs() : {};
         await savePreset();
         const imported = await importSelectedCardFilesToCache().catch(() => null);
         const cardData = imported?.selectedItem?.cardData || await resolveCardForRun();
         const savedCardData = await saveCardCache(cardData);
 
         showActionToast(`已启动本地执行: ${savedCardData.name}`, 'info');
-        const runInputs = typeof collectCardRunInputs === 'function' ? collectCardRunInputs() : {};
         void sendStandaloneMessage({
             type: 'card-run-start',
             payload: {
@@ -523,12 +526,14 @@ async function loopCard() {
     showActionToast('正在启动执行...', 'info');
 
     try {
+        // 同 importAndStartCard：在任何重渲染（saveCardCache 等）之前先采集用户输入的变量值，
+        // 否则输入框被重置回默认值，循环执行拿到的就是初始默认值。
+        const loopInputs = typeof collectCardRunInputs === 'function' ? collectCardRunInputs() : {};
         const imported = await importSelectedCardFilesToCache().catch(() => null);
         const cardData = imported?.selectedItem?.cardData || await resolveCardForRun();
         await saveCardCache(cardData);
 
         setLoopButtonState(true);
-        const loopInputs = typeof collectCardRunInputs === 'function' ? collectCardRunInputs() : {};
         void sendStandaloneMessage({
             type: 'card-run-start',
             payload: {

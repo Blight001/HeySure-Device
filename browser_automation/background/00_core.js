@@ -13,7 +13,6 @@ const TEMP_EMAIL_CARD_CACHE_LIST_KEY = 'cookie-capture-temp-email-card-cache-lis
 const TEMP_EMAIL_CARD_SELECTED_ID_KEY = 'cookie-capture-temp-email-card-cache-selected-id';
 const CARD_SIDEBAR_STATE_KEY = 'cookie-capture-card-sidebar-state';
 const STANDALONE_PROGRESS_STATE_KEY = 'cookie-capture-standalone-progress-state';
-let tempEmailRuntimeContext = null;
 const runtimeStateStorage = chrome.storage.session || chrome.storage.local;
 const standaloneSessions = new Map();
 const stoppedTabs = new Set();

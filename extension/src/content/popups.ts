@@ -171,10 +171,17 @@ export async function doClosePopup(msg: any) {
     const candidates = findCloseCandidates(target!, 8)
     const btn = candidates[0]
     if (!btn) return false
+    try { (btn as HTMLElement).focus?.() } catch {}
     if (isFxEnabled()) { await fxToElement(btn); const c = elCenter(btn); await fxClickAt(c.x, c.y); await fxSleep(80) }
-    // clickLikeUser
+    // clickLikeUser with hover
     const c = elCenter(btn)
-    const opts = { bubbles: true, cancelable: true, view: window, clientX: c.x, clientY: c.y } as MouseEventInit
+    const base = { bubbles: true, cancelable: true, view: window, clientX: c.x, clientY: c.y }
+    const pointer = { ...base, pointerId: 1, pointerType: 'mouse', isPrimary: true }
+    btn.dispatchEvent(new PointerEvent('pointerover', pointer))
+    btn.dispatchEvent(new PointerEvent('pointerenter', pointer))
+    btn.dispatchEvent(new MouseEvent('mouseover', base))
+    btn.dispatchEvent(new MouseEvent('mouseenter', base))
+    const opts = { ...base } as MouseEventInit
     btn.dispatchEvent(new PointerEvent('pointerdown', opts))
     btn.dispatchEvent(new MouseEvent('mousedown', opts))
     btn.dispatchEvent(new PointerEvent('pointerup', opts))

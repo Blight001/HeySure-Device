@@ -48,6 +48,9 @@ export async function doClick(msg: any) {
     const c = elCenter(el)
     x = c.x; y = c.y
 
+    // Always focus for clicks
+    try { (el as HTMLElement).focus?.() } catch {}
+
     if (!isVisible(el)) {
       return {
         success: false,
@@ -100,6 +103,7 @@ export async function doClick(msg: any) {
     await fxClickAt(p.x, p.y)
     await fxSleep(80)
   }
+  // clickLikeUser now always ensures focus + full hover events
   clickLikeUser(el, { x, y })
   const ctx = viewportContext()
   return {
@@ -115,9 +119,18 @@ export async function doDoubleClick(msg: any) {
   const { el, frame } = resolveTarget(msg)
   if (!el) throw new Error(`Element not found: selector=${msg.selector || ''} text=${msg.text || ''} coords=${msg.x},${msg.y}`)
   el.scrollIntoView({ block: 'center', behavior: 'auto' })
+  // Always do hover visual (if enabled) + focus before double click
+  try { (el as HTMLElement).focus?.() } catch {}
   if (isFxEnabled()) { await fxSleep(220); const c0 = elCenter(el); const p = topViewportPoint(c0.x, c0.y, frame); await fxToElement(el, frame ? p : undefined); await fxClickAt(p.x, p.y, 'double'); await fxSleep(80) }
+  const win = ownerWindow(el)
   const c = elCenter(el)
-  const opts = { bubbles: true, cancelable: true, view: ownerWindow(el), clientX: c.x, clientY: c.y } as MouseEventInit
+  const base = { bubbles: true, cancelable: true, view: win, clientX: c.x, clientY: c.y }
+  const pointer = { ...base, pointerId: 1, pointerType: 'mouse', isPrimary: true }
+  el.dispatchEvent(new PointerEvent('pointerover', pointer))
+  el.dispatchEvent(new PointerEvent('pointerenter', pointer))
+  el.dispatchEvent(new MouseEvent('mouseover', base))
+  el.dispatchEvent(new MouseEvent('mouseenter', base))
+  const opts = { ...base } as MouseEventInit
   el.dispatchEvent(new MouseEvent('mousedown', opts))
   el.dispatchEvent(new MouseEvent('mouseup', opts))
   el.dispatchEvent(new MouseEvent('click', { ...opts, detail: 1 }))
@@ -133,9 +146,18 @@ export async function doRightClick(msg: any) {
   const { el, frame } = resolveTarget(msg)
   if (!el) throw new Error(`Element not found: selector=${msg.selector || ''} text=${msg.text || ''} coords=${msg.x},${msg.y}`)
   el.scrollIntoView({ block: 'center', behavior: 'auto' })
+  // Always do hover visual (if enabled) + focus before right click
+  try { (el as HTMLElement).focus?.() } catch {}
   if (isFxEnabled()) { await fxSleep(220); const c0 = elCenter(el); const p = topViewportPoint(c0.x, c0.y, frame); await fxToElement(el, frame ? p : undefined); await fxClickAt(p.x, p.y, 'right'); await fxSleep(80) }
+  const win = ownerWindow(el)
   const c = elCenter(el)
-  const opts = { bubbles: true, cancelable: true, view: ownerWindow(el), button: 2, buttons: 2, clientX: c.x, clientY: c.y } as MouseEventInit
+  const base = { bubbles: true, cancelable: true, view: win, clientX: c.x, clientY: c.y, button: 2, buttons: 2 }
+  const pointer = { ...base, pointerId: 1, pointerType: 'mouse', isPrimary: true }
+  el.dispatchEvent(new PointerEvent('pointerover', pointer))
+  el.dispatchEvent(new PointerEvent('pointerenter', pointer))
+  el.dispatchEvent(new MouseEvent('mouseover', base))
+  el.dispatchEvent(new MouseEvent('mouseenter', base))
+  const opts = { ...base } as MouseEventInit
   el.dispatchEvent(new MouseEvent('mousedown', opts))
   el.dispatchEvent(new MouseEvent('mouseup', opts))
   el.dispatchEvent(new MouseEvent('contextmenu', opts))
@@ -1022,15 +1044,26 @@ export function storageList(msg: any) {
 
 // ── Hover ─────────────────────────────────────────────────────────────────
 export async function doHover(msg: any) {
-  const el = document.querySelector(msg.selector) as HTMLElement | null
-  if (!el) throw new Error(`Element not found: ${msg.selector}`)
+  // Support the same targeting as clicks: ref / selector / text / coords
+  const resolved = resolveTarget(msg)
+  const el = resolved.el
+  if (!el) {
+    const sel = msg.selector || msg.text || msg.ref || 'unknown'
+    throw new Error(`Element not found for hover: ${sel}`)
+  }
   if (isFxEnabled()) {
-    await fxToElement(el)
+    const c = elCenter(el)
+    const p = topViewportPoint(c.x, c.y, resolved.frame)
+    await fxToElement(el, p)
     fxHoverOn(el)
   }
-  el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
-  el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }))
-  return { success: true, selector: msg.selector }
+  const win = ownerWindow(el)
+  const c = elCenter(el)
+  const base = { bubbles: true, cancelable: true, view: win, clientX: c.x, clientY: c.y }
+  el.dispatchEvent(new MouseEvent('mouseover', base))
+  el.dispatchEvent(new MouseEvent('mouseenter', base))
+  el.dispatchEvent(new PointerEvent('pointerover', { ...base, pointerId: 1, pointerType: 'mouse', isPrimary: true }))
+  return { success: true, selector: cssPath(el), tag: el.tagName }
 }
 
 export async function doScreenshotFx(msg: any) {

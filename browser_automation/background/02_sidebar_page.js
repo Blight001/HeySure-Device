@@ -477,6 +477,8 @@ async function executePageAction(tabId, action) {
                 } catch (_error) {
                 }
 
+                // Hover + focus before click for consistency with MCP browser_action
+                try { element.focus?.(); } catch (_error) {}
                 try {
                     if (window.__hsFx && typeof window.__hsFx.clickEl === 'function') {
                         await window.__hsFx.clickEl(element, 'left');
@@ -485,8 +487,11 @@ async function executePageAction(tabId, action) {
                 }
 
                 try {
-                    element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-                    element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+                    const base = { bubbles: true, cancelable: true, view: window };
+                    element.dispatchEvent(new MouseEvent('mouseover', base));
+                    element.dispatchEvent(new MouseEvent('mouseenter', base));
+                    element.dispatchEvent(new MouseEvent('mousedown', base));
+                    element.dispatchEvent(new MouseEvent('mouseup', base));
                 } catch (_error) {
                 }
 
@@ -535,6 +540,10 @@ async function executePageAction(tabId, action) {
 
                 if (payload.clickBeforeType === true) {
                     try {
+                        element.focus?.();
+                        const b = { bubbles: true, cancelable: true, view: window };
+                        element.dispatchEvent(new MouseEvent('mouseover', b));
+                        element.dispatchEvent(new MouseEvent('mouseenter', b));
                         element.click();
                     } catch (_error) {
                     }
@@ -737,10 +746,15 @@ async function clickTempEmailDetailBySelector(tabId, rowSelector = '') {
                     element.scrollIntoView({ block: 'center', inline: 'center' });
                 } catch (_error) {
                 }
+                // Hover + focus for all injected clicks
+                try { element.focus?.(); } catch (_error) {}
                 try {
-                    element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
-                    element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
-                    element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+                    const b = { bubbles: true, cancelable: true, view: window };
+                    element.dispatchEvent(new MouseEvent('mouseover', b));
+                    element.dispatchEvent(new MouseEvent('mouseenter', b));
+                    element.dispatchEvent(new MouseEvent('mousedown', b));
+                    element.dispatchEvent(new MouseEvent('mouseup', b));
+                    element.dispatchEvent(new MouseEvent('click', b));
                 } catch (_error) {
                 }
                 try {

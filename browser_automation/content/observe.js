@@ -1222,8 +1222,11 @@
         const buttons = opts.button === 'right' ? 2 : opts.button === 'middle' ? 4 : 1;
         const base = { bubbles: true, cancelable: true, view: win, clientX: center.x, clientY: center.y, button };
         const pointer = { ...base, pointerId: 1, pointerType: 'mouse', isPrimary: true };
+        // Full hover + enter before press (ensure sites see hover state)
         el.dispatchEvent(new PointerEvent('pointerover', pointer));
+        el.dispatchEvent(new PointerEvent('pointerenter', pointer));
         el.dispatchEvent(new MouseEvent('mouseover', base));
+        el.dispatchEvent(new MouseEvent('mouseenter', base));
         el.dispatchEvent(new PointerEvent('pointerdown', { ...pointer, buttons }));
         el.dispatchEvent(new MouseEvent('mousedown', { ...base, buttons }));
         el.dispatchEvent(new PointerEvent('pointerup', { ...pointer, buttons: 0 }));
@@ -1262,6 +1265,9 @@
         }
 
         const center = elCenter(el);
+        // Always focus the element for clicks (required by many form/controls)
+        try { el.focus(); } catch (_error) { /* ignore */ }
+        // Hover visual (hand cursor glide + ripples) + hover events (in dispatch)
         await playFx(el, variant === 'right' ? 'right' : variant === 'double' ? 'double' : 'left');
 
         if (variant === 'double') {

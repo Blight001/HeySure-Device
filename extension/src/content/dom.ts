@@ -227,17 +227,22 @@ export function elCenter(el: Element): { x: number; y: number } {
 export function clickLikeUser(el: Element, at?: { x: number; y: number }) {
   const win = ownerWindow(el)
   const c = at || elCenter(el)
-  ;(el as HTMLElement).focus?.()
+  // Always focus + full hover sequence before click
+  try { (el as HTMLElement).focus?.() } catch {}
   const base = { bubbles: true, cancelable: true, view: win, clientX: c.x, clientY: c.y, button: 0 }
   const pointer = { ...base, pointerId: 1, pointerType: 'mouse', isPrimary: true }
+  // Hover / enter first (many UIs gate on hover state)
   el.dispatchEvent(new PointerEvent('pointerover', pointer))
+  el.dispatchEvent(new PointerEvent('pointerenter', pointer))
   el.dispatchEvent(new MouseEvent('mouseover', base))
+  el.dispatchEvent(new MouseEvent('mouseenter', base))
+  // Then press sequence
   el.dispatchEvent(new PointerEvent('pointerdown', { ...pointer, buttons: 1 }))
   el.dispatchEvent(new MouseEvent('mousedown', { ...base, buttons: 1 }))
   el.dispatchEvent(new PointerEvent('pointerup', { ...pointer, buttons: 0 }))
   el.dispatchEvent(new MouseEvent('mouseup', { ...base, buttons: 0 }))
   el.dispatchEvent(new MouseEvent('click', base))
-  ;(el as HTMLElement).click?.()
+  try { (el as HTMLElement).click?.() } catch {}
 }
 
 // Resolve a target from observe-id (ref) / selector / text / explicit coords.

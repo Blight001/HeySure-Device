@@ -1107,6 +1107,13 @@ async function toolClick(args: any): Promise<any> {
     return withAutoObserve(tab, args, result, t.frameId)
   }
 
+  // Ensure hover (visual cursor + events) + focus happens for *all* clicks,
+  // even when using trusted CDP path (some sites require hover state or :focus).
+  try {
+    await contentMsg(tab.id!, { action: 'hover', ref: t.ref, selector: t.selector, text: t.text, x: t.x, y: t.y }, t.frameId).catch(() => {})
+    await contentMsg(tab.id!, { action: 'focus_target', ref: t.ref, selector: t.selector }, t.frameId).catch(() => {})
+  } catch {}
+
   // Top frame: ask the content script to resolve + scroll + run the visibility /
   // occlusion guards, then return the final viewport coords WITHOUT clicking.
   const resolved = await contentMsg(tab.id!, { ...clickMsg, resolveOnly: true }, t.frameId)

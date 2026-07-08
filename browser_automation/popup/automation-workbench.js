@@ -52,13 +52,8 @@ const sidebarCardUploadCardKeyInput = document.getElementById('sidebar-card-uplo
 const sidebarCardRawJsonInput = document.getElementById('sidebar-card-raw-json');
 const sidebarStepTemplateSelect = document.getElementById('sidebar-step-template');
 const sidebarAddStepButton = document.getElementById('sidebar-add-step');
-const sidebarLoadCardButton = document.getElementById('sidebar-load-card');
-const sidebarSaveCardButton = document.getElementById('sidebar-save-card');
-const sidebarExportCardButton = document.getElementById('sidebar-export-card');
-const sidebarLoopButton = document.getElementById('sidebar-loop-card');
 const sidebarRefreshCardButton = document.getElementById('sidebar-refresh-card');
 const sidebarCloseButton = document.getElementById('sidebar-close');
-const sidebarTutorialButton = document.getElementById('sidebar-tutorial');
 const sidebarStepListNode = document.getElementById('sidebar-step-list');
 const sidebarEditorMetaNode = document.getElementById('sidebar-editor-meta');
 
@@ -69,6 +64,7 @@ const debugProgressFillNode = document.getElementById('debug-progress-fill');
 const debugProgressMetaNode = document.getElementById('debug-progress-meta');
 const debugProgressErrorNode = document.getElementById('debug-progress-error');
 const runControlStopButton = document.getElementById('run-control-stop');
+const debugControlLabel = document.querySelector('.debug-control-label');
 
 let activeDebugErrorReason = '';
 let debugProgressAutoHideTimer = null;
@@ -450,6 +446,16 @@ function setDebugProgress(state = {}) {
     if (debugProgressTextNode) {
         debugProgressTextNode.textContent = text;
     }
+
+    // 失败态强制显示 0%（匹配执行进度失败展示）
+    if (state.kind === 'error' || phase === 'failed') {
+        if (debugProgressFillNode) {
+            debugProgressFillNode.style.width = '0%';
+        }
+        if (debugProgressPercentNode) {
+            debugProgressPercentNode.textContent = '0%';
+        }
+    }
     if (debugProgressMetaNode) {
         debugProgressMetaNode.textContent = meta;
     }
@@ -461,6 +467,31 @@ function setDebugProgress(state = {}) {
         const showRunStop = visible;
         runControlStopButton.disabled = !showRunStop;
         runControlStopButton.hidden = !showRunStop;
+        if (showRunStop) {
+            const isErrorState = state.kind === 'error' || phase === 'failed';
+            const hasStep = Number(state.stepIndex || 0) > 0;
+            if (isErrorState && hasStep) {
+                runControlStopButton.textContent = '继续';
+                runControlStopButton.title = `从失败的步骤 ${state.stepIndex} 继续/重试`;
+                runControlStopButton.dataset.action = 'continue';
+            } else {
+                runControlStopButton.textContent = '停止';
+                runControlStopButton.title = '停止执行';
+                runControlStopButton.dataset.action = 'stop';
+            }
+        }
+    }
+
+    if (debugControlLabel) {
+        if (state.kind === 'error' || phase === 'failed') {
+            debugControlLabel.textContent = '当前：执行失败';
+        } else if (phase === 'stopped') {
+            debugControlLabel.textContent = '当前：已停止';
+        } else if (state.running === false) {
+            debugControlLabel.textContent = '当前：执行结束';
+        } else {
+            debugControlLabel.textContent = '当前：自动化执行中';
+        }
     }
 }
 
@@ -490,6 +521,12 @@ function resetDebugProgress() {
     if (runControlStopButton) {
         runControlStopButton.hidden = true;
         runControlStopButton.disabled = true;
+        runControlStopButton.textContent = '停止';
+        runControlStopButton.title = '停止执行';
+        runControlStopButton.dataset.action = 'stop';
+    }
+    if (debugControlLabel) {
+        debugControlLabel.textContent = '当前：自动化执行中';
     }
 }
 
@@ -548,10 +585,6 @@ function setLoopButtonState(isRunning = false) {
         loopCardButton.textContent = label;
         loopCardButton.setAttribute('aria-pressed', isRunning ? 'true' : 'false');
     }
-    if (sidebarLoopButton) {
-        sidebarLoopButton.textContent = label;
-        sidebarLoopButton.setAttribute('aria-pressed', isRunning ? 'true' : 'false');
-    }
 }
 
 async function refreshLoopButtonState() {
@@ -576,6 +609,39 @@ async function sendStopAction() {
         throw new Error(response?.error || '停止执行失败');
     }
 
+    return response;
+}
+
+async function sendContinueAction() {
+    const state = await loadStandaloneProgressState().catch(() => null);
+    const stepIndex = Number(state && state.stepIndex || 0);
+    if (!stepIndex || stepIndex < 1) {
+        throw new Error('没有可继续的失败步骤信息');
+    }
+
+    let cardData = null;
+    try {
+        const cacheState = await loadCardCacheState().catch(() => ({ items: [], selectedId: '' }));
+        const selected = (cacheState.items || []).find((it) => it && it.id === cacheState.selectedId) || (cacheState.items || [])[0];
+        cardData = selected && selected.cardData ? selected.cardData : null;
+    } catch (_) {}
+    if (!cardData) {
+        throw new Error('无法加载当前卡片数据以继续执行');
+    }
+
+    const inputs = typeof collectCardRunInputs === 'function' ? collectCardRunInputs() : {};
+    const response = await chrome.runtime.sendMessage({
+        type: 'card-run-start',
+        payload: {
+            cardData,
+            start_step: stepIndex,
+            inputs
+        }
+    });
+
+    if (response && response.success === false && response.error) {
+        throw new Error(response.error);
+    }
     return response;
 }
 
@@ -950,7 +1016,7 @@ function buildSidebarStepCardHtml(step = {}, index = 0, expanded = false) {
       <div class="sidebar-step-card${expanded ? ' is-expanded' : ''}" data-sidebar-step-card data-step-index="${index}">
         <div class="sidebar-step-card__header">
           <div class="sidebar-step-card__title-wrap">
-            <h4 class="sidebar-step-card__title">步骤 ${index + 1}-${name}</h4>
+            <h4 class="sidebar-step-card__title">步骤 ${index + 1}-${name} <span class="sidebar-step-status" data-step-status></span></h4>
             <div class="sidebar-step-card__summary">${buildSidebarStepSummary(step)}</div>
           </div>
           <div class="sidebar-step-card__actions">
@@ -960,6 +1026,7 @@ function buildSidebarStepCardHtml(step = {}, index = 0, expanded = false) {
             <button type="button" class="button-secondary" data-sidebar-step-action="delete">删除</button>
           </div>
         </div>
+        <div class="sidebar-step-error" data-step-error hidden></div>
         <div class="sidebar-step-card__body">
           <div class="sidebar-step-card__grid">
           <div class="full">
@@ -1036,6 +1103,72 @@ function buildSidebarStepCardHtml(step = {}, index = 0, expanded = false) {
       </div>
     `;
   }
+
+function resetSidebarStepStatuses() {
+  if (!sidebarStepListNode) return;
+  sidebarStepListNode.querySelectorAll('[data-sidebar-step-card]').forEach((card) => {
+    card.classList.remove('is-pending', 'is-success', 'is-error', 'is-running');
+    const statusEl = card.querySelector('.sidebar-step-status') || card.querySelector('[data-step-status]');
+    if (statusEl) statusEl.textContent = '';
+    const errEl = card.querySelector('.sidebar-step-error') || card.querySelector('[data-step-error]');
+    if (errEl) {
+      errEl.textContent = '';
+      errEl.hidden = true;
+    }
+  });
+}
+
+function applyExecutionStatusToSidebarStep(stepIndex, status = 'pending', errorReason = '') {
+  if (!sidebarStepListNode || !stepIndex) return;
+  const idx = Number(stepIndex);
+  const card = sidebarStepListNode.querySelector(`[data-sidebar-step-card][data-step-index="${idx}"]`);
+  if (!card) return;
+
+  card.classList.remove('is-pending', 'is-success', 'is-error', 'is-running');
+
+  const statusEl = card.querySelector('.sidebar-step-status') || card.querySelector('[data-step-status]');
+  let errEl = card.querySelector('.sidebar-step-error') || card.querySelector('[data-step-error]');
+  if (!errEl) {
+    errEl = document.createElement('div');
+    errEl.className = 'sidebar-step-error';
+    errEl.setAttribute('data-step-error', '');
+    const header = card.querySelector('.sidebar-step-card__header');
+    if (header && header.parentNode) {
+      header.parentNode.insertBefore(errEl, header.nextSibling);
+    } else {
+      card.appendChild(errEl);
+    }
+  }
+
+  let label = '';
+  if (status === 'success') {
+    card.classList.add('is-success');
+    label = '✓ 通过';
+    errEl.hidden = true;
+    errEl.textContent = '';
+  } else if (status === 'error') {
+    card.classList.add('is-error');
+    label = '✗ 失败';
+    if (errorReason) {
+      errEl.textContent = String(errorReason);
+      errEl.hidden = false;
+    } else {
+      errEl.hidden = true;
+    }
+  } else if (status === 'running') {
+    card.classList.add('is-running');
+    label = '⟳ 执行中';
+    errEl.hidden = true;
+  } else {
+    card.classList.add('is-pending');
+    label = '○ 待执行';
+    errEl.hidden = true;
+  }
+
+  if (statusEl) {
+    statusEl.textContent = label;
+  }
+}
 
 function collectSidebarStepCards() {
     if (!sidebarStepListNode) {
@@ -1216,10 +1349,12 @@ function renderSidebarCardEditor(cardData) {
 
     if (steps.length === 0) {
         sidebarStepListNode.innerHTML = '<div class="sidebar-step-empty">还没有步骤。先添加一条步骤开始编辑。</div>';
+        resetSidebarStepStatuses();
         return;
     }
 
     sidebarStepListNode.innerHTML = steps.map((step, index) => buildSidebarStepCardHtml(step, index, previousExpandedStates.get(index) === true)).join('');
+    resetSidebarStepStatuses();
 }
 
 function getSidebarCardDataFromEditor() {
@@ -1435,6 +1570,7 @@ globalThis.CookieCaptureAutomationWorkbench = {
     setLoopButtonState,
     refreshLoopButtonState,
     sendStopAction,
+    sendContinueAction,
     normalizeCardData,
     stringifyCardData,
     parseEditorCardData,
@@ -1463,6 +1599,8 @@ globalThis.CookieCaptureAutomationWorkbench = {
     collectSidebarStepCards,
     readSidebarStepCard,
     collectSidebarSteps,
+    resetSidebarStepStatuses,
+    applyExecutionStatusToSidebarStep,
     syncSidebarEditorToHiddenJson,
     collectSidebarCardDataFromForm,
     renderSidebarCardEditor,

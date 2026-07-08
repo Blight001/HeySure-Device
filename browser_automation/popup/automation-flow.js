@@ -139,13 +139,8 @@ const sidebarCardUploadCardKeyInput = document.getElementById('sidebar-card-uplo
 const sidebarCardRawJsonInput = document.getElementById('sidebar-card-raw-json');
 const sidebarStepTemplateSelect = document.getElementById('sidebar-step-template');
 const sidebarAddStepButton = document.getElementById('sidebar-add-step');
-const sidebarLoadCardButton = document.getElementById('sidebar-load-card');
-const sidebarSaveCardButton = document.getElementById('sidebar-save-card');
-const sidebarExportCardButton = document.getElementById('sidebar-export-card');
-const sidebarLoopButton = document.getElementById('sidebar-loop-card');
 const sidebarRefreshCardButton = document.getElementById('sidebar-refresh-card');
 const sidebarCloseButton = document.getElementById('sidebar-close');
-const sidebarTutorialButton = document.getElementById('sidebar-tutorial');
 const sidebarStepListNode = document.getElementById('sidebar-step-list');
 const sidebarEditorMetaNode = document.getElementById('sidebar-editor-meta');
 const TUTORIAL_URL = 'https://www.yuque.com/heysure/mn6q55/lyorlysczr8eh39b?singleDoc#';
@@ -209,6 +204,8 @@ const {
     collectSidebarStepCards,
     readSidebarStepCard,
     collectSidebarSteps,
+    resetSidebarStepStatuses,
+    applyExecutionStatusToSidebarStep,
     syncSidebarEditorToHiddenJson,
     collectSidebarCardDataFromForm,
     renderSidebarCardEditor,
@@ -471,6 +468,14 @@ async function importAndStartCard() {
         const cardData = imported?.selectedItem?.cardData || await resolveCardForRun();
         const savedCardData = await saveCardCache(cardData);
 
+        if (isSidebarLayout() && typeof resetSidebarStepStatuses === 'function' && typeof applyExecutionStatusToSidebarStep === 'function') {
+            resetSidebarStepStatuses();
+            const stepCount = Array.isArray(savedCardData.steps) ? savedCardData.steps.length : 0;
+            for (let i = 1; i <= stepCount; i++) {
+                applyExecutionStatusToSidebarStep(i, 'pending');
+            }
+        }
+
         showActionToast(`已启动本地执行: ${savedCardData.name}`, 'info');
         void sendStandaloneMessage({
             type: 'card-run-start',
@@ -495,7 +500,6 @@ async function loopCard() {
     const isRunning = await refreshLoopButtonState();
     if (isRunning) {
         loopCardButton && (loopCardButton.disabled = true);
-        sidebarLoopButton && (sidebarLoopButton.disabled = true);
         showActionToast('正在停止执行流程...', 'info');
         try {
             await sendStopAction();
@@ -507,15 +511,11 @@ async function loopCard() {
             if (loopCardButton) {
                 loopCardButton.disabled = false;
             }
-            if (sidebarLoopButton) {
-                sidebarLoopButton.disabled = false;
-            }
         }
         return;
     }
 
     loopCardButton && (loopCardButton.disabled = true);
-    sidebarLoopButton && (sidebarLoopButton.disabled = true);
     showActionToast('正在启动循环执行...', 'info');
     setDebugProgress({
         visible: true,
@@ -533,6 +533,14 @@ async function loopCard() {
         const imported = await importSelectedCardFilesToCache().catch(() => null);
         const cardData = imported?.selectedItem?.cardData || await resolveCardForRun();
         await saveCardCache(cardData);
+
+        if (isSidebarLayout() && typeof resetSidebarStepStatuses === 'function' && typeof applyExecutionStatusToSidebarStep === 'function') {
+            resetSidebarStepStatuses();
+            const stepCount = Array.isArray(cardData.steps) ? cardData.steps.length : 0;
+            for (let i = 1; i <= stepCount; i++) {
+                applyExecutionStatusToSidebarStep(i, 'pending');
+            }
+        }
 
         setLoopButtonState(true);
         void sendStandaloneMessage({
@@ -556,9 +564,6 @@ async function loopCard() {
     } finally {
         if (loopCardButton) {
             loopCardButton.disabled = false;
-        }
-        if (sidebarLoopButton) {
-            sidebarLoopButton.disabled = false;
         }
     }
 }

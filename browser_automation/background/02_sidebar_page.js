@@ -36,46 +36,9 @@ async function injectCardEditorSidebar(tabId, width = 820) {
                         border-left: 1px solid rgba(148, 163, 184, 0.34);
                         pointer-events: auto;
                     }
-                    .bar {
-                        display: flex;
-                        align-items: center;
-                        justify-content: space-between;
-                        gap: 10px;
-                        height: 44px;
-                        padding: 0 12px 0 14px;
-                        background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(248,250,252,0.92));
-                        border-bottom: 1px solid rgba(148, 163, 184, 0.18);
-                        color: #172033;
-                        font: 600 13px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-                    }
-                    .title {
-                        display: flex;
-                        flex-direction: column;
-                        gap: 2px;
-                    }
-                    .title strong {
-                        font-size: 13px;
-                        font-weight: 700;
-                    }
-                    .title span {
-                        font-size: 11px;
-                        color: #667085;
-                        font-weight: 500;
-                    }
-                    .close {
-                        appearance: none;
-                        border: 1px solid rgba(209, 213, 219, 0.9);
-                        border-radius: 10px;
-                        min-height: 30px;
-                        padding: 0 12px;
-                        background: #fff;
-                        color: #334155;
-                        font: 600 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-                        cursor: pointer;
-                    }
                     .frame {
                         width: 100%;
-                        height: calc(100vh - 44px);
+                        height: 100vh;
                         border: 0;
                         display: block;
                         background: transparent;
@@ -92,18 +55,10 @@ async function injectCardEditorSidebar(tabId, width = 820) {
                 </style>
                 <div class="panel">
                     <div class="resize" title="拖动调整宽度"></div>
-                    <div class="bar">
-                        <div class="title">
-                            <strong>自动化卡片编辑侧边栏</strong>
-                            <span>右侧独立编辑，不再挤在小栏目里</span>
-                        </div>
-                        <button class="close" type="button">关闭</button>
-                    </div>
                     <iframe class="frame" src="${iframeUrl}" allow="clipboard-read; clipboard-write"></iframe>
                 </div>
             `;
 
-            const closeButton = shadow.querySelector('.close');
             const resizeHandle = shadow.querySelector('.resize');
             let startX = 0;
             let startWidth = 0;
@@ -126,7 +81,12 @@ async function injectCardEditorSidebar(tabId, width = 820) {
                 host.remove();
             };
 
-            closeButton?.addEventListener('click', closePanel);
+            // Allow the inner iframe (sidebar editor) to request close
+            window.addEventListener('message', (ev) => {
+                if (ev && ev.data && ev.data.type === 'close-card-sidebar') {
+                    closePanel();
+                }
+            });
 
             resizeHandle?.addEventListener('mousedown', (event) => {
                 event.preventDefault();

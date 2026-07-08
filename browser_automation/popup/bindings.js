@@ -153,14 +153,9 @@ const sidebarCardUploadCardKeyInput = document.getElementById('sidebar-card-uplo
 const sidebarCardRawJsonInput = document.getElementById('sidebar-card-raw-json');
 const sidebarStepTemplateSelect = document.getElementById('sidebar-step-template');
 const sidebarAddStepButton = document.getElementById('sidebar-add-step');
-const sidebarLoadCardButton = document.getElementById('sidebar-load-card');
-const sidebarSaveCardButton = document.getElementById('sidebar-save-card');
-const sidebarExportCardButton = document.getElementById('sidebar-export-card');
-const sidebarLoopButton = document.getElementById('sidebar-loop-card');
 const sidebarRefreshCardButton = document.getElementById('sidebar-refresh-card');
 const sidebarCloseButton = document.getElementById('sidebar-close');
 const runControlStopButton = document.getElementById('run-control-stop');
-const sidebarTutorialButton = document.getElementById('sidebar-tutorial');
 const sidebarStepListNode = document.getElementById('sidebar-step-list');
 const sidebarEditorMetaNode = document.getElementById('sidebar-editor-meta');
 const TUTORIAL_URL = 'https://www.yuque.com/heysure/mn6q55/lyorlysczr8eh39b?singleDoc#';
@@ -192,6 +187,7 @@ const {
     setLoopButtonState,
     refreshLoopButtonState,
     sendStopAction,
+    sendContinueAction,
     normalizeCardData,
     stringifyCardData,
     parseEditorCardData,
@@ -220,6 +216,8 @@ const {
     collectSidebarStepCards,
     readSidebarStepCard,
     collectSidebarSteps,
+    resetSidebarStepStatuses,
+    applyExecutionStatusToSidebarStep,
     syncSidebarEditorToHiddenJson,
     collectSidebarCardDataFromForm,
     renderSidebarCardEditor,
@@ -514,16 +512,29 @@ cardCacheListNode?.addEventListener('click', (event) => {
     })();
 });
 
-// 进度面板停止按钮（仅保留自动化运行的停止）
+// 进度面板停止/继续按钮：失败后自动变成“继续”，点击可从失败步骤重试
 runControlStopButton?.addEventListener('click', () => {
     runControlStopButton.disabled = true;
-    void sendStopAction().then(() => {
-        showActionToast('已停止执行', 'success');
-    }).catch((error) => {
-        showActionToast(error && error.message ? error.message : '停止执行失败', 'error');
-    }).finally(() => {
-        if (runControlStopButton) runControlStopButton.disabled = false;
-    });
+    void (async () => {
+        let state = null;
+        try {
+            state = await loadStandaloneProgressState();
+        } catch (_) {}
+        const isContinueCase = !!(state && (state.kind === 'error' || state.phase === 'failed') && Number(state.stepIndex || 0) > 0);
+        try {
+            if (isContinueCase && typeof sendContinueAction === 'function') {
+                await sendContinueAction();
+                showActionToast('已从当前失败步骤继续执行', 'success');
+            } else {
+                await sendStopAction();
+                showActionToast('已停止执行', 'success');
+            }
+        } catch (error) {
+            showActionToast(error && error.message ? error.message : (isContinueCase ? '继续执行失败' : '停止执行失败'), 'error');
+        } finally {
+            if (runControlStopButton) runControlStopButton.disabled = false;
+        }
+    })();
 });
 
 captureButton?.addEventListener('click', () => {
@@ -733,34 +744,6 @@ appendStepButton?.addEventListener('click', () => {
     })();
 });
 
-sidebarLoadCardButton?.addEventListener('click', () => {
-    void (async () => {
-        sidebarLoadCardButton.disabled = true;
-        try {
-            const cardData = await loadCardIntoEditor();
-            showActionToast(`已载入自动化卡片: ${cardData.name || '未命名'}`, 'success');
-        } catch (error) {
-            showActionToast(error && error.message ? error.message : '载入自动化卡片失败', 'error');
-        } finally {
-            sidebarLoadCardButton.disabled = false;
-        }
-    })();
-});
-
-sidebarTutorialButton?.addEventListener('click', () => {
-    void (async () => {
-        sidebarTutorialButton.disabled = true;
-        try {
-            await openTutorialPage();
-            showActionToast('已打开教程', 'success');
-        } catch (error) {
-            showActionToast(error && error.message ? error.message : '打开教程失败', 'error');
-        } finally {
-            sidebarTutorialButton.disabled = false;
-        }
-    })();
-});
-
 heroTutorialButton?.addEventListener('click', () => {
     void (async () => {
         heroTutorialButton.disabled = true;
@@ -775,41 +758,14 @@ heroTutorialButton?.addEventListener('click', () => {
     })();
 });
 
-sidebarSaveCardButton?.addEventListener('click', () => {
-    void (async () => {
-        sidebarSaveCardButton.disabled = true;
-        try {
-            const saved = await saveEditorCardToCache();
-            showActionToast(`已保存自动化卡片: ${saved.name}`, 'success');
-        } catch (error) {
-            showActionToast(error && error.message ? error.message : '保存自动化卡片失败', 'error');
-        } finally {
-            sidebarSaveCardButton.disabled = false;
-        }
-    })();
-});
-
-sidebarExportCardButton?.addEventListener('click', () => {
-    void (async () => {
-        sidebarExportCardButton.disabled = true;
-        try {
-            const result = await exportCard();
-            showActionToast(`已导出自动化卡片: ${result.fileName}`, 'success');
-        } catch (error) {
-            showActionToast(error && error.message ? error.message : '导出自动化卡片失败', 'error');
-        } finally {
-            sidebarExportCardButton.disabled = false;
-        }
-    })();
-});
-
-sidebarLoopButton?.addEventListener('click', () => {
-    void loopCard();
-});
-
 sidebarCloseButton?.addEventListener('click', () => {
+    // Direct close via postMessage to the outer sidebar host (immediate DOM removal)
+    try {
+        window.parent && window.parent.postMessage({ type: 'close-card-sidebar' }, '*');
+    } catch (_e) {}
+    // Also notify background to update state (the sendMessage will toggle/close)
     void openCardEditorSidebar().catch((error) => {
-        showActionToast(error && error.message ? error.message : '关闭侧边栏失败', 'error');
+        // ignore if already closed
     });
 });
 
@@ -1001,6 +957,9 @@ chrome.runtime.onMessage.addListener((message) => {
             kind: message.kind || '',
             errorReason,
             mode: String(message.mode || '').trim() || 'debug',
+            stepIndex,
+            stepTotal,
+            stepName,
             meta: [
                 ...stepMetaParts,
                 hasProgress ? `${Math.round(Math.max(0, Math.min(100, progressValue)))}%` : ''
@@ -1014,6 +973,30 @@ chrome.runtime.onMessage.addListener((message) => {
             setStatus(text, message.kind === 'error' ? 'error' : '');
         }
         setLoopButtonState(message.running === true);
+
+        // 侧边栏：执行步骤状态显示在“自动化步骤”栏目内（灰/绿/红），不再在最下方面板
+        if (isSidebarLayout() && typeof applyExecutionStatusToSidebarStep === 'function') {
+          const si = stepIndex;
+          const phase = String(message.phase || '').trim();
+          const err = errorReason;
+          if (si > 0) {
+            if (phase === 'step_start') {
+              for (let i = 1; i < si; i++) {
+                applyExecutionStatusToSidebarStep(i, 'success');
+              }
+              applyExecutionStatusToSidebarStep(si, 'running');
+            } else if (phase === 'step_complete') {
+              applyExecutionStatusToSidebarStep(si, 'success');
+            } else if (phase === 'step_skip') {
+              applyExecutionStatusToSidebarStep(si, 'pending');
+            } else if (message.kind === 'error') {
+              for (let i = 1; i < si; i++) {
+                applyExecutionStatusToSidebarStep(i, 'success');
+              }
+              applyExecutionStatusToSidebarStep(si, 'error', err || text);
+            }
+          }
+        }
     }
 
     if (message.type === 'card-run-finished') {
@@ -1024,15 +1007,40 @@ chrome.runtime.onMessage.addListener((message) => {
             ? Number(message.progress)
             : (success ? 100 : 0);
         const finalMsg = String(message.message || (message.success ? '执行完成' : '执行失败'));
-        setDebugProgress({
-            visible: true,
-            progress: finishedProgress,
-            message: finalMsg,
-            kind: success || stopped ? '' : 'error',
-            errorReason: String(message.errorReason || (!success && !stopped ? message.message || '' : '')).trim(),
-            meta: continuation ? '继续循环' : stopped ? '已停止' : success ? '已完成' : '已失败',
-            mode: continuation ? 'loop' : ''
-        });
+        // 载入持久化状态以带出失败步骤索引，让按钮可正确显示为“继续”
+        (async () => {
+            let stepIndex = Number(message.stepIndex || 0) || 0;
+            if (!success && !stopped && !stepIndex) {
+                try {
+                    const st = await loadStandaloneProgressState().catch(() => null);
+                    if (st && Number(st.stepIndex)) stepIndex = Number(st.stepIndex);
+                } catch (_) {}
+            }
+            setDebugProgress({
+                visible: true,
+                progress: finishedProgress,
+                message: finalMsg,
+                kind: success || stopped ? '' : 'error',
+                errorReason: String(message.errorReason || (!success && !stopped ? message.message || '' : '')).trim(),
+                meta: continuation ? '继续循环' : stopped ? '已停止' : success ? '已完成' : '已失败',
+                mode: continuation ? 'loop' : '',
+                stepIndex
+            });
+
+            // 侧边栏步骤最终状态
+            if (isSidebarLayout() && typeof applyExecutionStatusToSidebarStep === 'function' && stepIndex > 0) {
+              if (success || stopped) {
+                for (let i = 1; i <= stepIndex; i++) {
+                  applyExecutionStatusToSidebarStep(i, 'success');
+                }
+              } else {
+                for (let i = 1; i < stepIndex; i++) {
+                  applyExecutionStatusToSidebarStep(i, 'success');
+                }
+                applyExecutionStatusToSidebarStep(stepIndex, 'error', String(message.errorReason || message.message || '执行失败'));
+              }
+            }
+        })();
         if (message.success === true) {
             setStatus(finalMsg, 'success');
             showActionToast(finalMsg, 'success');

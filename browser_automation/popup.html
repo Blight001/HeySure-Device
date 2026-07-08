@@ -6,80 +6,6 @@
   <title>AI自动化插件</title>
   <link rel="icon" href="icon16.png">
   <link rel="stylesheet" href="popup.css">
-  <style>
-    /* ── 服务器同步：状态 / 账号 / 连接 / AI 分配（教程右侧）── */
-    .agent-status-pill {
-      display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px;
-      background:var(--panel); border:1px solid var(--border); font-size:11px; color:var(--muted);
-      box-shadow:var(--shadow);
-    }
-    .agent-status-dot { width:8px; height:8px; border-radius:50%; background:#9aa4b2; flex-shrink:0; }
-    .agent-status-dot.is-green  { background:var(--success); box-shadow:0 0 0 3px rgba(21,128,61,.14); }
-    .agent-status-dot.is-yellow { background:#d97706; box-shadow:0 0 0 3px rgba(217,119,6,.14); }
-    .agent-status-dot.is-red    { background:var(--error); box-shadow:0 0 0 3px rgba(185,28,28,.12); }
-    .agent-chip {
-      display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px;
-      background:var(--panel); border:1px solid var(--border); font-size:11px; color:var(--text);
-      cursor:pointer; max-width:150px; box-shadow:var(--shadow);
-    }
-    .agent-chip:hover { background:var(--panel-strong); }
-    .agent-chip-ava {
-      width:16px; height:16px; border-radius:50%; flex-shrink:0; overflow:hidden;
-      display:flex; align-items:center; justify-content:center; color:#fff; font-size:9px;
-      background:linear-gradient(135deg,var(--primary),var(--success));
-    }
-    .agent-chip-ava img { width:100%; height:100%; object-fit:cover; }
-    .agent-chip span:last-child { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-
-    /* 教程右侧紧凑样式 */
-    .hero-top .agent-status-pill,
-    .hero-top .agent-chip {
-      padding: 2px 6px;
-      font-size: 10px;
-      line-height: 1.1;
-    }
-    .hero-top .agent-chip-ava {
-      width: 12px; height: 12px; font-size: 7px;
-    }
-    .hero-top .agent-status-dot {
-      width: 6px; height: 6px;
-    }
-
-    .agent-modal { position:fixed; inset:0; z-index:80; display:flex; align-items:center; justify-content:center; padding:14px; background:rgba(15,23,42,.4); }
-    .agent-modal.is-hidden { display:none; }
-    .agent-modal-box {
-      width:min(360px,100%); max-height:min(90vh,600px); overflow:auto; display:flex; flex-direction:column; gap:12px;
-      background:var(--panel-strong); border:1px solid var(--border); border-radius:14px; padding:16px; box-shadow:var(--shadow);
-    }
-    .agent-modal-head { display:flex; align-items:center; justify-content:space-between; }
-    .agent-modal-title { font-size:14px; font-weight:700; color:var(--text); }
-    .agent-modal-close { border:none; background:none; font-size:20px; line-height:1; color:var(--muted); cursor:pointer; padding:0 4px; }
-    .agent-card { border:1px solid var(--border); border-radius:10px; padding:12px; background:var(--panel); display:flex; flex-direction:column; gap:8px; }
-    .agent-card-title { font-size:11px; font-weight:700; letter-spacing:.4px; color:var(--muted); text-transform:uppercase; }
-    .agent-field { display:flex; flex-direction:column; gap:4px; }
-    .agent-field label { font-size:11px; color:var(--muted); font-weight:600; }
-    .agent-field input[type=text], .agent-field input[type=url], .agent-field input[type=password] {
-      width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:8px; font-size:12px;
-      background:var(--panel-strong); color:var(--text); outline:none;
-    }
-    .agent-field input:focus { border-color:var(--primary); }
-    .agent-check { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--muted); }
-    .agent-kv { display:flex; justify-content:space-between; gap:8px; font-size:12px; }
-    .agent-kv .k { color:var(--muted); }
-    .agent-kv .v { color:var(--text); text-align:right; word-break:break-word; }
-    .agent-btn { display:inline-flex; align-items:center; justify-content:center; gap:5px; width:100%; padding:8px 12px; border-radius:8px; border:none; font-size:12px; font-weight:600; cursor:pointer; }
-    .agent-btn-primary { background:var(--primary-strong); color:#fff; }
-    .agent-btn-primary:hover { background:var(--primary); }
-    .agent-btn-danger { background:rgba(185,28,28,.1); color:var(--error); border:1px solid rgba(185,28,28,.2); }
-    .agent-btn-ghost { background:var(--panel-strong); color:var(--text); border:1px solid var(--border); }
-    .agent-btn-row { display:flex; gap:8px; }
-    .agent-btn-row .agent-btn { flex:1; }
-    .agent-hint { font-size:11px; color:var(--muted); line-height:1.5; }
-    .agent-feedback { font-size:11px; min-height:14px; }
-    .agent-feedback.is-ok { color:var(--success); }
-    .agent-feedback.is-err { color:var(--error); }
-    .is-hidden { display:none !important; }
-  </style>
 </head>
   <body>
   <div class="wrap">
@@ -201,7 +127,7 @@
             <button id="open-card-sidebar" class="button-secondary button-sidebar" type="button">打开侧边栏</button>
           </div>
           <div class="field-actions field-actions--left card-toolbar">
-            <button id="import-card">开始执行</button>
+            <button id="import-card" class="button-primary">开始执行</button>
             <button id="loop-card" class="button-secondary" type="button">循环执行</button>
           </div>
           <div id="card-cache-list" class="card-cache-list" aria-label="自动化卡片列表"></div>
@@ -296,7 +222,7 @@
         </div>
         <div class="actions cookie-capture-actions">
           <div class="cookie-capture-actions__row">
-            <button id="capture">Cookie 管理</button>
+            <button id="capture" class="button-primary">Cookie 管理</button>
             <input id="cookie-import-file" type="file" accept=".json,.txt,.cookie,text/plain,application/json" hidden>
             <button id="import-cookie" class="button-secondary" type="button">导入Cookie</button>
             <button id="clear-current-page-cache" class="button-secondary" type="button">清理当前页缓存</button>
@@ -368,7 +294,7 @@
           <div class="agent-field"><label for="agent-account">账号</label><input id="agent-account" type="text" placeholder="你的账号" autocomplete="username"></div>
           <div class="agent-field"><label for="agent-password">密码</label><input id="agent-password" type="password" placeholder="密码" autocomplete="current-password"></div>
           <label class="agent-check"><input id="agent-remember" type="checkbox"> 记住账号和密码</label>
-          <button id="agent-login-btn" class="agent-btn agent-btn-primary" type="button">登录并连接</button>
+          <button id="agent-login-btn" type="button">登录并连接</button>
           <div id="agent-login-feedback" class="agent-feedback"></div>
         </div>
 
@@ -376,17 +302,17 @@
           <div class="agent-card-title">👤 已登录</div>
           <div class="agent-kv"><span class="k">账号</span><span class="v" id="agent-current-account">-</span></div>
           <div class="agent-btn-row">
-            <button id="agent-connect-btn" class="agent-btn agent-btn-ghost" type="button">重新连接</button>
-            <button id="agent-disconnect-btn" class="agent-btn agent-btn-ghost" type="button">断开</button>
+            <button id="agent-connect-btn" class="button-secondary" type="button">重新连接</button>
+            <button id="agent-disconnect-btn" class="button-secondary" type="button">断开</button>
           </div>
-          <button id="agent-logout-btn" class="agent-btn agent-btn-danger" type="button">退出登录</button>
+          <button id="agent-logout-btn" class="button-secondary button-delete" type="button">退出登录</button>
         </div>
 
         <div class="agent-card">
           <div class="agent-card-title">⚙ 选项</div>
           <label class="agent-check"><input id="agent-mousefx" type="checkbox"> AI 操作时在页面显示动效（手型光标、点击涟漪、输入高亮）</label>
           <div class="agent-field"><label for="agent-name">设备名称（显示在作坊里）</label><input id="agent-name" type="text" placeholder="AI自动化浏览器" autocomplete="off"></div>
-          <button id="agent-save-options" class="agent-btn agent-btn-ghost" type="button">保存选项</button>
+          <button id="agent-save-options" class="button-secondary" type="button">保存选项</button>
           <div id="agent-options-feedback" class="agent-feedback"></div>
         </div>
       </div>

@@ -219,7 +219,7 @@
 
     html[data-layout='popup'] .main-tabs {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       margin-top: 8px;
       padding: 5px;
     }
@@ -1452,7 +1452,8 @@
       white-space: pre-wrap;
     }
 
-    button {
+    button,
+    .button-primary {
       appearance: none;
       border: 0;
       border-radius: 12px;
@@ -1466,12 +1467,14 @@
       transition: transform .15s ease, opacity .15s ease, box-shadow .15s ease;
     }
 
-    button:hover {
+    button:hover,
+    .button-primary:hover {
       transform: translateY(-1px);
       box-shadow: 0 10px 22px rgba(37, 99, 235, 0.25);
     }
 
-    button:disabled {
+    button:disabled,
+    .button-primary:disabled {
       opacity: 0.65;
       cursor: not-allowed;
       transform: none;
@@ -1492,35 +1495,36 @@
       box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
     }
 
-    .button-import,
-    .button-export {
-      background: #fde047 !important;
-      color: #713f12 !important;
-      border-color: #eab308 !important;
+    /* 彩色变体按钮（与 .button-secondary 组合使用，移除 !important 依赖） */
+    .button-secondary.button-import,
+    .button-secondary.button-export {
+      background: #fde047;
+      color: #713f12;
+      border-color: #eab308;
     }
-    .button-import:hover,
-    .button-export:hover {
-      background: #facc15 !important;
+    .button-secondary.button-import:hover,
+    .button-secondary.button-export:hover {
+      background: #facc15;
       box-shadow: 0 6px 16px rgba(234, 179, 8, 0.3);
     }
 
-    .button-delete {
-      background: #fecaca !important;
-      color: #991b1b !important;
-      border-color: #f87171 !important;
+    .button-secondary.button-delete {
+      background: #fecaca;
+      color: #991b1b;
+      border-color: #f87171;
     }
-    .button-delete:hover {
-      background: #fca5a5 !important;
+    .button-secondary.button-delete:hover {
+      background: #fca5a5;
       box-shadow: 0 6px 16px rgba(248, 113, 113, 0.3);
     }
 
-    .button-sidebar {
-      background: #ddd6fe !important;
-      color: #5b21b6 !important;
-      border-color: #a78bfa !important;
+    .button-secondary.button-sidebar {
+      background: #ddd6fe;
+      color: #5b21b6;
+      border-color: #a78bfa;
     }
-    .button-sidebar:hover {
-      background: #c4b5fd !important;
+    .button-secondary.button-sidebar:hover {
+      background: #c4b5fd;
       box-shadow: 0 6px 16px rgba(167, 139, 250, 0.3);
     }
 
@@ -1665,4 +1669,249 @@
       background: var(--primary, #2563eb);
       color: #fff;
       border-color: var(--primary, #2563eb);
+    }
+
+    /* =========================================
+       服务器同步 / Agent UI 统一风格
+       与 device/extension popup 视觉语言对齐：
+       - 状态胶囊、账号 chip、modal、按钮
+       - 使用相同 pill / chip / 圆角 / 间距规范
+       ========================================= */
+
+    .agent-status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--muted);
+      box-shadow: var(--shadow);
+    }
+    .agent-status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #9aa4b2;
+      flex-shrink: 0;
+    }
+    .agent-status-dot.is-green {
+      background: var(--success);
+      box-shadow: 0 0 0 3px rgba(21, 128, 61, .14);
+    }
+    .agent-status-dot.is-yellow {
+      background: #d97706;
+      box-shadow: 0 0 0 3px rgba(217, 119, 6, .14);
+    }
+    .agent-status-dot.is-red {
+      background: var(--error);
+      box-shadow: 0 0 0 3px rgba(185, 28, 28, .12);
+    }
+
+    .agent-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      max-width: 150px;
+      box-shadow: var(--shadow);
+    }
+    .agent-chip:hover {
+      background: var(--panel-strong);
+    }
+    .agent-chip-ava {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 9px;
+      background: linear-gradient(135deg, var(--primary), var(--success));
+    }
+    .agent-chip-ava img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .agent-chip span:last-child {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* 教程按钮在 hero 里更紧凑 */
+    .hero-top .agent-status-pill,
+    .hero-top .agent-chip {
+      padding: 2px 6px;
+      font-size: 10px;
+    }
+    .hero-top .agent-chip-ava {
+      width: 12px;
+      height: 12px;
+      font-size: 7px;
+    }
+    .hero-top .agent-status-dot {
+      width: 6px;
+      height: 6px;
+    }
+
+    .agent-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 14px;
+      background: rgba(15, 23, 42, .4);
+      backdrop-filter: blur(4px);
+    }
+    .agent-modal.is-hidden {
+      display: none;
+    }
+    .is-hidden {
+      display: none !important;
+    }
+    .agent-modal-box {
+      width: min(360px, 100%);
+      max-height: min(90vh, 600px);
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      background: var(--panel-strong);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+    .agent-modal-box button,
+    .agent-modal-box .button-secondary {
+      padding: 8px 12px;
+      font-size: 12px;
+    }
+    .agent-modal-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .agent-modal-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .agent-modal-close {
+      border: none;
+      background: none;
+      font-size: 20px;
+      line-height: 1;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 0 4px;
+    }
+
+    .agent-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      background: var(--panel);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .agent-card-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .agent-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .agent-field label {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .agent-field input[type="text"],
+    .agent-field input[type="url"],
+    .agent-field input[type="password"] {
+      width: 100%;
+      padding: 7px 9px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 12px;
+      background: var(--panel-strong);
+      color: var(--text);
+      outline: none;
+    }
+    .agent-field input:focus {
+      border-color: var(--primary);
+    }
+
+    .agent-check {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .agent-kv {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+    }
+    .agent-kv .k {
+      color: var(--muted);
+    }
+    .agent-kv .v {
+      color: var(--text);
+      text-align: right;
+      word-break: break-word;
+    }
+
+    /* 统一按钮系统已在全局 button / .button-secondary / .button-delete 等定义
+       这里仅保留 agent 区域特有的布局容器 */
+    .agent-btn-row {
+      display: flex;
+      gap: 8px;
+    }
+    .agent-btn-row button,
+    .agent-btn-row .button-secondary {
+      flex: 1;
+    }
+
+    .agent-hint {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .agent-feedback {
+      font-size: 11px;
+      min-height: 14px;
+    }
+    .agent-feedback.is-ok {
+      color: var(--success);
+    }
+    .agent-feedback.is-err {
+      color: var(--error);
     }

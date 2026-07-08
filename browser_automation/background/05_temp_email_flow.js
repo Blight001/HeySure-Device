@@ -249,7 +249,7 @@ async function invokeTempEmailControlWithRetry(channel = '', payload = {}, optio
 
     while (true) {
         if (controlTabId) {
-            await throwIfStopped(controlTabId);
+
         }
         attempt += 1;
         try {
@@ -269,7 +269,7 @@ async function invokeTempEmailControlWithRetry(channel = '', payload = {}, optio
             if (attempt === 1 || attempt % 10 === 0) {
                 console.warn(`[cookie_capture] ${label}失败，${intervalMs}ms后重试:`, error && error.message ? error.message : error);
             }
-            await sleepWithStandaloneStopCheck(intervalMs, controlTabId);
+            await sleep(intervalMs);
             intervalMs = Math.min(maxIntervalMs, Math.max(baseIntervalMs, Math.floor(intervalMs * 1.5)));
         }
     }
@@ -478,9 +478,6 @@ async function getTempEmailDesktopCode(payload = {}, context = null) {
     const apiContext = context && typeof context === 'object' ? context : {};
     const controlTabId = Number(payload.tabId || payload.runTabId || apiContext.runTabId || apiContext.tabId || 0) || 0;
     let email = String(payload.email || apiContext.email || '').trim();
-    if (controlTabId) {
-        await throwIfStopped(controlTabId);
-    }
     if (!email) {
         const emailResult = await getTempEmailDesktopEmail({
             ...payload,
@@ -503,9 +500,6 @@ async function getTempEmailDesktopCode(payload = {}, context = null) {
         tabId: payload.tabId || apiContext.tabId || 0,
         forceRefresh: payload.forceRefresh === true
     });
-    if (controlTabId) {
-        await throwIfStopped(controlTabId);
-    }
     const response = await invokeTempEmailControlWithRetry('temp-email-get-code', {
         ...payload,
         providerId,
@@ -573,7 +567,7 @@ async function ensureTempEmailContext(tempEmailPayload = {}, emitProgress = asyn
         await emitProgress({
             message: `已使用提供/缓存的临时邮箱地址: ${context.email}`,
             progress: progressBase,
-            mode: tempEmailPayload.debugMode === true ? 'debug' : 'run',
+            mode: 'run',
             phase: 'temp_email_ready'
         });
     } else {
@@ -582,7 +576,7 @@ async function ensureTempEmailContext(tempEmailPayload = {}, emitProgress = asyn
         await emitProgress({
             message: '未提供邮箱，将跳过自动临时邮箱打开（使用传入的 email 或 {email} 占位符）',
             progress: progressBase,
-            mode: tempEmailPayload.debugMode === true ? 'debug' : 'run',
+            mode: 'run',
             phase: 'temp_email_ready'
         });
     }
@@ -591,8 +585,8 @@ async function ensureTempEmailContext(tempEmailPayload = {}, emitProgress = asyn
         message: context.email
             ? `邮箱就绪: ${context.email}`
             : '邮箱未提供（后续 email 步骤或验证码将依赖显式传入值）',
-        progress: Math.min(35, progressBase + 25),
-        mode: tempEmailPayload.debugMode === true ? 'debug' : 'run',
+        progress: Math.min(18, progressBase + 8),
+        mode: 'run',
         phase: 'temp_email_ready'
     });
     tempEmailRuntimeContext = context;
@@ -618,9 +612,6 @@ async function waitForVerificationCode(payload = {}, tempEmailContext = null, em
         || 'default'
     ).trim() || 'default';
     let email = String(tempEmailContext?.email || payload.email || '').trim();
-    if (controlTabId) {
-        await throwIfStopped(controlTabId);
-    }
     if (!email) {
         const emailResult = await getTempEmailDesktopEmail({
             ...payload,
@@ -635,18 +626,6 @@ async function waitForVerificationCode(payload = {}, tempEmailContext = null, em
         return '';
     }
 
-    if (controlTabId) {
-        await waitForStandaloneDebugControl(controlTabId, emitProgress, {
-            mode: progressMode,
-            progress: Number.isFinite(progressBase) && Number.isFinite(progressSpan)
-                ? Math.max(0, Math.min(100, progressBase))
-                : undefined,
-            stepIndex,
-            stepTotal,
-            stepName
-        });
-    }
-
     if (Number.isFinite(progressBase) && Number.isFinite(progressSpan)) {
         await emitProgress({
             message: `${formatStepProgressLabel(stepIndex, stepTotal, stepName)} · 等待验证码`,
@@ -659,19 +638,64 @@ async function waitForVerificationCode(payload = {}, tempEmailContext = null, em
         });
     }
 
-    const codeResult = await getTempEmailDesktopCode({
-        ...payload,
-        tabId: controlTabId || payload.tabId,
-        email,
-        sessionId,
-        timeoutMs,
-        intervalMs
-    }, {
-        ...tempEmailContext,
-        email,
-        sessionId
-    });
-    const code = String(codeResult.code || '').trim();
+    // 根据步骤分配进度：在长等待期间逐步推进进度，避免停留在固定百分比
+    const hasSpan = Number.isFinite(progressBase) && Number.isFinite(progressSpan) && progressSpan > 0;
+    const targetEnd = hasSpan ? Math.max(0, Math.min(100, progressBase + progressSpan)) : null;
+    let currentProg = hasSpan ? Math.max(0, Math.min(100, progressBase)) : null;
+    let progressTicker = null;
+    if (hasSpan && targetEnd != null && currentProg != null && targetEnd > currentProg) {
+        progressTicker = setInterval(() => {
+            if (currentProg != null && targetEnd != null) {
+                // 每3秒小幅推进，逐步接近目标（不超过stepEnd）
+                currentProg = Math.min(targetEnd, currentProg + Math.max(0.5, (targetEnd - currentProg) * 0.08));
+                emitProgress({
+                    message: `${formatStepProgressLabel(stepIndex, stepTotal, stepName)} · 等待验证码中`,
+                    progress: Math.round(currentProg),
+                    mode: progressMode,
+                    phase: 'wait_verification_code',
+                    stepIndex,
+                    stepTotal,
+                    stepName
+                }).catch(() => {});
+            }
+        }, 3000);
+    }
+
+    let codeResult;
+    try {
+        codeResult = await getTempEmailDesktopCode({
+            ...payload,
+            tabId: controlTabId || payload.tabId,
+            email,
+            sessionId,
+            timeoutMs,
+            intervalMs
+        }, {
+            ...tempEmailContext,
+            email,
+            sessionId
+        });
+    } finally {
+        if (progressTicker) {
+            clearInterval(progressTicker);
+            progressTicker = null;
+        }
+    }
+
+    // 完成后推进到step end
+    if (hasSpan && targetEnd != null) {
+        await emitProgress({
+            message: `${formatStepProgressLabel(stepIndex, stepTotal, stepName)} · 等待验证码`,
+            progress: targetEnd,
+            mode: progressMode,
+            phase: 'wait_verification_code',
+            stepIndex,
+            stepTotal,
+            stepName
+        }).catch(() => {});
+    }
+
+    const code = String(codeResult && codeResult.code || '').trim();
     if (code) {
         return {
             code,
@@ -700,13 +724,7 @@ async function pauseAtStep({
         return;
     }
 
-    await saveStandaloneDebugControlState({
-        tabId: normalizedTabId,
-        cardName: String(cardName || '').trim(),
-        mode: 'pause',
-        stepBudget: 0,
-        running: true
-    }).catch(() => {});
+
 
     await emitProgress({
         message: stepName ? `${message}: ${stepName}` : message,

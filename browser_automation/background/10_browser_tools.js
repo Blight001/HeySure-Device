@@ -86,6 +86,13 @@ async function toolBrowserTabSwitch(args = {}) {
     return { success: true, action: 'switch', ...tabSummary(refreshed) };
 }
 
+// 导航成功回执附 cardStep：与 browser_action 的 cardStep 回执一致，探索路径可直接固化进卡片 steps。
+function navigateCardStep(href) {
+    let host = '';
+    try { host = new URL(href).hostname; } catch (_error) {}
+    return { name: `打开 ${host || '网址'}`, type: 'navigate', url: href };
+}
+
 async function toolBrowserTabReplace(args = {}) {
     const href = normalizeTargetUrl(args.url);
     if (!href) throw new Error('replace 需要提供 url');
@@ -96,13 +103,19 @@ async function toolBrowserTabReplace(args = {}) {
         const created = await chrome.tabs.create({ url: href, active: true });
         await waitForTabComplete(created.id, 20000).catch(() => {});
         const refreshed = await chrome.tabs.get(created.id);
-        return { success: true, action: 'replace', ...tabSummary(refreshed), note: '未找到可用的目标标签页，已在新标签页打开。' };
+        return { success: true, action: 'replace', ...tabSummary(refreshed), cardStep: navigateCardStep(href), note: '未找到可用的目标标签页，已在新标签页打开。' };
+    }
+    const currentUrl = normalizeTargetUrl(String(tab.url || '').trim());
+    if (currentUrl === href) {
+        await focusTab(tab.id).catch(() => {});
+        const refreshed = await chrome.tabs.get(tab.id);
+        return { success: true, action: 'replace', ...tabSummary(refreshed), cardStep: navigateCardStep(href), note: '已在目标网页，无需跳转' };
     }
     await chrome.tabs.update(tab.id, { url: href, active: true });
     await focusTab(tab.id);
     await waitForTabComplete(tab.id, 20000).catch(() => {});
     const refreshed = await chrome.tabs.get(tab.id);
-    return { success: true, action: 'replace', ...tabSummary(refreshed) };
+    return { success: true, action: 'replace', ...tabSummary(refreshed), cardStep: navigateCardStep(href) };
 }
 
 async function toolBrowserTabNavigate(args = {}) {
@@ -112,7 +125,7 @@ async function toolBrowserTabNavigate(args = {}) {
     await focusTab(tab.id);
     await waitForTabComplete(tab.id, 20000).catch(() => {});
     const refreshed = await chrome.tabs.get(tab.id);
-    return { success: true, action: 'navigate', ...tabSummary(refreshed) };
+    return { success: true, action: 'navigate', ...tabSummary(refreshed), cardStep: navigateCardStep(href) };
 }
 
 async function toolBrowserTabClose(args = {}) {

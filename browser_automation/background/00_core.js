@@ -13,10 +13,40 @@ const TEMP_EMAIL_CARD_CACHE_LIST_KEY = 'cookie-capture-temp-email-card-cache-lis
 const TEMP_EMAIL_CARD_SELECTED_ID_KEY = 'cookie-capture-temp-email-card-cache-selected-id';
 const CARD_SIDEBAR_STATE_KEY = 'cookie-capture-card-sidebar-state';
 const STANDALONE_PROGRESS_STATE_KEY = 'cookie-capture-standalone-progress-state';
-const STANDALONE_DEBUG_CONTROL_STATE_KEY = 'cookie-capture-standalone-debug-control-state';
 let tempEmailRuntimeContext = null;
 const runtimeStateStorage = chrome.storage.session || chrome.storage.local;
 const standaloneSessions = new Map();
+const stoppedTabs = new Set();
+
+function markTabStopped(tabId) {
+    const id = Number(tabId || 0);
+    if (id) {
+        stoppedTabs.add(id);
+    }
+    const sess = standaloneSessions.get(id);
+    if (sess) {
+        sess.running = false;
+        sess.stopRequested = true;
+    }
+}
+
+function isTabStopped(tabId) {
+    const id = Number(tabId || 0);
+    if (!id) return false;
+    if (stoppedTabs.has(id)) return true;
+    const sess = standaloneSessions.get(id);
+    return !!(sess && (sess.stopRequested || sess.running === false));
+}
+
+function createStopError() {
+    const err = new Error('执行已停止');
+    err.stopped = true;
+    return err;
+}
+
+function isStopError(error) {
+    return !!(error && (error.stopped === true || /已停止|stop/i.test(String(error.message || ''))));
+}
 
 function sanitizeFilePart(value = '') {
     return String(value || '')

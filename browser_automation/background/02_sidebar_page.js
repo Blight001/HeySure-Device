@@ -469,7 +469,7 @@ async function executePageAction(tabId, action) {
             if (actionType === 'click') {
                 const element = await waitForElement(selector, timeoutMs, intervalMs, true);
                 if (!element) {
-                    return { success: false, error: `未找到可点击元素: ${selector}` };
+                    return { success: false, error: `未找到可点击元素: ${selector}`, code: 'ELEMENT_NOT_FOUND' };
                 }
 
                 try {
@@ -493,7 +493,7 @@ async function executePageAction(tabId, action) {
                 try {
                     element.click();
                 } catch (_error) {
-                    return { success: false, error: `点击失败: ${selector}` };
+                    return { success: false, error: `点击失败: ${selector}`, code: 'CLICK_FAILED' };
                 }
 
                 return { success: true };
@@ -502,7 +502,7 @@ async function executePageAction(tabId, action) {
             if (actionType === 'type') {
                 const element = await waitForElement(selector, timeoutMs, intervalMs, true);
                 if (!element) {
-                    return { success: false, error: `未找到可输入元素: ${selector}` };
+                    return { success: false, error: `未找到可输入元素: ${selector}`, code: 'ELEMENT_NOT_FOUND' };
                 }
 
                 // P0 fix: pre-validate element type to fail fast with actionable error (no silent 3x retry waste)
@@ -511,7 +511,8 @@ async function executePageAction(tabId, action) {
                     const role = String(element.getAttribute && element.getAttribute('role') || '').toLowerCase();
                     return {
                         success: false,
-                        error: `元素类型不支持 type 输入（tag=<${tag}> role="${role || 'none'}"），Card Runner 的 type 仅支持 <input type=text/search/email 等>、<textarea>、contenteditable 元素、role=textbox/searchbox。建议：更换 selector 到实际输入框，或改用 external_script 降级。`
+                        error: `元素类型不支持 type 输入（tag=<${tag}> role="${role || 'none'}"），Card Runner 的 type 仅支持 <input type=text/search/email 等>、<textarea>、contenteditable 元素、role=textbox/searchbox。建议：更换 selector 到实际输入框，或改用 external_script 降级。`,
+                        code: 'UNSUPPORTED_ELEMENT_TYPE'
                     };
                 }
 
@@ -562,7 +563,7 @@ async function executePageAction(tabId, action) {
                         return { success: true };
                     }
                     if (!result) {
-                        return { success: false, error: `等待元素超时: ${selector}` };
+                        return { success: false, error: `等待元素超时: ${selector}`, code: 'WAIT_TIMEOUT' };
                     }
                     return { success: true };
                 }
@@ -576,7 +577,7 @@ async function executePageAction(tabId, action) {
                         }
                         await sleep(intervalMs);
                     }
-                    return { success: false, error: `等待文本超时: ${waitForText}` };
+                    return { success: false, error: `等待文本超时: ${waitForText}`, code: 'WAIT_TIMEOUT' };
                 }
 
                 if (waitForElementHidden) {
@@ -588,7 +589,7 @@ async function executePageAction(tabId, action) {
                         }
                         await sleep(intervalMs);
                     }
-                    return { success: false, error: `等待元素消失超时: ${waitForElementHidden}` };
+                    return { success: false, error: `等待元素消失超时: ${waitForElementHidden}`, code: 'WAIT_TIMEOUT' };
                 }
 
                 if (waitForTextHidden) {
@@ -600,7 +601,7 @@ async function executePageAction(tabId, action) {
                         }
                         await sleep(intervalMs);
                     }
-                    return { success: false, error: `等待文本消失超时: ${waitForTextHidden}` };
+                    return { success: false, error: `等待文本消失超时: ${waitForTextHidden}`, code: 'WAIT_TIMEOUT' };
                 }
 
                 await sleep(timeoutMs);
@@ -649,7 +650,7 @@ async function executePageAction(tabId, action) {
                     const result = await (new Function(`return (async () => { ${script} })();`))();
                     return { success: true, result };
                 } catch (error) {
-                    return { success: false, error: error && error.message ? error.message : '脚本执行失败' };
+                    return { success: false, error: error && error.message ? error.message : '脚本执行失败', code: 'SCRIPT_ERROR' };
                 }
             }
 
@@ -661,7 +662,7 @@ async function executePageAction(tabId, action) {
                 };
             }
 
-            return { success: false, error: `不支持的动作: ${actionType}` };
+            return { success: false, error: `不支持的动作: ${actionType}`, code: 'UNSUPPORTED_ACTION' };
         }
     });
 

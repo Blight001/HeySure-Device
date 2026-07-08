@@ -23,11 +23,6 @@ chrome.tabs.onRemoved.addListener((tabId) => {
         if (sidebarState && Number(sidebarState.tabId || 0) === Number(tabId)) {
             await clearCardSidebarState();
         }
-
-        const controlState = await loadStandaloneDebugControlState().catch(() => null);
-        if (controlState && Number(controlState.tabId || 0) === Number(tabId)) {
-            await clearStandaloneDebugControlState();
-        }
     })();
 });
 
@@ -154,23 +149,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         (async () => {
             try {
                 const payload = message.payload && typeof message.payload === 'object' ? message.payload : {};
-                const isLooping = payload.isLooping === true;
-                let result = null;
+                const result = await runStandaloneCard(payload);
 
-                do {
-                    result = await runStandaloneCard({
-                        ...payload,
-                        isLooping
-                    });
+                if (result && result.stopped) {
+                    sendResponse({ success: false, stopped: true });
+                    return;
+                }
 
-                    const success = result?.success === true;
-                    const currentControlState = await loadStandaloneDebugControlState().catch(() => null);
-                    const stopRequested = Boolean(
-                        currentControlState
-                        && (currentControlState.stopRequested === true || currentControlState.running === false)
-                    );
-                    const stopped = result?.stopped === true || (isLooping && success && stopRequested);
-                    const continuation = isLooping && success && !stopped && !stopRequested;
+                const success = result?.success === true;
 
                     try {
                         const lastState = await loadStandaloneProgressState().catch(() => null);
@@ -178,38 +164,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                             ...(lastState && typeof lastState === 'object' ? lastState : {}),
                             tabId: lastState?.tabId || null,
                             cardName: String(result?.cardName || lastState?.cardName || payload?.cardData?.name || '').trim(),
-                            message: String(continuation
-                                ? `本轮执行完成: ${result.cardName || '未命名卡片'}`
-                                : success
-                                    ? `执行完成: ${result.cardName || '未命名卡片'}`
-                                    : stopped
-                                        ? `已停止执行: ${result.cardName || '未命名卡片'}`
-                                        : result?.error || '执行失败'),
-                            phase: continuation ? 'loop_iteration_finished' : success ? 'finished' : stopped ? 'stopped' : 'failed',
-                            mode: continuation ? 'loop' : '',
-                            isLooping: continuation,
-                            kind: continuation || success || stopped ? '' : 'error',
-                            errorReason: continuation || success || stopped ? '' : String(result?.error || '').trim(),
-                            progress: continuation
-                                ? 100
-                                : success
-                                    ? 100
-                                    : stopped
-                                        ? Number.isFinite(Number(lastState?.progress))
-                                            ? Number(lastState.progress)
-                                            : 0
-                                        : 0,
-                            running: continuation,
+                            message: String(success
+                                ? `执行完成: ${result.cardName || '未命名卡片'}`
+                                : result?.error || '执行失败'),
+                            phase: success ? 'finished' : 'failed',
+                            mode: '',
+                            kind: success ? '' : 'error',
+                            errorReason: success ? '' : String(result?.error || '').trim(),
+                            progress: success ? 100 : Number.isFinite(Number(lastState?.progress)) ? Number(lastState.progress) : 0,
+                            running: false,
                             visible: true
-                        });
-                        await saveStandaloneDebugControlState({
-                            tabId: lastState?.tabId || null,
-                            cardName: String(result?.cardName || lastState?.cardName || payload?.cardData?.name || '').trim(),
-                            mode: continuation ? 'loop' : 'pause',
-                            stepBudget: 0,
-                            running: continuation,
-                            isLooping: continuation,
-                            stopRequested: false
                         });
                     } catch (_error) {
                     }
@@ -218,34 +182,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                         await chrome.runtime.sendMessage({
                             type: 'card-run-finished',
                             success,
-                            stopped,
-                            continuation,
-                            isLooping,
-                            progress: success || continuation ? 100 : stopped ? Number(result?.progress || 0) : 0,
-                            mode: continuation ? 'loop' : message.payload?.debugMode === true ? 'debug' : 'run',
-                            errorReason: success || stopped ? '' : String(result?.error || '').trim(),
-                            message: continuation
-                                ? `本轮执行完成: ${result.cardName || '未命名卡片'}`
-                                : success
-                                    ? `执行完成: ${result.cardName || '未命名卡片'}`
-                                    : stopped
-                                        ? `已停止执行: ${result.cardName || '未命名卡片'}`
-                                        : result?.error || '执行失败'
+                            stopped: false,
+                            continuation: false,
+                            progress: success ? 100 : 0,
+                            mode: 'run',
+                            errorReason: success ? '' : String(result?.error || '').trim(),
+                            message: success
+                                ? `执行完成: ${result.cardName || '未命名卡片'}`
+                                : result?.error || '执行失败'
                         });
                     } catch (_error) {
                     }
-
-                    if (!continuation) {
-                        break;
-                    }
-
-                    const controlState = await loadStandaloneDebugControlState().catch(() => null);
-                    if (!controlState || controlState.stopRequested === true || controlState.running === false) {
-                        break;
-                    }
-
-                    await sleep(250);
-                } while (true);
 
                 sendResponse(result);
             } catch (error) {
@@ -261,20 +208,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                         message: detailedErr,
                         phase: 'failed',
                         mode: '',
-                        isLooping: false,
                         kind: 'error',
                         errorReason: detailedErr,
                         progress: Number.isFinite(Number(lastState?.progress)) ? Number(lastState.progress) : 0,
                         running: false,
                         visible: true
-                    });
-                    await saveStandaloneDebugControlState({
-                        tabId: lastState?.tabId || null,
-                        cardName: String(message.payload?.cardData?.name || lastState?.cardName || '').trim(),
-                        mode: 'pause',
-                        stepBudget: 0,
-                        running: false,
-                        isLooping: false
                     });
                 } catch (_error) {
                 }
@@ -288,7 +226,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                         type: 'card-run-finished',
                         success: false,
                         progress: 0,
-                        mode: message.payload?.debugMode === true ? 'debug' : 'run',
+                        mode: 'run',
                         errorReason: detailedForFinished,
                         message: detailedForFinished
                     });
@@ -303,88 +241,46 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         return true;
     }
 
-    if (message.type === 'card-run-control') {
-        (async () => {
-            try {
-                const payload = message.payload && typeof message.payload === 'object' ? message.payload : {};
-                const requestedMode = String(payload.mode || 'loop').trim().toLowerCase();
-                const controlState = await loadStandaloneDebugControlState().catch(() => null);
-                const progressState = await loadStandaloneProgressState().catch(() => null);
-                const tabId = Number(payload.tabId || controlState?.tabId || progressState?.tabId || 0);
-                if (!tabId) {
-                    sendResponse({ success: false, error: '当前没有可控制的调试任务' });
-                    return;
-                }
-
-                const normalizedMode = requestedMode === 'step' || requestedMode === 'pause' ? requestedMode : 'loop';
-                const existingBudget = Number(controlState?.stepBudget || 0) || 0;
-                const nextStepBudget = normalizedMode === 'step'
-                    ? (controlState?.mode === 'step' ? existingBudget + 1 : 1)
-                    : 0;
-
-                const saved = await saveStandaloneDebugControlState({
-                    tabId,
-                    cardName: controlState?.cardName || progressState?.cardName || '',
-                    mode: normalizedMode,
-                    stepBudget: nextStepBudget,
-                    running: controlState?.running !== false && progressState?.running !== false
-                });
-
-                sendResponse({
-                    success: true,
-                    controlMode: saved.mode,
-                    stepBudget: saved.stepBudget,
-                    running: saved.running
-                });
-            } catch (error) {
-                sendResponse({
-                    success: false,
-                    error: error && error.message ? error.message : '更新调试控制失败'
-                });
-            }
-        })();
-        return true;
-    }
-
     if (message.type === 'card-run-stop') {
         (async () => {
             try {
-                const controlState = await loadStandaloneDebugControlState().catch(() => null);
-                const progressState = await loadStandaloneProgressState().catch(() => null);
-                const tabId = Number(controlState?.tabId || progressState?.tabId || 0);
-                if (!tabId) {
-                    sendResponse({ success: false, error: '当前没有正在运行的自动化任务' });
-                    return;
+                const lastState = await loadStandaloneProgressState().catch(() => null);
+                const tabId = Number(lastState?.tabId || 0) || 0;
+
+                if (tabId) {
+                    markTabStopped(tabId);
                 }
 
-                const cardName = String(controlState?.cardName || progressState?.cardName || '').trim();
-                await saveStandaloneDebugControlState({
-                    tabId,
-                    cardName,
-                    mode: controlState?.mode || 'pause',
-                    stepBudget: 0,
-                    running: false,
-                    isLooping: false,
-                    stopRequested: true
-                });
+                const stoppedProgress = Number.isFinite(Number(lastState?.progress))
+                    ? Number(lastState.progress)
+                    : 0;
+
                 await saveStandaloneProgressState({
-                    ...(progressState && typeof progressState === 'object' ? progressState : {}),
-                    tabId,
-                    cardName,
-                    message: '正在停止执行流程...',
-                    phase: 'stopping',
-                    mode: '',
-                    isLooping: false,
+                    ...(lastState && typeof lastState === 'object' ? lastState : {}),
+                    tabId: tabId || (lastState?.tabId || null),
+                    cardName: String(lastState?.cardName || '').trim(),
+                    message: '已停止执行',
+                    phase: 'stopped',
+                    mode: String(lastState?.mode || '').trim(),
                     kind: '',
                     errorReason: '',
-                    running: true,
+                    progress: stoppedProgress,
+                    running: false,
+                    stopped: true,
                     visible: true
-                });
+                }).catch(() => {});
 
-                sendResponse({
-                    success: true,
-                    stopped: true
-                });
+                await chrome.runtime.sendMessage({
+                    type: 'card-run-finished',
+                    success: false,
+                    stopped: true,
+                    continuation: false,
+                    progress: stoppedProgress,
+                    mode: String(lastState?.mode || '').trim(),
+                    message: '已停止执行'
+                }).catch(() => {});
+
+                sendResponse({ success: true });
             } catch (error) {
                 sendResponse({
                     success: false,
@@ -405,7 +301,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             } catch (error) {
                 sendResponse({
                     success: false,
-                    error: error && error.message ? error.message : '同步调试卡片失败'
+                    error: error && error.message ? error.message : '同步自动化卡片失败'
                 });
             }
         })();

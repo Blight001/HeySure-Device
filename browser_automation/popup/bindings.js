@@ -82,7 +82,7 @@ const AUTOMATION_CARD_CACHE_LIST_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_CACHE
 const AUTOMATION_CARD_SELECTED_ID_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_SELECTED_ID_KEY;
 const LAST_MAIN_PANEL_KEY = shared.STORAGE_KEYS.LAST_MAIN_PANEL_KEY;
 const STANDALONE_PROGRESS_STATE_KEY = shared.STORAGE_KEYS.STANDALONE_PROGRESS_STATE_KEY;
-const STANDALONE_DEBUG_CONTROL_STATE_KEY = shared.STORAGE_KEYS.STANDALONE_DEBUG_CONTROL_STATE_KEY;
+
 
 const accountInput = document.getElementById('account');
 const passwordInput = document.getElementById('password');
@@ -140,28 +140,12 @@ const openCardSidebarButton = document.getElementById('open-card-sidebar');
 const mainTabsNode = document.getElementById('main-tabs');
 const mainTabButtons = Array.from(document.querySelectorAll('[data-main-tab]'));
 const mainPanels = Array.from(document.querySelectorAll('[data-main-panel]'));
-const debugProgressPanel = document.getElementById('debug-progress-panel');
-const debugProgressTextNode = document.getElementById('debug-progress-text');
-const debugProgressPercentNode = document.getElementById('debug-progress-percent');
-const debugProgressFillNode = document.getElementById('debug-progress-fill');
-const debugProgressMetaNode = document.getElementById('debug-progress-meta');
-const debugProgressErrorNode = document.getElementById('debug-progress-error');
-const runControlStopButton = document.getElementById('run-control-stop');
-const debugControlModeNode = document.getElementById('debug-control-mode');
-const debugControlStepButton = document.getElementById('debug-control-step');
-const debugControlLoopButton = document.getElementById('debug-control-loop');
-const debugControlPauseButton = document.getElementById('debug-control-pause');
-const debugControlStopButton = document.getElementById('debug-control-stop');
 const toastStackNode = document.getElementById('toast-stack');
 const sidebarEditorShell = document.getElementById('sidebar-editor-shell');
 const sidebarCardNameInput = document.getElementById('sidebar-card-name');
 const sidebarCardWebsiteInput = document.getElementById('sidebar-card-website');
 const sidebarCardDescriptionInput = document.getElementById('sidebar-card-description');
-const sidebarCardAccountInput = document.getElementById('sidebar-card-account');
-const sidebarCardPasswordInput = document.getElementById('sidebar-card-password');
 const sidebarCardPointsInput = document.getElementById('sidebar-card-points');
-const sidebarCardRandomLengthInput = document.getElementById('sidebar-card-random-length');
-const sidebarCardRandomTypeInput = document.getElementById('sidebar-card-random-type');
 const sidebarCardPopupsInput = document.getElementById('sidebar-card-popups');
 const sidebarCardUploadServerUrlInput = document.getElementById('sidebar-card-upload-server-url');
 const sidebarCardUploadCardKeyInput = document.getElementById('sidebar-card-upload-card-key');
@@ -174,19 +158,17 @@ const sidebarExportCardButton = document.getElementById('sidebar-export-card');
 const sidebarLoopButton = document.getElementById('sidebar-loop-card');
 const sidebarRefreshCardButton = document.getElementById('sidebar-refresh-card');
 const sidebarCloseButton = document.getElementById('sidebar-close');
+const runControlStopButton = document.getElementById('run-control-stop');
 const sidebarTutorialButton = document.getElementById('sidebar-tutorial');
 const sidebarStepListNode = document.getElementById('sidebar-step-list');
 const sidebarEditorMetaNode = document.getElementById('sidebar-editor-meta');
 const TUTORIAL_URL = 'https://www.yuque.com/heysure/mn6q55/lyorlysczr8eh39b?singleDoc#';
 const runtimeStateStorage = chrome.storage.session || chrome.storage.local;
-let activeDebugErrorReason = '';
-let debugProgressAutoHideTimer = null;
+
 
 await import('./automation-workbench.js');
 const workbenchModule = globalThis.CookieCaptureAutomationWorkbench || {};
 const {
-    clearDebugProgressAutoHideTimer,
-    scheduleDebugProgressAutoHide,
     buildPresetFileName,
     setStatus,
     copyTextToClipboard,
@@ -205,19 +187,10 @@ const {
     buildCardListLabel,
     renderCardCacheList,
     normalizeProgressValue,
-    setDebugProgress,
-    resetDebugProgress,
     loadStandaloneProgressState,
-    loadStandaloneDebugControlState,
-    formatStepTypeLabel,
-    normalizeDebugControlMode,
-    setDebugControlMode,
     setLoopButtonState,
     refreshLoopButtonState,
-    refreshDebugControlUi,
-    sendDebugControlAction,
     sendStopAction,
-    syncSidebarCardToRunningDebugSession,
     normalizeCardData,
     stringifyCardData,
     parseEditorCardData,
@@ -225,8 +198,6 @@ const {
     getCardEditorValue,
     isVerificationStepName,
     isEmailStepName,
-    createDebugStepTemplate,
-    insertDebugStepIntoEditor,
     isSidebarLayout,
     escapeHtml,
     normalizeSidebarPopupsInput,
@@ -261,7 +232,10 @@ const {
     upsertCardCache,
     renderSidebarEditorFromCurrentState,
     saveCardCache,
-    saveEditorCardToCache
+    saveEditorCardToCache,
+    setDebugProgress,
+    resetDebugProgress,
+    scheduleDebugProgressAutoHide
 } = workbenchModule;
 const { generateCookiePassword } = shared;
 
@@ -514,28 +488,41 @@ deleteCardButton?.addEventListener('click', () => {
 });
 
 cardCacheListNode?.addEventListener('click', (event) => {
-    const button = event.target && event.target.closest ? event.target.closest('[data-card-cache-action="select"]') : null;
-    if (!button) {
+    const item = event.target && event.target.closest ? event.target.closest('[data-card-cache-item]') : null;
+    if (!item) {
         return;
     }
 
-    const item = button.closest('[data-card-cache-item]');
-    const cardId = String(item?.dataset.cardId || '').trim();
+    const cardId = String(item.dataset.cardId || '').trim();
     if (!cardId) {
         return;
     }
 
+    // 点击卡片直接切换选中（无需选择按钮）
     void (async () => {
-        button.disabled = true;
         try {
+            const current = await loadCardCacheState().catch(() => ({ selectedId: '' }));
+            if (String(current.selectedId || '').trim() === cardId) {
+                return; // 已选中则不重复操作
+            }
             const selected = await selectCardCacheItem(cardId);
             showActionToast(`已选中自动化卡片: ${selected.cardName || selected.cardData?.name || '未命名'}`, 'success');
         } catch (error) {
             showActionToast(error && error.message ? error.message : '选择自动化卡片失败', 'error');
-        } finally {
-            button.disabled = false;
         }
     })();
+});
+
+// 进度面板停止按钮（仅保留自动化运行的停止）
+runControlStopButton?.addEventListener('click', () => {
+    runControlStopButton.disabled = true;
+    void sendStopAction().then(() => {
+        showActionToast('已停止执行', 'success');
+    }).catch((error) => {
+        showActionToast(error && error.message ? error.message : '停止执行失败', 'error');
+    }).finally(() => {
+        if (runControlStopButton) runControlStopButton.disabled = false;
+    });
 });
 
 captureButton?.addEventListener('click', () => {
@@ -660,75 +647,6 @@ loopCardButton?.addEventListener('click', () => {
     void loopCard();
 });
 
-debugControlStepButton?.addEventListener('click', () => {
-    void (async () => {
-        debugControlStepButton.disabled = true;
-        try {
-            await sendDebugControlAction('step');
-            showActionToast('已切换为逐步运行', 'success');
-        } catch (error) {
-            showActionToast(error && error.message ? error.message : '切换逐步运行失败', 'error');
-        } finally {
-            debugControlStepButton.disabled = false;
-        }
-    })();
-});
-
-debugControlLoopButton?.addEventListener('click', () => {
-    void (async () => {
-        debugControlLoopButton.disabled = true;
-        try {
-            await sendDebugControlAction('loop');
-            showActionToast('已切换为循环运行', 'success');
-        } catch (error) {
-            showActionToast(error && error.message ? error.message : '切换循环运行失败', 'error');
-        } finally {
-            debugControlLoopButton.disabled = false;
-        }
-    })();
-});
-
-debugControlPauseButton?.addEventListener('click', () => {
-    void (async () => {
-        debugControlPauseButton.disabled = true;
-        try {
-            await sendDebugControlAction('pause');
-            showActionToast('已暂停调试运行', 'success');
-        } catch (error) {
-            showActionToast(error && error.message ? error.message : '暂停调试失败', 'error');
-        } finally {
-            debugControlPauseButton.disabled = false;
-        }
-    })();
-});
-
-debugControlStopButton?.addEventListener('click', () => {
-    void (async () => {
-        debugControlStopButton.disabled = true;
-        try {
-            await sendStopAction();
-            showActionToast('已停止调试流程', 'success');
-        } catch (error) {
-            showActionToast(error && error.message ? error.message : '停止调试失败', 'error');
-        } finally {
-            debugControlStopButton.disabled = false;
-        }
-    })();
-});
-
-runControlStopButton?.addEventListener('click', () => {
-    void (async () => {
-        runControlStopButton.disabled = true;
-        try {
-            await sendStopAction();
-            showActionToast('已停止执行流程', 'success');
-        } catch (error) {
-            showActionToast(error && error.message ? error.message : '停止执行失败', 'error');
-        } finally {
-            runControlStopButton.disabled = false;
-        }
-    })();
-});
 
 loadCardToEditorButton?.addEventListener('click', () => {
     void (async () => {
@@ -791,8 +709,21 @@ appendStepButton?.addEventListener('click', () => {
     void (async () => {
         appendStepButton.disabled = true;
         try {
-            const cardData = insertDebugStepIntoEditor();
-            showActionToast(`已添加步骤，当前共 ${Array.isArray(cardData.steps) ? cardData.steps.length : 0} 步`, 'success');
+            const workbench = globalThis.CookieCaptureAutomationWorkbench || {};
+            let added = 0;
+            if (typeof workbench.buildSidebarStepTemplate === 'function') {
+                const newStep = workbench.buildSidebarStepTemplate('click');
+                // basic: if sidebar functions available use them, else just toast
+                if (typeof workbench.collectSidebarCardDataFromForm === 'function' && typeof workbench.setCardEditorValue === 'function') {
+                    const current = workbench.collectSidebarCardDataFromForm() || { steps: [] };
+                    const steps = Array.isArray(current.steps) ? [...current.steps, newStep] : [newStep];
+                    workbench.setCardEditorValue({ ...current, steps });
+                    added = steps.length;
+                } else {
+                    added = 1;
+                }
+            }
+            showActionToast(`已添加步骤${added ? `，当前共 ${added} 步` : ''}`, 'success');
         } catch (error) {
             showActionToast(error && error.message ? error.message : '添加步骤失败', 'error');
         } finally {
@@ -906,12 +837,8 @@ sidebarRefreshCardButton?.addEventListener('click', () => {
         sidebarRefreshCardButton.disabled = true;
         try {
             renderSidebarEditorFromCurrentState();
-            const result = await syncSidebarCardToRunningDebugSession();
-            if (result.synced === true) {
-                showActionToast(`已同步到正在运行的调试: ${result.stepCount} 步`, 'success');
-            } else {
-                showActionToast('已刷新编辑内容', 'success');
-            }
+            // sync to running debug removed
+            showActionToast('已刷新编辑内容', 'success');
         } catch (error) {
             showActionToast(error && error.message ? error.message : '刷新失败', 'error');
         } finally {
@@ -923,11 +850,7 @@ sidebarRefreshCardButton?.addEventListener('click', () => {
 sidebarCardNameInput?.addEventListener('input', () => syncSidebarEditorToHiddenJson());
 sidebarCardWebsiteInput?.addEventListener('input', () => syncSidebarEditorToHiddenJson());
 sidebarCardDescriptionInput?.addEventListener('input', () => syncSidebarEditorToHiddenJson());
-sidebarCardAccountInput?.addEventListener('input', () => syncSidebarEditorToHiddenJson());
-sidebarCardPasswordInput?.addEventListener('input', () => syncSidebarEditorToHiddenJson());
 sidebarCardPointsInput?.addEventListener('input', () => syncSidebarEditorToHiddenJson());
-sidebarCardRandomLengthInput?.addEventListener('input', () => syncSidebarEditorToHiddenJson());
-sidebarCardRandomTypeInput?.addEventListener('change', () => syncSidebarEditorToHiddenJson());
 sidebarCardPopupsInput?.addEventListener('input', () => syncSidebarEditorToHiddenJson());
 sidebarCardUploadServerUrlInput?.addEventListener('input', () => syncSidebarEditorToHiddenJson());
 sidebarCardUploadCardKeyInput?.addEventListener('input', () => syncSidebarEditorToHiddenJson());
@@ -1073,7 +996,7 @@ chrome.runtime.onMessage.addListener((message) => {
         ].filter(Boolean);
         const progressState = {
             visible: true,
-            message: text || '正在处理调试流程...',
+            message: text || '正在处理自动化执行...',
             kind: message.kind || '',
             errorReason,
             mode: String(message.mode || '').trim() || 'debug',
@@ -1099,48 +1022,53 @@ chrome.runtime.onMessage.addListener((message) => {
         const finishedProgress = Number.isFinite(Number(message.progress))
             ? Number(message.progress)
             : (success ? 100 : 0);
+        const finalMsg = String(message.message || (message.success ? '执行完成' : '执行失败'));
         setDebugProgress({
             visible: true,
             progress: finishedProgress,
-            message: String(message.message || (success ? '执行完成' : '执行失败')),
+            message: finalMsg,
             kind: success || stopped ? '' : 'error',
             errorReason: String(message.errorReason || (!success && !stopped ? message.message || '' : '')).trim(),
             meta: continuation ? '继续循环' : stopped ? '已停止' : success ? '已完成' : '已失败',
             mode: continuation ? 'loop' : ''
         });
-        void refreshDebugControlUi();
         if (message.success === true) {
-            setStatus(String(message.message || '执行完成'), 'success');
+            setStatus(finalMsg, 'success');
+            showActionToast(finalMsg, 'success');
         } else if (stopped) {
-            setStatus(String(message.message || '执行已停止'), 'success');
+            setStatus(finalMsg, 'success');
+            showActionToast(finalMsg, 'success');
         } else {
-            setStatus(String(message.message || '执行失败'), 'error');
+            // Failure error: put below (in status) instead of popup toast
+            const failMsg = String(message.errorReason || message.message || '执行失败');
+            setStatus(failMsg, 'error');
+            // no toast for failure report
         }
         setLoopButtonState(continuation || message.running === true);
-        if (stopped || !continuation) {
-            scheduleDebugProgressAutoHide(3000);
-        }
     }
 });
 
 void (async () => {
-    resetDebugProgress();
     const lastMainPanel = await loadLastMainPanel().catch(() => 'card');
     activateMainPanel(lastMainPanel || 'card', { persist: false });
     await loadPreset();
     syncCookieCredentialEditUi();
     await refreshCookieCredentialCacheUi().catch(() => {});
-    await refreshDebugControlUi();
     await refreshLoopButtonState();
     try {
         const storedProgress = await loadStandaloneProgressState();
-        if (storedProgress && storedProgress.visible !== false) {
+        if (storedProgress && storedProgress.visible !== false && storedProgress.message) {
             setDebugProgress(storedProgress);
-            if (String(storedProgress.phase || '').trim() === 'stopped') {
-                scheduleDebugProgressAutoHide(3000);
+            const isErr = storedProgress.kind === 'error';
+            setStatus(String(storedProgress.message), isErr ? 'error' : '');
+            if (!isErr) {
+                showActionToast(String(storedProgress.message), 'info');
             }
+        } else {
+            resetDebugProgress();
         }
     } catch (_error) {
+        resetDebugProgress();
     }
     try {
         const cacheState = await refreshCardCacheUi();

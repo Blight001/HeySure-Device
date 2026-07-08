@@ -1193,6 +1193,28 @@
         }
     }
 
+    // ── browser_action 成功回执：附可直接写入自动化卡片的 cardStep ─────────────
+    // 探索（browser_action）→ 固化（manage_card write）不再需要人工翻译 selector：
+    // 成功后带回与卡片规范同构的步骤对象，selector 用 cssPath（优先稳定属性选择器）。
+    // 卡片 runner 只在主文档查找元素，iframe 内元素以 inFrame + note 提醒不可直接写入。
+    function cardStepReceipt(el, frame, stepType, extra = {}) {
+        try {
+            const selector = cssPath(el);
+            if (!selector) return {};
+            const attr = (name) => String((el.getAttribute && el.getAttribute(name)) || '').trim();
+            const label = textOf(el, 30) || attr('aria-label') || attr('placeholder') || attr('name') || el.tagName.toLowerCase();
+            const prefix = stepType === 'click' ? '点击' : stepType === 'type' ? '输入' : '操作';
+            const out = { cardStep: { name: `${prefix} ${label}`.trim().slice(0, 50), type: stepType, selector, ...extra } };
+            if (frame) {
+                out.cardStep.inFrame = true;
+                out.cardStepNote = '元素在 iframe 内：卡片 runner 只查主文档，此 selector 直接写入卡片将找不到元素（可考虑 navigate 直达 iframe 的 src，或改用 external_script）。';
+            }
+            return out;
+        } catch (_error) {
+            return {};
+        }
+    }
+
     // ── browser_action：click / double_click / right_click ───────────────────
     function dispatchClickSequence(el, center, opts = {}) {
         const win = ownerWindow(el);
@@ -1255,7 +1277,8 @@
         const ctx = viewportContext();
         return {
             success: true, tag: el.tagName.toLowerCase(), text: textOf(el, 100), center,
-            position: { scrollY: ctx.scrollY, scrollPercent: ctx.scrollPercent, currentSection: ctx.currentSection }
+            position: { scrollY: ctx.scrollY, scrollPercent: ctx.scrollPercent, currentSection: ctx.currentSection },
+            ...(variant === 'left' ? cardStepReceipt(el, frame, 'click') : {})
         };
     }
 
@@ -1339,7 +1362,10 @@
             }
         }
 
-        return { success: true, tag: el.tagName.toLowerCase(), submitted };
+        return {
+            success: true, tag: el.tagName.toLowerCase(), submitted,
+            ...cardStepReceipt(el, resolved.frame, 'type', { text })
+        };
     }
 
     // ── browser_action：press_key ─────────────────────────────────────────────
@@ -1446,7 +1472,12 @@
             const deadline = Date.now() + timeoutMs;
             while (Date.now() <= deadline) {
                 const el = document.querySelector(selector);
-                if (el && isVisible(el)) return { success: true, selector };
+                if (el && isVisible(el)) {
+                    return {
+                        success: true, selector,
+                        cardStep: { name: `等待 ${selector}`.slice(0, 50), type: 'wait', selector, timeout: timeoutMs }
+                    };
+                }
                 await sleep(150);
             }
             return { success: false, error: `等待元素超时: ${selector}`, selector };

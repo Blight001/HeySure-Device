@@ -76,7 +76,7 @@ const AUTOMATION_CARD_CACHE_LIST_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_CACHE
 const AUTOMATION_CARD_SELECTED_ID_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_SELECTED_ID_KEY;
 const LAST_MAIN_PANEL_KEY = shared.STORAGE_KEYS.LAST_MAIN_PANEL_KEY;
 const STANDALONE_PROGRESS_STATE_KEY = shared.STORAGE_KEYS.STANDALONE_PROGRESS_STATE_KEY;
-const STANDALONE_DEBUG_CONTROL_STATE_KEY = shared.STORAGE_KEYS.STANDALONE_DEBUG_CONTROL_STATE_KEY;
+
 
 const accountInput = document.getElementById('account');
 const passwordInput = document.getElementById('password');
@@ -126,28 +126,12 @@ const openCardSidebarButton = document.getElementById('open-card-sidebar');
 const mainTabsNode = document.getElementById('main-tabs');
 const mainTabButtons = Array.from(document.querySelectorAll('[data-main-tab]'));
 const mainPanels = Array.from(document.querySelectorAll('[data-main-panel]'));
-const debugProgressPanel = document.getElementById('debug-progress-panel');
-const debugProgressTextNode = document.getElementById('debug-progress-text');
-const debugProgressPercentNode = document.getElementById('debug-progress-percent');
-const debugProgressFillNode = document.getElementById('debug-progress-fill');
-const debugProgressMetaNode = document.getElementById('debug-progress-meta');
-const debugProgressErrorNode = document.getElementById('debug-progress-error');
-const runControlStopButton = document.getElementById('run-control-stop');
-const debugControlModeNode = document.getElementById('debug-control-mode');
-const debugControlStepButton = document.getElementById('debug-control-step');
-const debugControlLoopButton = document.getElementById('debug-control-loop');
-const debugControlPauseButton = document.getElementById('debug-control-pause');
-const debugControlStopButton = document.getElementById('debug-control-stop');
 const toastStackNode = document.getElementById('toast-stack');
 const sidebarEditorShell = document.getElementById('sidebar-editor-shell');
 const sidebarCardNameInput = document.getElementById('sidebar-card-name');
 const sidebarCardWebsiteInput = document.getElementById('sidebar-card-website');
 const sidebarCardDescriptionInput = document.getElementById('sidebar-card-description');
-const sidebarCardAccountInput = document.getElementById('sidebar-card-account');
-const sidebarCardPasswordInput = document.getElementById('sidebar-card-password');
 const sidebarCardPointsInput = document.getElementById('sidebar-card-points');
-const sidebarCardRandomLengthInput = document.getElementById('sidebar-card-random-length');
-const sidebarCardRandomTypeInput = document.getElementById('sidebar-card-random-type');
 const sidebarCardPopupsInput = document.getElementById('sidebar-card-popups');
 const sidebarCardUploadServerUrlInput = document.getElementById('sidebar-card-upload-server-url');
 const sidebarCardUploadCardKeyInput = document.getElementById('sidebar-card-upload-card-key');
@@ -165,14 +149,10 @@ const sidebarStepListNode = document.getElementById('sidebar-step-list');
 const sidebarEditorMetaNode = document.getElementById('sidebar-editor-meta');
 const TUTORIAL_URL = 'https://www.yuque.com/heysure/mn6q55/lyorlysczr8eh39b?singleDoc#';
 const runtimeStateStorage = chrome.storage.session || chrome.storage.local;
-let activeDebugErrorReason = '';
-let debugProgressAutoHideTimer = null;
 
 await import('./automation-workbench.js');
 const workbenchModule = globalThis.CookieCaptureAutomationWorkbench || {};
 const {
-    clearDebugProgressAutoHideTimer,
-    scheduleDebugProgressAutoHide,
     buildPresetFileName,
     setStatus,
     copyTextToClipboard,
@@ -190,20 +170,16 @@ const {
     normalizeCardCacheEntry,
     buildCardListLabel,
     renderCardCacheList,
+    getCardTypeStepVariables,
+    renderCardRunInputs,
+    collectCardRunInputs,
     normalizeProgressValue,
-    setDebugProgress,
-    resetDebugProgress,
     loadStandaloneProgressState,
-    loadStandaloneDebugControlState,
+
     formatStepTypeLabel,
-    normalizeDebugControlMode,
-    setDebugControlMode,
     setLoopButtonState,
     refreshLoopButtonState,
-    refreshDebugControlUi,
-    sendDebugControlAction,
     sendStopAction,
-    syncSidebarCardToRunningDebugSession,
     normalizeCardData,
     stringifyCardData,
     parseEditorCardData,
@@ -211,8 +187,6 @@ const {
     getCardEditorValue,
     isVerificationStepName,
     isEmailStepName,
-    createDebugStepTemplate,
-    insertDebugStepIntoEditor,
     isSidebarLayout,
     escapeHtml,
     normalizeSidebarPopupsInput,
@@ -247,7 +221,9 @@ const {
     upsertCardCache,
     renderSidebarEditorFromCurrentState,
     saveCardCache,
-    saveEditorCardToCache
+    saveEditorCardToCache,
+    setDebugProgress,
+    resetDebugProgress
 } = workbenchModule;
 
 async function loadCardIntoEditor() {
@@ -477,11 +453,12 @@ async function importAndStartCard() {
     showActionToast('正在准备自动化卡片...', 'info');
     setDebugProgress({
         visible: true,
-        progress: 0,
+        progress: 5,
         message: '正在启动自动化流程...',
         meta: '执行模式',
         mode: 'run'
     });
+    showActionToast('正在启动自动化流程...', 'info');
 
     try {
         await savePreset();
@@ -490,17 +467,21 @@ async function importAndStartCard() {
         const savedCardData = await saveCardCache(cardData);
 
         showActionToast(`已启动本地执行: ${savedCardData.name}`, 'info');
+        const runInputs = typeof collectCardRunInputs === 'function' ? collectCardRunInputs() : {};
         void sendStandaloneMessage({
             type: 'card-run-start',
             payload: {
-                cardData: savedCardData
+                cardData: savedCardData,
+                inputs: runInputs
             }
         }).catch((error) => {
-            showActionToast(error && error.message ? error.message : '启动执行失败', 'error');
+            const msg = error && error.message ? error.message : '启动执行失败';
+            showActionToast(msg, 'error');
         });
 
     } catch (error) {
-        showActionToast(error && error.message ? error.message : '导入并执行失败', 'error');
+        const msg = error && error.message ? error.message : '导入并执行失败';
+        showActionToast(msg, 'error');
     } finally {
         importCardButton.disabled = false;
     }
@@ -534,11 +515,12 @@ async function loopCard() {
     showActionToast('正在启动循环执行...', 'info');
     setDebugProgress({
         visible: true,
-        progress: 0,
+        progress: 5,
         message: '正在启动循环执行...',
         meta: '循环执行',
         mode: 'loop'
     });
+    showActionToast('正在启动执行...', 'info');
 
     try {
         const imported = await importSelectedCardFilesToCache().catch(() => null);
@@ -546,20 +528,24 @@ async function loopCard() {
         await saveCardCache(cardData);
 
         setLoopButtonState(true);
+        const loopInputs = typeof collectCardRunInputs === 'function' ? collectCardRunInputs() : {};
         void sendStandaloneMessage({
             type: 'card-run-start',
             payload: {
                 cardData,
-                isLooping: true
+                isLooping: true,
+                inputs: loopInputs
             }
         }).catch((error) => {
-            showActionToast(error && error.message ? error.message : '循环执行失败', 'error');
+            const msg = error && error.message ? error.message : '循环执行失败';
+            showActionToast(msg, 'error');
             void refreshLoopButtonState().catch(() => {});
         });
 
         showActionToast(`已开始循环执行: ${cardData.name || '未命名卡片'}`, 'success');
     } catch (error) {
-        showActionToast(error && error.message ? error.message : '循环执行失败', 'error');
+        const msg = error && error.message ? error.message : '循环执行失败';
+        showActionToast(msg, 'error');
         await refreshLoopButtonState().catch(() => {});
     } finally {
         if (loopCardButton) {

@@ -17,7 +17,7 @@ const STORAGE_KEYS = {
     AUTOMATION_CARD_SELECTED_ID_KEY: 'cookie-capture-automation-card-cache-selected-id',
     LAST_MAIN_PANEL_KEY: 'cookie-capture-last-main-panel',
     STANDALONE_PROGRESS_STATE_KEY: 'cookie-capture-standalone-progress-state',
-    STANDALONE_DEBUG_CONTROL_STATE_KEY: 'cookie-capture-standalone-debug-control-state'
+
 };
 
 function sanitizeFilePart(value = '') {

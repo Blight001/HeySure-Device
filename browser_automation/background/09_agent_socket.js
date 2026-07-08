@@ -47,17 +47,16 @@ const CARD_FORMAT_RULES = `# 自动化卡片规范（cardData）—— 步骤类
 - name: string，卡片名称（为空时自动生成 automation_<时间戳>）
 - website: string，目标网址；若 steps 第一步不是 navigate，执行时会自动在最前插入跳转到 website 的 navigate 步骤
 - description: string，可选，卡片说明
-- account: string，可选，执行账号（{account} 模板、Cookie 文件名；MCP run 时可覆盖）
-- password: string，可选，执行密码（{password} 模板、Cookie 文件名；MCP run 时可覆盖，否则按 random 生成）
 - points: number，可选，积分基础值
-- random: { password: { length: number（默认 12）, type: "mixed"|"lowercase"|"uppercase"|"numeric"|"alphanumeric" } }，决定 {password} 未提供时的随机生成方式
 - popups: array，可选，弹窗关闭规则，形如 [{ "name": "关闭弹窗", "selector": ".modal-close" }]
 - steps: array，必填且非空，按顺序执行
 
 ## 步骤通用字段
-- name: string，步骤名（会影响智能填充，见运行规则第 4 条）
+- name: string，步骤名（仅用于展示/日志，不再影响填充逻辑）
 - type: string，必填，只能取下方 10 种步骤类型之一
 - selector: string，目标元素定位，语法见「选择器语法」
+- text: string，type 步骤要输入的默认文本（即变量默认值，见运行规则第 4 条「变量输入」）
+- variable: string，可选，仅 type 步骤有效；该变量的键名，运行前可用 inputs 按此键覆盖输入文本；不填则按其在全部 type 步骤中的顺序回退为 var1/var2/...
 - by: "css_selector"（默认）| "text"（按可见文本）| "auto"（先按 CSS 再按文本兜底）
 - nth: number，可选，selector 命中多个元素时取第几个
 - timeout: number，毫秒，可选，默认值见各步骤类型
@@ -65,7 +64,7 @@ const CARD_FORMAT_RULES = `# 自动化卡片规范（cardData）—— 步骤类
 - optional: true 时该步骤失败直接跳过；不设置则失败会无限重试（见运行规则第 2 条）
 
 ## 步骤类型（type，仅以下 10 种）
-- navigate: 跳转 url（省略 url 时用卡片 website；当前已在目标地址则改为强制刷新；timeout 默认 30000）
+- navigate: 跳转 url（省略 url 时用卡片 website；当前已在目标地址则跳过跳转；timeout 默认 30000）
 - click: 点击 selector 元素（timeout 默认 15000，poll_interval_ms 默认 200）
 - type: 向 selector 输入 text（支持 <input>（非 button/checkbox 等）、<textarea>、[contenteditable]、role=textbox/searchbox 等可编辑元素；timeout 默认 15000）；clear_first=true 输入前清空；click_before_type=true 输入前先点击。找到非输入元素会立即报错（不再盲目重试 3 次）
 - wait: 等待元素出现（selector + timeout，默认 3000）；或改用 wait_for_text 等文本出现 / wait_for_element_hidden 等元素消失 / wait_for_text_hidden 等文本消失
@@ -84,29 +83,31 @@ const CARD_FORMAT_RULES = `# 自动化卡片规范（cardData）—— 步骤类
 - by="auto" 时先按 CSS 查找，找不到再自动按 text= 兜底
 
 ## 模板变量
-url/selector/text/script/wait_for_* 等字符串字段支持占位符：{account} {password} {email} {code}，执行时替换为运行上下文的值；未知占位符原样保留。
+url/selector/text/script/wait_for_* 等字符串字段支持占位符 {键}，执行时替换为运行上下文的值；未知占位符原样保留。可用的键：{code}（wait_verification_code 成功后写入）、以及任意「变量键」（每个 type 步骤的 variable，或 var1/var2/...，取其最终输入值）和运行前 inputs 传入的键。不再有账号/密码专属占位符或随机密码。
 
 ## 运行规则（执行行为，写卡片时必须据此设计步骤）
 1. 卡片在当前活动标签页执行；入口地址取第一步 navigate 的 url，否则取卡片 website（两者都没有则 write 会被拒绝）。
 2. 非 optional 步骤失败后最多重试 3 次（间隔约 2 秒），超过上限则失败并结束；对可能不存在的元素（如偶现弹窗、可选勾选框）必须加 optional:true，否则流程可能因重试耗尽失败。
-3. account/password 优先使用 run(payload) 传入值，其次卡片顶层 account/password，否则 password 随机生成（按 random 配置）；email 由 run 传入或卡片顶层提供（不再自动通过软件 HTTP 打开临时邮箱浏览器）；{code} 在 wait_verification_code 成功后才有值，之前使用会原样保留占位符。
-4. type 步骤智能填充：步骤 name/selector/text 含「验证码/code/otp」等关键词时自动改填已获取的验证码；含「邮箱/email」时自动改填临时邮箱地址（会覆盖 text 原值）。type 支持的元素类型见「步骤类型」说明，命中非输入元素会立即清晰报错。
-5. 正常运行结束后会自动抓取当前页 Cookie 并保存；若步骤中已包含 save_cookies 则跳过这次最终自动保存。
+3. 变量输入（替代原账号/密码机制）：每个 type 步骤都是一个变量槽，默认输入其 text 字段的固定文本。运行前可通过 run(payload) 的 inputs（{ 变量键: 值 } 对象或数组按序映射 var1..varN）或注册面板输入框按变量键覆盖该步骤的输入文本；未提供覆盖值则用 text 默认值。变量键取步骤 variable 字段，未设置则按其在全部 type 步骤中的顺序回退为 var1/var2/...。不再自动生成密码。
+4. 不再有基于步骤名的智能填充。验证码请把该 type 步骤的默认 text 写成 "{code}"（wait_verification_code 成功后注入）；其它需要运行期赋值的输入，用自定义变量键 + inputs 覆盖。type 支持的元素类型见「步骤类型」说明，命中非输入元素会立即清晰报错。
+5. 正常运行结束后会自动抓取当前页 Cookie 并保存；若步骤中已包含 save_cookies 则跳过这次最终自动保存。Cookie 文件名会用名为 account/password（或 email/code）的变量值；没有则用时间戳。
 6. 同一时间只能运行一张卡片；action=run 是长任务，可能耗时数分钟（如等待邮箱验证码）。执行期间会通过 task:progress 及时反馈每步开始/完成/重试/错误等完整过程，而非仅返回最终结果。
+7. 失败结果与续跑闭环：run 失败时返回 errorCode（ELEMENT_NOT_FOUND / WAIT_TIMEOUT / NAVIGATION_TIMEOUT / UNSUPPORTED_ELEMENT_TYPE / SCRIPT_ERROR / VERIFICATION_CODE_TIMEOUT / CLICK_FAILED / MISSING_URL 等）、失败步骤 stepIndex/stepName/stepType/selector、failureSnapshot（当前页 URL/标题 + 近似候选元素的 tag/selector/text/placeholder）与 context（已用到的变量值，如 account/password/email/code 或自定义键）。失败后页面停留在失败现场：先按 failureSnapshot.candidates 或 browser_observe 找出正确 selector，用 write 修复卡片，再 run + start_step=失败的 stepIndex（并通过 inputs 回传 context 里已用到的变量值）从失败步骤继续，不要从头重跑。另外 browser_action click/type、browser_tab navigate/replace、browser_wait 成功回执都带 cardStep 字段（与本规范同构的步骤对象）——探索验证通过后直接把这些 cardStep 拼进 steps 即可成卡，type 步骤的 text 即该变量默认值（需运行期赋值的写成 {code} 或自定义变量键）；cardStep.inFrame=true 时该 selector 在 iframe 内，不能直接写入卡片。
 
 ## 最小示例
 {
   "name": "示例注册",
   "website": "https://example.com/signup",
   "steps": [
-    { "name": "输入邮箱", "type": "type", "selector": "#email", "text": "{email}" },
-    { "name": "输入密码", "type": "type", "selector": "#password", "text": "{password}" },
+    { "name": "输入邮箱", "type": "type", "selector": "#email", "variable": "email", "text": "test@example.com" },
+    { "name": "输入密码", "type": "type", "selector": "#password", "variable": "password", "text": "MyPassw0rd!" },
     { "name": "同意条款", "type": "click", "selector": "#agree", "optional": true },
     { "name": "提交", "type": "click", "selector": "button[type=submit]" },
     { "name": "等待验证码", "type": "wait_verification_code" },
     { "name": "输入验证码", "type": "type", "selector": "#otp", "text": "{code}" }
   ]
-}`;
+}
+// 运行时覆盖示例：inputs = { "email": "user01@x.com", "password": "P@ss01" }（未传的变量用上面的默认 text）`;
 
 // write 前置校验：拦截 AI 编造的步骤类型/定位方式，错误信息直接指回 action=rules。
 function validateCardDataForWrite(cardData) {
@@ -150,16 +151,19 @@ function effectiveAgentToolDefs() {
     return [
         {
             name: 'manage_card',
-            description: '自动化卡片唯一入口（管理 + 执行合一）。action=rules 返回卡片步骤类型（10 种 type 及其字段、默认超时）与运行规则（失败重试、智能填充、Cookie 自动保存等）——写卡片前必须先调用，字段与步骤类型只能取自规范，不要凭空编造；action=list 列出所有已保存卡片的基本信息（id、名称、步骤数、保存时间、是否选中）；action=get 读取指定卡片完整 JSON；action=write 创建新卡片或用同一个 id 覆盖已有卡片（需 cardData，至少含 name/website/steps，写入前会按规范校验并拒绝非法步骤类型）；action=delete 删除卡片；action=run 在当前活动标签页执行卡片，执行中通过 task:progress 及时反馈完整过程（每步开始/完成/重试/错误），最终返回结果（可能耗时数分钟，例如等待邮箱验证码；同一时间只能有一个 run；失败操作最多重试 3 次）。',
+            description: '自动化卡片唯一入口（管理 + 执行合一）。action=rules 返回卡片步骤类型（10 种 type 及其字段、默认超时）与运行规则（失败重试、变量输入、Cookie 自动保存等）——写卡片前必须先调用，字段与步骤类型只能取自规范，不要凭空编造；action=list 列出所有已保存卡片的基本信息（id、名称、步骤数、保存时间、是否选中）；action=get 读取指定卡片完整 JSON；action=write 创建新卡片或用同一个 id 覆盖已有卡片（需 cardData，至少含 name/website/steps，写入前会按规范校验并拒绝非法步骤类型）；action=delete 删除卡片；action=run 在当前活动标签页执行卡片，可用 inputs 按变量键覆盖各 type 步骤的输入文本（默认用步骤 text），执行中通过 task:progress 及时反馈完整过程（每步开始/完成/重试/错误），最终返回结果（可能耗时数分钟，例如等待邮箱验证码；同一时间只能有一个 run；失败操作最多重试 3 次）。run 失败时返回结构化现场：errorCode、失败步骤 stepIndex/stepName/selector、failureSnapshot（当前页 URL/标题 + 近似候选元素）与 context（已用到的变量值）；页面停留在失败现场——修复卡片（write）后用 action=run + start_step=stepIndex 并通过 inputs 回传已用到的变量值即可从失败步骤继续，不必从头执行。',
             input_schema: {
                 type: 'object',
                 properties: {
                     action: { type: 'string', enum: ['rules', 'list', 'get', 'write', 'delete', 'run'], description: 'rules 获取步骤类型与运行规则（写卡片前必看）；list 列出全部卡片；get 读取卡片完整 JSON；write 写入/覆盖卡片；delete 删除卡片；run 执行卡片。' },
                     id: { type: 'string', description: '目标卡片 id：get/run 省略时用当前选中卡片；write 省略时按卡片名新建（同名覆盖）；delete 必填；rules/list 忽略。' },
                     cardData: { type: 'object', description: '完整卡片 JSON（至少含 name/website/steps），仅 action=write 需要；格式必须严格遵循 action=rules 返回的规范。' },
-                    account: { type: 'string', description: '可选：action=run 时指定执行账号（用于 {account} 模板及 Cookie 命名；优先于卡片顶层 account）。' },
-                    password: { type: 'string', description: '可选：action=run 时指定执行密码（用于 {password} 模板及 Cookie 命名；优先于卡片顶层 password，否则随机生成）。' },
-                    email: { type: 'string', description: '可选：action=run 时指定执行邮箱（用于 {email} 模板；省略则不自动打开邮箱浏览器）。' }
+                    inputs: { type: 'object', description: '可选：action=run 时按「变量键→值」覆盖对应 type 步骤的输入文本。每个 type 步骤都是一个变量，键取步骤 variable 字段，未设置则按其在全部 type 步骤中的顺序回退为 var1/var2/...；未提供覆盖值时用步骤自身 text 作为默认。也可传数组按序映射 var1..varN。若某变量键为 account/password/email，会同时用于 Cookie 命名与结果。' },
+                    code: { type: 'string', description: '可选：action=run 时预置验证码上下文（{code} 模板可直接引用；wait_verification_code 成功后也会写入）。续跑时回传上一次失败结果 context.code。' },
+                    account: { type: 'string', description: '可选：兼容别名，等价于 inputs.account（用于名为 account 的变量与 Cookie 命名）。' },
+                    password: { type: 'string', description: '可选：兼容别名，等价于 inputs.password（用于名为 password 的变量与 Cookie 命名）。' },
+                    email: { type: 'string', description: '可选：兼容别名，等价于 inputs.email（用于名为 email 的变量）。' },
+                    start_step: { type: 'number', description: '可选：action=run 时从第 N 步开始执行（1-based，序号与失败结果 stepIndex 一致；卡片 website 自动插入的 navigate 前置步骤算第 1 步）。用于失败修复后续跑：页面停留在失败现场，跳过已成功的步骤直接继续；同时通过 inputs 回传已用到的变量值。' }
                 },
                 required: ['action']
             }
@@ -181,7 +185,7 @@ function effectiveAgentToolDefs() {
         // ── 导航与搜索 ─────────────────────────────────────────────────────
         {
             name: 'browser_tab',
-            description: '浏览器标签页与导航管理：列出已打开页面、切换标签、在当前页覆盖跳转、新标签打开链接、关闭标签、前进后退。动作仅 7 种：list 获取全部页面及当前激活页；switch 切换到已有 tab_id；replace 在当前页（或 tab_id）覆盖跳转到 url；navigate 在新标签页打开 url；close 关闭标签；back/forward 历史导航。流程：先 list，目标页已开则 switch，要在当前页改地址用 replace，并行任务用 navigate。',
+            description: '浏览器标签页与导航管理：列出已打开页面、切换标签、在当前页覆盖跳转、新标签打开链接、关闭标签、前进后退。动作仅 7 种：list 获取全部页面及当前激活页；switch 切换到已有 tab_id；replace 在当前页（或 tab_id）覆盖跳转到 url；navigate 在新标签页打开 url；close 关闭标签；back/forward 历史导航。流程：先 list，目标页已开则 switch，要在当前页改地址用 replace，并行任务用 navigate。navigate/replace 成功回执附 cardStep（navigate 步骤对象），可直接拼进自动化卡片 steps。',
             input_schema: {
                 type: 'object',
                 properties: {
@@ -230,7 +234,8 @@ function effectiveAgentToolDefs() {
                 '· scroll：滚动页面，返回滚动前后位置与移动像素数。\n' +
                 '· type：向 input/textarea/可编辑区输入文本（单字段；多字段请多次 type）；submit:true 时优先调用所在表单的 requestSubmit()（合成键盘事件不会触发浏览器原生 Enter 提交，这里用等效方式兜底）。\n' +
                 '· press_key：在焦点元素或指定 selector 上派发合成键盘事件，可带 Ctrl/Shift/Alt/Meta 修饰键；同样不是 CDP trusted 事件，按 Enter 时会尝试兜底 requestSubmit()。\n' +
-                '用途：统一的点击/滚动/输入/键盘入口。场景：先 browser_observe 获取元素基本信息（含 selector），用 selector/text 构造卡片步骤或用 ref 做临时 browser_action；页面变化后自行再 observe。',
+                '用途：统一的点击/滚动/输入/键盘入口。场景：先 browser_observe 获取元素基本信息（含 selector），用 selector/text 构造卡片步骤或用 ref 做临时 browser_action；页面变化后自行再 observe。\n' +
+                '· cardStep 回执：click（单击）/type 成功后返回 cardStep 字段——与自动化卡片规范同构的步骤对象（name/type/selector[/text]，selector 为稳定 CSS）。探索验证通过后直接把各步 cardStep 按顺序拼进 manage_card write 的 steps 即可固化为卡片；text 值按需替换为 {account}/{password}/{email}/{code} 模板。cardStep.inFrame=true 表示元素在 iframe 内（卡片 runner 只查主文档，勿直接写入，见 cardStepNote）。',
             input_schema: {
                 type: 'object',
                 properties: {
@@ -256,7 +261,7 @@ function effectiveAgentToolDefs() {
         },
         {
             name: 'browser_wait',
-            description: '等待某个 CSS selector 出现，或固定等待一段时间。用途：等待页面/元素就绪后再操作。场景：等异步加载的按钮出现、等动画结束、给页面留出渲染时间。',
+            description: '等待某个 CSS selector 出现，或固定等待一段时间。用途：等待页面/元素就绪后再操作。场景：等异步加载的按钮出现、等动画结束、给页面留出渲染时间。selector 命中成功时回执附 cardStep（wait 步骤对象），可直接拼进自动化卡片 steps。',
             input_schema: {
                 type: 'object',
                 properties: {
@@ -619,11 +624,15 @@ async function runAgentToolCommand(tool, args, taskId = null) {
                     }
                     return await runStandaloneCard({
                         cardData: entry ? entry.cardData : undefined,
+                        // 变量输入：inputs 为 { 变量键: 值 } 对象（或数组按序映射 var1..varN），
+                        // 覆盖对应 type 步骤的默认输入文本；account/password/email/code 仍作兼容别名。
+                        inputs: payload.inputs || payload.variables || {},
                         account: payload.account || '',
                         password: payload.password || '',
                         email: payload.email || '',
-                        isLooping: false,
-                        debugMode: false
+                        code: payload.code || '',
+                        start_step: Number(payload.start_step || payload.startStep || 0) || 0,
+                        isLooping: false
                     });
                 } catch (runErr) {
                     // 捕获执行失败，返回带详细原因的结构化结果（而非抛错），让 MCP 返回详细的 error / errorReason
@@ -660,6 +669,12 @@ async function runAgentToolCommand(tool, args, taskId = null) {
                             };
                         }
                     } catch (_) {}
+                    // 06_automation_run.js 在最终失败时把结构化详情挂在 error.failure 上：
+                    // errorCode / 失败步骤 / selector / 现场快照（URL+候选元素）/ 运行上下文。
+                    // 合并进结果并给出续跑提示，形成「失败 → 修卡 → start_step 续跑」闭环。
+                    const failure = (runErr && typeof runErr === 'object' && runErr.failure && typeof runErr.failure === 'object')
+                        ? runErr.failure
+                        : null;
                     return {
                         success: false,
                         cardName: (entry && entry.cardName) || '',
@@ -670,7 +685,19 @@ async function runAgentToolCommand(tool, args, taskId = null) {
                         email: payload.email || '',
                         cookiesSaved: false,
                         stopped: false,
-                        ...extra
+                        ...extra,
+                        ...(failure ? {
+                            errorCode: failure.errorCode || '',
+                            stepIndex: failure.stepIndex,
+                            stepTotal: failure.stepTotal,
+                            stepName: failure.stepName,
+                            stepType: failure.stepType,
+                            selector: failure.selector,
+                            attempts: failure.attempts,
+                            failureSnapshot: failure.failureSnapshot || null,
+                            context: failure.context || null,
+                            resumeHint: `页面已停在失败现场。修复卡片（action=write）后可用 action=run + start_step=${failure.stepIndex} 从失败步骤继续，并把本结果 context 里已用到的变量值（如 account/password/email/code 或自定义变量键）通过 inputs 原样回传，避免丢失验证码等运行期取值。`
+                        } : {})
                     };
                 } finally {
                     activeMcpCardTask = null;
@@ -749,7 +776,8 @@ function summarizeAgentResult(tool, result) {
             if (result.cardName) {
                 if (result.success === false) {
                     const reason = String(result.error || result.errorReason || result.message || '未知原因').trim();
-                    return `执行失败: ${result.cardName} - ${reason}`;
+                    const codeTag = String(result.errorCode || '').trim();
+                    return `执行失败: ${result.cardName} - ${codeTag ? `[${codeTag}] ` : ''}${reason}`;
                 }
                 return `执行完成: ${result.cardName}`;
             }
@@ -1032,6 +1060,7 @@ chrome.runtime.onMessage.addListener((message, _sender, _sendResponse) => {
             cardName: p.cardName || '',
             mode: p.mode,
             errorReason: p.errorReason || p.error || '',
+            errorCode: p.errorCode || '',
             previousStepName: p.previousStepName || '',
             nextStepName: p.nextStepName || ''
         };

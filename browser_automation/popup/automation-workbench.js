@@ -8,7 +8,7 @@ const AUTOMATION_CARD_CACHE_LIST_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_CACHE
 const AUTOMATION_CARD_SELECTED_ID_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_SELECTED_ID_KEY;
 const LAST_MAIN_PANEL_KEY = shared.STORAGE_KEYS.LAST_MAIN_PANEL_KEY;
 const STANDALONE_PROGRESS_STATE_KEY = shared.STORAGE_KEYS.STANDALONE_PROGRESS_STATE_KEY;
-const STANDALONE_DEBUG_CONTROL_STATE_KEY = shared.STORAGE_KEYS.STANDALONE_DEBUG_CONTROL_STATE_KEY;
+
 
 const accountInput = document.getElementById('account');
 const passwordInput = document.getElementById('password');
@@ -21,6 +21,7 @@ const loopCardButton = document.getElementById('loop-card');
 const cardFileNameNode = document.getElementById('card-file-name');
 const cardCacheBadgeNode = document.getElementById('card-cache-badge');
 const cardCacheListNode = document.getElementById('card-cache-list');
+const cardRunInputsNode = document.getElementById('card-run-inputs');
 const deleteCardButton = document.getElementById('delete-card');
 const cardEditor = document.getElementById('card-editor');
 const loadCardToEditorButton = document.getElementById('load-card-to-editor');
@@ -38,28 +39,12 @@ const openCardSidebarButton = document.getElementById('open-card-sidebar');
 const mainTabsNode = document.getElementById('main-tabs');
 const mainTabButtons = Array.from(document.querySelectorAll('[data-main-tab]'));
 const mainPanels = Array.from(document.querySelectorAll('[data-main-panel]'));
-const debugProgressPanel = document.getElementById('debug-progress-panel');
-const debugProgressTextNode = document.getElementById('debug-progress-text');
-const debugProgressPercentNode = document.getElementById('debug-progress-percent');
-const debugProgressFillNode = document.getElementById('debug-progress-fill');
-const debugProgressMetaNode = document.getElementById('debug-progress-meta');
-const debugProgressErrorNode = document.getElementById('debug-progress-error');
-const runControlStopButton = document.getElementById('run-control-stop');
-const debugControlModeNode = document.getElementById('debug-control-mode');
-const debugControlStepButton = document.getElementById('debug-control-step');
-const debugControlLoopButton = document.getElementById('debug-control-loop');
-const debugControlPauseButton = document.getElementById('debug-control-pause');
-const debugControlStopButton = document.getElementById('debug-control-stop');
 const toastStackNode = document.getElementById('toast-stack');
 const sidebarEditorShell = document.getElementById('sidebar-editor-shell');
 const sidebarCardNameInput = document.getElementById('sidebar-card-name');
 const sidebarCardWebsiteInput = document.getElementById('sidebar-card-website');
 const sidebarCardDescriptionInput = document.getElementById('sidebar-card-description');
-const sidebarCardAccountInput = document.getElementById('sidebar-card-account');
-const sidebarCardPasswordInput = document.getElementById('sidebar-card-password');
 const sidebarCardPointsInput = document.getElementById('sidebar-card-points');
-const sidebarCardRandomLengthInput = document.getElementById('sidebar-card-random-length');
-const sidebarCardRandomTypeInput = document.getElementById('sidebar-card-random-type');
 const sidebarCardPopupsInput = document.getElementById('sidebar-card-popups');
 const sidebarCardUploadServerUrlInput = document.getElementById('sidebar-card-upload-server-url');
 const sidebarCardUploadCardKeyInput = document.getElementById('sidebar-card-upload-card-key');
@@ -76,24 +61,18 @@ const sidebarTutorialButton = document.getElementById('sidebar-tutorial');
 const sidebarStepListNode = document.getElementById('sidebar-step-list');
 const sidebarEditorMetaNode = document.getElementById('sidebar-editor-meta');
 
-const runtimeStateStorage = chrome.storage.session || chrome.storage.local;
+const debugProgressPanel = document.getElementById('debug-progress-panel');
+const debugProgressTextNode = document.getElementById('debug-progress-text');
+const debugProgressPercentNode = document.getElementById('debug-progress-percent');
+const debugProgressFillNode = document.getElementById('debug-progress-fill');
+const debugProgressMetaNode = document.getElementById('debug-progress-meta');
+const debugProgressErrorNode = document.getElementById('debug-progress-error');
+const runControlStopButton = document.getElementById('run-control-stop');
+
 let activeDebugErrorReason = '';
 let debugProgressAutoHideTimer = null;
 
-function clearDebugProgressAutoHideTimer() {
-    if (debugProgressAutoHideTimer) {
-        clearTimeout(debugProgressAutoHideTimer);
-        debugProgressAutoHideTimer = null;
-    }
-}
-
-function scheduleDebugProgressAutoHide(delayMs = 3000) {
-    clearDebugProgressAutoHideTimer();
-    debugProgressAutoHideTimer = window.setTimeout(() => {
-        debugProgressAutoHideTimer = null;
-        resetDebugProgress();
-    }, Math.max(0, Number(delayMs) || 0));
-}
+const runtimeStateStorage = chrome.storage.session || chrome.storage.local;
 
 const {
     sanitizeFilePart,
@@ -237,7 +216,6 @@ function renderCardCacheList(state = { items: [], selectedId: '' }) {
             </div>
             <div class="card-cache-item__actions">
               ${active ? '<div class="chip">已选中</div>' : '<div class="chip">未选中</div>'}
-              <button type="button" class="button-secondary" data-card-cache-action="select">选择</button>
             </div>
           </div>
         `;
@@ -247,6 +225,72 @@ function renderCardCacheList(state = { items: [], selectedId: '' }) {
     if (cardFileNameNode) {
         cardFileNameNode.textContent = selectedItem ? selectedItem.cardData?.name || selectedItem.cardName || '未命名自动化卡片' : '未选择卡片';
     }
+    renderCardRunInputs(selectedItem ? selectedItem.cardData : null);
+}
+
+// 运行前「变量输入」面板：为选中卡片的每个 type 步骤渲染一个输入框，默认值=步骤 text；
+// 开始执行/循环执行时把这些框收集为 inputs 传给后台，按变量键覆盖对应步骤的输入文本。
+function renderCardRunInputs(cardData) {
+    if (!cardRunInputsNode) {
+        return;
+    }
+
+    const variables = getCardTypeStepVariables(cardData || {});
+    // 相同变量键（如手动填了相同 variable）只显示一个框，共同控制多步
+    const seen = new Set();
+    const uniqueVariables = [];
+    variables.forEach((item) => {
+        if (seen.has(item.key)) {
+            return;
+        }
+        seen.add(item.key);
+        uniqueVariables.push(item);
+    });
+
+    if (!cardData || !Array.isArray(cardData.steps) || cardData.steps.length === 0) {
+        // 未选中卡片 / 卡片无步骤：隐藏面板
+        cardRunInputsNode.hidden = true;
+        cardRunInputsNode.innerHTML = '';
+        return;
+    }
+
+    if (uniqueVariables.length === 0) {
+        // 有卡片但没有 type（输入内容）步骤：给出可见提示，避免以为面板没渲染
+        cardRunInputsNode.innerHTML = `
+          <div class="card-run-inputs__title">变量输入</div>
+          <div class="card-run-inputs__empty">该卡片没有「输入内容(type)」步骤，无需变量输入。</div>
+        `;
+        cardRunInputsNode.hidden = false;
+        return;
+    }
+
+    const rows = uniqueVariables.map((item) => `
+      <div class="card-run-input">
+        <label>步骤${item.stepIndex} · ${escapeHtml(item.label)} · <code>${escapeHtml(item.key)}</code></label>
+        <input type="text" data-run-input-key="${escapeHtml(item.key)}" value="${escapeHtml(item.defaultText)}" placeholder="默认: ${escapeHtml(item.defaultText || '(空)')}">
+      </div>
+    `).join('');
+
+    cardRunInputsNode.innerHTML = `
+      <div class="card-run-inputs__title">变量输入（运行前可覆盖，共 ${uniqueVariables.length} 项）</div>
+      <div class="card-run-inputs__list">${rows}</div>
+    `;
+    cardRunInputsNode.hidden = false;
+}
+
+// 收集面板里各变量框的当前值为 { 变量键: 值 } 对象；无面板/无变量时返回空对象。
+function collectCardRunInputs() {
+    if (!cardRunInputsNode || cardRunInputsNode.hidden) {
+        return {};
+    }
+    const inputs = {};
+    cardRunInputsNode.querySelectorAll('[data-run-input-key]').forEach((node) => {
+        const key = String(node.dataset.runInputKey || '').trim();
+        if (key) {
+            inputs[key] = String(node.value || '');
+        }
+    });
+    return inputs;
 }
 
 function normalizeProgressValue(value = 0) {
@@ -255,6 +299,21 @@ function normalizeProgressValue(value = 0) {
         return 0;
     }
     return Math.max(0, Math.min(100, number));
+}
+
+function clearDebugProgressAutoHideTimer() {
+    if (debugProgressAutoHideTimer) {
+        clearTimeout(debugProgressAutoHideTimer);
+        debugProgressAutoHideTimer = null;
+    }
+}
+
+function scheduleDebugProgressAutoHide(delayMs = 3000) {
+    clearDebugProgressAutoHideTimer();
+    debugProgressAutoHideTimer = window.setTimeout(() => {
+        debugProgressAutoHideTimer = null;
+        resetDebugProgress();
+    }, delayMs);
 }
 
 function setDebugProgress(state = {}) {
@@ -266,13 +325,12 @@ function setDebugProgress(state = {}) {
 
     const hasProgress = Number.isFinite(Number(state.progress));
     const progress = hasProgress ? normalizeProgressValue(state.progress) : null;
-    const text = String(state.message || '等待开始').trim() || '等待开始';
+    const text = String(state.message || '等待执行').trim() || '等待执行';
     const meta = String(state.meta || '').trim();
     const hasErrorReason = Object.prototype.hasOwnProperty.call(state, 'errorReason');
     const nextErrorReason = hasErrorReason ? String(state.errorReason || '').trim() : activeDebugErrorReason;
     const phase = String(state.phase || '').trim();
     const visible = state.visible !== false;
-    const mode = String(state.mode || '').trim().toLowerCase();
 
     if (hasErrorReason) {
         activeDebugErrorReason = nextErrorReason;
@@ -282,7 +340,6 @@ function setDebugProgress(state = {}) {
 
     debugProgressPanel.classList.toggle('is-visible', visible);
     debugProgressPanel.classList.toggle('is-error', state.kind === 'error');
-    debugProgressPanel.dataset.mode = mode || '';
 
     if (hasProgress && debugProgressFillNode) {
         debugProgressFillNode.style.width = `${progress}%`;
@@ -301,7 +358,7 @@ function setDebugProgress(state = {}) {
     }
 
     if (runControlStopButton) {
-        const showRunStop = visible && mode === 'run';
+        const showRunStop = visible;
         runControlStopButton.disabled = !showRunStop;
         runControlStopButton.hidden = !showRunStop;
     }
@@ -321,7 +378,7 @@ function resetDebugProgress() {
         debugProgressPercentNode.textContent = '0%';
     }
     if (debugProgressTextNode) {
-        debugProgressTextNode.textContent = '等待开始';
+        debugProgressTextNode.textContent = '等待执行';
     }
     if (debugProgressMetaNode) {
         debugProgressMetaNode.textContent = '';
@@ -330,9 +387,6 @@ function resetDebugProgress() {
         debugProgressErrorNode.textContent = '';
     }
     activeDebugErrorReason = '';
-    if (debugProgressPanel) {
-        debugProgressPanel.dataset.mode = '';
-    }
     if (runControlStopButton) {
         runControlStopButton.hidden = true;
         runControlStopButton.disabled = true;
@@ -350,7 +404,7 @@ async function loadStandaloneProgressState() {
     return {
         tabId: Number(state.tabId || 0) || null,
         cardName: String(state.cardName || '').trim(),
-        message: String(state.message || '等待开始').trim() || '等待开始',
+        message: String(state.message || '等待执行').trim() || '等待执行',
         phase: String(state.phase || '').trim(),
         mode: String(state.mode || '').trim(),
         isLooping: state.isLooping === true,
@@ -368,22 +422,7 @@ async function loadStandaloneProgressState() {
     };
 }
 
-async function loadStandaloneDebugControlState() {
-    const stored = await runtimeStateStorage.get([STANDALONE_DEBUG_CONTROL_STATE_KEY]).catch(() => ({}));
-    const state = stored && typeof stored === 'object' ? stored[STANDALONE_DEBUG_CONTROL_STATE_KEY] : null;
-    if (!state || typeof state !== 'object') {
-        return null;
-    }
 
-    return {
-        tabId: Number(state.tabId || 0) || null,
-        cardName: String(state.cardName || '').trim(),
-        mode: String(state.mode || 'loop').trim() || 'loop',
-        stepBudget: Math.max(0, Number(state.stepBudget || 0) || 0),
-        running: state.running !== false,
-        updatedAt: String(state.updatedAt || '').trim()
-    };
-}
 
 const STEP_TYPE_LABELS = {
     navigate: '访问网页',
@@ -401,38 +440,6 @@ const STEP_TYPE_LABELS = {
 function formatStepTypeLabel(stepType = '') {
     const normalized = String(stepType || '').trim();
     return STEP_TYPE_LABELS[normalized] || normalized || '步骤';
-}
-
-function normalizeDebugControlMode(value = 'loop') {
-    const mode = String(value || 'loop').trim().toLowerCase();
-    if (mode === 'step' || mode === 'pause' || mode === 'loop') {
-        return mode;
-    }
-    return 'loop';
-}
-
-function setDebugControlMode(mode = 'loop') {
-    const normalized = normalizeDebugControlMode(mode);
-    const label = normalized === 'step' ? '逐步运行' : normalized === 'pause' ? '暂停' : '循环运行';
-
-    if (debugControlModeNode) {
-        debugControlModeNode.textContent = `当前：${label}`;
-    }
-
-    const buttons = [
-        [debugControlStepButton, 'step'],
-        [debugControlLoopButton, 'loop'],
-        [debugControlPauseButton, 'pause']
-    ];
-
-    for (const [button, buttonMode] of buttons) {
-        if (!button) {
-            continue;
-        }
-        button.classList.toggle('is-active', buttonMode === normalized);
-        button.setAttribute('aria-pressed', buttonMode === normalized ? 'true' : 'false');
-    }
-
 }
 
 function setLoopButtonState(isRunning = false) {
@@ -459,36 +466,6 @@ async function refreshLoopButtonState() {
     }
 }
 
-async function refreshDebugControlUi() {
-    try {
-        const state = await loadStandaloneDebugControlState();
-        if (!state) {
-            setDebugControlMode('step');
-            return;
-        }
-        setDebugControlMode(state.mode || 'loop');
-    } catch (_error) {
-        setDebugControlMode('step');
-    }
-}
-
-async function sendDebugControlAction(mode) {
-    const normalized = normalizeDebugControlMode(mode);
-    const response = await chrome.runtime.sendMessage({
-        type: 'card-run-control',
-        payload: {
-            mode: normalized
-        }
-    });
-
-    if (!response || response.success !== true) {
-        throw new Error(response?.error || '更新调试控制失败');
-    }
-
-    setDebugControlMode(response.controlMode || normalized);
-    return response;
-}
-
 async function sendStopAction() {
     const response = await chrome.runtime.sendMessage({
         type: 'card-run-stop',
@@ -500,53 +477,6 @@ async function sendStopAction() {
     }
 
     return response;
-}
-
-async function syncSidebarCardToRunningDebugSession() {
-    if (!isSidebarLayout()) {
-        return { synced: false };
-    }
-
-    const cardData = getSidebarCardDataFromEditor();
-    if (!cardData) {
-        return { synced: false };
-    }
-
-    const normalizedCard = normalizeCardData(cardData, cardData?.name || 'automation', { allowEmptySteps: true });
-    const [progressState, controlState] = await Promise.all([
-        loadStandaloneProgressState().catch(() => null),
-        loadStandaloneDebugControlState().catch(() => null)
-    ]);
-
-    const runningTabId = Number(progressState?.tabId || controlState?.tabId || 0);
-    const isRunningDebug = Boolean(
-        runningTabId > 0
-        && progressState?.running === true
-        && String(progressState?.mode || '').trim() === 'debug'
-    );
-
-    if (!isRunningDebug) {
-        await saveCardCache(normalizedCard);
-        return { synced: false, cardName: normalizedCard.name };
-    }
-
-    const response = await chrome.runtime.sendMessage({
-        type: 'card-sync',
-        payload: {
-            tabId: runningTabId,
-            cardData: normalizedCard
-        }
-    });
-
-    if (!response || response.success !== true) {
-        throw new Error(response?.error || '同步调试卡片失败');
-    }
-
-    return {
-        synced: true,
-        cardName: response.cardName || normalizedCard.name,
-        stepCount: Number(response.stepCount || 0) || 0
-    };
 }
 
 function setCardEditorValue(cardData) {
@@ -568,46 +498,41 @@ function isEmailStepName(value = '') {
     return /邮箱|email|mail|电子邮箱|邮箱地址|e-mail/i.test(String(value || '').trim());
 }
 
-function createDebugStepTemplate() {
-    const stepType = String(stepTypeSelect?.value || 'click').trim();
-    const stepLabel = formatStepTypeLabel(stepType);
-    const stepName = String(stepNameInput?.value || '').trim() || (stepType === 'save_cookies' || stepType === 'clear_current_page_cache' ? stepLabel : `调试 ${stepLabel}`);
-    const timeout = Number(stepTimeoutInput?.value || 15000);
-    const step = {
-        name: stepName,
-        type: stepType
-    };
-
-    if (Number.isFinite(timeout) && timeout > 0) {
-        step.timeout = timeout;
+// 变量键推导（须与后台 03_formatting.js 的 resolveStepVariableKey 保持一致）：
+// 取步骤显式 variable 字段，否则按其在全部 type 步骤中的顺序回退为 var1/var2/...（1-based）。
+function resolveStepVariableKey(step = {}, typeOrdinal = 1) {
+    const explicit = String((step && step.variable) || '').trim();
+    if (explicit) {
+        return explicit;
     }
-
-    if (stepType === 'navigate') {
-        step.url = String(stepUrlInput?.value || '').trim() || 'https://example.com';
-    } else if (stepType === 'type') {
-        step.selector = String(stepSelectorInput?.value || '').trim();
-        const typedText = String(stepTextInput?.value || '').trim();
-        step.text = typedText || (isVerificationStepName(stepName) ? '{code}' : isEmailStepName(stepName) ? '{email}' : '{account}');
-        step.by = 'css_selector';
-    } else if (stepType === 'save_cookies') {
-        step.name = stepName || '获取Cookie';
-    } else if (stepType === 'clear_current_page_cache') {
-        step.name = stepName || '清理当前页缓存';
-    } else if (stepType === 'click' || stepType === 'wait' || stepType === 'get_credits' || stepType === 'external_script') {
-        step.selector = String(stepSelectorInput?.value || '').trim();
-        step.by = 'css_selector';
-    }
-
-    return step;
+    const ordinal = Number.isFinite(Number(typeOrdinal)) && Number(typeOrdinal) > 0 ? Math.floor(Number(typeOrdinal)) : 1;
+    return `var${ordinal}`;
 }
 
-function insertDebugStepIntoEditor() {
-    const cardData = parseEditorCardData(getCardEditorValue(), { allowEmptySteps: true });
-    const steps = Array.isArray(cardData.steps) ? [...cardData.steps] : [];
-    steps.push(createDebugStepTemplate());
-    cardData.steps = steps;
-    setCardEditorValue(cardData);
-    return cardData;
+// 收集卡片里全部 type 步骤对应的变量输入槽（用于运行前的「变量输入」面板）。
+// 返回 [{ key, label, stepIndex, defaultText }]，按步骤顺序排列。
+function getCardTypeStepVariables(cardData = {}) {
+    const steps = Array.isArray(cardData?.steps) ? cardData.steps : [];
+    const variables = [];
+    let typeOrdinal = 0;
+    steps.forEach((step, index) => {
+        if (!step || typeof step !== 'object') {
+            return;
+        }
+        if (String(step.type || '').trim().toLowerCase() !== 'type') {
+            return;
+        }
+        typeOrdinal += 1;
+        const key = resolveStepVariableKey(step, typeOrdinal);
+        const stepName = String(step.name || `步骤${index + 1}`).trim() || `步骤${index + 1}`;
+        variables.push({
+            key,
+            label: stepName,
+            stepIndex: index + 1,
+            defaultText: String(step.text || '')
+        });
+    });
+    return variables;
 }
 
 function isSidebarLayout() {
@@ -838,7 +763,10 @@ function updateSidebarEditorMeta(cardData = null) {
 
 function buildSidebarStepTemplate(stepType = 'navigate') {
     const normalizedType = String(stepType || 'navigate').trim();
-    const template = createDebugStepTemplate();
+    const template = {
+        name: `步骤`,
+        type: normalizedType
+    };
     template.type = normalizedType;
 
     if (normalizedType === 'navigate') {
@@ -909,6 +837,7 @@ function buildSidebarStepCardHtml(step = {}, index = 0, expanded = false) {
     const name = String(step?.name || `步骤${index + 1}`).trim() || `步骤${index + 1}`;
     const selector = String(step?.selector || '').trim();
     const text = String(step?.text || '').trim();
+    const variable = String(step?.variable || '').trim();
     const url = String(step?.url || '').trim();
     const timeout = String(step?.timeout ?? '').trim();
     const by = String(step?.by || 'css_selector').trim() || 'css_selector';
@@ -968,8 +897,12 @@ function buildSidebarStepCardHtml(step = {}, index = 0, expanded = false) {
             <input data-sidebar-step-field="selector" type="text" value="${escapeHtml(selector)}" placeholder="可直接粘贴 HTML 元素片段">
           </div>
           <div class="full">
-            <label>输入文本</label>
-            <input data-sidebar-step-field="text" type="text" value="${escapeHtml(text)}">
+            <label>输入文本（变量默认值）</label>
+            <input data-sidebar-step-field="text" type="text" value="${escapeHtml(text)}" placeholder="type 步骤要输入的默认文本；运行前可按变量名覆盖">
+          </div>
+          <div class="full">
+            <label>变量名（仅输入步骤，留空自动按顺序 var1/var2…）</label>
+            <input data-sidebar-step-field="variable" type="text" value="${escapeHtml(variable)}" placeholder="如 email / password / username">
           </div>
           <div class="full">
             <label>跳转 URL</label>
@@ -1040,6 +973,7 @@ function readSidebarStepCard(stepCard, index = 0) {
 
     const selector = String(selectorNormalization.selector || readField('selector') || '').trim();
     const text = String(readField('text') || '').trim();
+    const variable = String(readField('variable') || '').trim();
     const url = String(readField('url') || '').trim();
     const by = String(readField('by') || '').trim();
     const timeoutValue = Number(readField('timeout'));
@@ -1052,6 +986,9 @@ function readSidebarStepCard(stepCard, index = 0) {
     }
     if (text) {
         step.text = text;
+    }
+    if (variable && String(step.type || '').trim().toLowerCase() === 'type') {
+        step.variable = variable;
     }
     if (url) {
         step.url = url;
@@ -1117,23 +1054,15 @@ function collectSidebarCardDataFromForm() {
 
     const steps = collectSidebarSteps();
     const popups = normalizeSidebarPopupsInput(String(sidebarCardPopupsInput?.value || ''));
-    const randomLength = Number(sidebarCardRandomLengthInput?.value || 12);
     const points = Number(sidebarCardPointsInput?.value || 0);
+    // 不再收集账号/密码/随机密码：输入内容改由各 type 步骤的变量（text 默认值 + 运行前 inputs 覆盖）承载。
+    const { account: _dropAccount, password: _dropPassword, random: _dropRandom, ...baseRest } = base;
     const cardData = {
-        ...base,
+        ...baseRest,
         name: String(sidebarCardNameInput?.value || base.name || '').trim() || '未命名自动化卡片',
         website: String(sidebarCardWebsiteInput?.value || base.website || '').trim(),
         description: String(sidebarCardDescriptionInput?.value || base.description || '').trim(),
-        account: String(sidebarCardAccountInput?.value || base.account || '').trim(),
-        password: String(sidebarCardPasswordInput?.value || base.password || '').trim(),
         points: Number.isFinite(points) ? points : 0,
-        random: {
-            ...(base.random && typeof base.random === 'object' ? base.random : {}),
-            password: {
-                length: Number.isFinite(randomLength) ? Math.max(4, randomLength) : 12,
-                type: String(sidebarCardRandomTypeInput?.value || base.random?.password?.type || 'mixed').trim() || 'mixed'
-            }
-        },
         popups,
         steps
     };
@@ -1163,11 +1092,7 @@ function renderSidebarCardEditor(cardData) {
     if (sidebarCardNameInput) sidebarCardNameInput.value = String(normalized.name || '');
     if (sidebarCardWebsiteInput) sidebarCardWebsiteInput.value = String(normalized.website || '');
     if (sidebarCardDescriptionInput) sidebarCardDescriptionInput.value = String(normalized.description || '');
-    if (sidebarCardAccountInput) sidebarCardAccountInput.value = String(normalized.account || '');
-    if (sidebarCardPasswordInput) sidebarCardPasswordInput.value = String(normalized.password || '');
     if (sidebarCardPointsInput) sidebarCardPointsInput.value = String(normalized.points ?? 0);
-    if (sidebarCardRandomLengthInput) sidebarCardRandomLengthInput.value = String(normalized.random?.password?.length || 12);
-    if (sidebarCardRandomTypeInput) sidebarCardRandomTypeInput.value = String(normalized.random?.password?.type || 'mixed');
     if (sidebarCardPopupsInput) sidebarCardPopupsInput.value = formatSidebarPopupsInput(normalized.popups || []);
     if (sidebarCardUploadServerUrlInput) sidebarCardUploadServerUrlInput.value = String(normalized.upload_server_url || normalized.upload?.server_url || '');
     if (sidebarCardUploadCardKeyInput) sidebarCardUploadCardKeyInput.value = String(normalized.upload_card_key || normalized.upload?.card_key || '');
@@ -1376,8 +1301,6 @@ async function saveEditorCardToCache() {
 
 
 globalThis.CookieCaptureAutomationWorkbench = {
-    clearDebugProgressAutoHideTimer,
-    scheduleDebugProgressAutoHide,
     sanitizeFilePart,
     buildPresetFileName,
     generateCookiePassword,
@@ -1397,20 +1320,19 @@ globalThis.CookieCaptureAutomationWorkbench = {
     normalizeCardCacheEntry,
     buildCardListLabel,
     renderCardCacheList,
+    resolveStepVariableKey,
+    getCardTypeStepVariables,
+    renderCardRunInputs,
+    collectCardRunInputs,
     normalizeProgressValue,
     setDebugProgress,
     resetDebugProgress,
+    scheduleDebugProgressAutoHide,
+    clearDebugProgressAutoHideTimer,
     loadStandaloneProgressState,
-    loadStandaloneDebugControlState,
-    formatStepTypeLabel,
-    normalizeDebugControlMode,
-    setDebugControlMode,
     setLoopButtonState,
     refreshLoopButtonState,
-    refreshDebugControlUi,
-    sendDebugControlAction,
     sendStopAction,
-    syncSidebarCardToRunningDebugSession,
     normalizeCardData,
     stringifyCardData,
     parseEditorCardData,
@@ -1418,8 +1340,6 @@ globalThis.CookieCaptureAutomationWorkbench = {
     getCardEditorValue,
     isVerificationStepName,
     isEmailStepName,
-    createDebugStepTemplate,
-    insertDebugStepIntoEditor,
     isSidebarLayout,
     escapeHtml,
     normalizeSidebarPopupsInput,

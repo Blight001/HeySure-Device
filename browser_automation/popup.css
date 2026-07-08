@@ -81,149 +81,12 @@
       border-radius: 14px;
     }
 
+    html[data-layout='popup'] .hero-top {
+      gap: 6px;
+    }
+
     html[data-layout='sidebar'] .hero {
       display: none;
-    }
-
-    .debug-progress-panel {
-      display: none;
-      margin-top: 12px;
-      padding: 14px 16px;
-      border: 1px solid rgba(255, 255, 255, 0.72);
-      border-radius: 18px;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.90));
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(10px);
-    }
-
-    .debug-progress-panel.is-visible {
-      display: grid;
-      gap: 10px;
-    }
-
-    html[data-layout='popup'] .debug-progress-panel {
-      margin-top: 8px;
-      padding: 10px 12px;
-      border-radius: 14px;
-    }
-
-    html[data-layout='popup'] .debug-progress-panel.is-visible {
-      gap: 8px;
-    }
-
-    .debug-progress-head {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 12px;
-    }
-
-    .debug-progress-title {
-      font-size: 14px;
-      font-weight: 800;
-      margin: 0 0 4px;
-    }
-
-    .debug-progress-text {
-      color: var(--muted);
-      font-size: 12px;
-      word-break: break-all;
-    }
-
-    .debug-progress-percent {
-      flex: 0 0 auto;
-      min-width: 48px;
-      text-align: right;
-      font-size: 18px;
-      font-weight: 800;
-      color: var(--primary);
-    }
-
-    .debug-progress-track {
-      width: 100%;
-      height: 10px;
-      border-radius: 999px;
-      overflow: hidden;
-      background: rgba(226, 232, 240, 0.95);
-      box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.08);
-    }
-
-    .debug-progress-fill {
-      width: 0%;
-      height: 100%;
-      border-radius: 999px;
-      background: linear-gradient(90deg, #1d4ed8, #2563eb 45%, #38bdf8 100%);
-      transition: width 180ms ease;
-    }
-
-    .debug-progress-panel.is-error .debug-progress-fill {
-      background: linear-gradient(90deg, #b91c1c, #ef4444 70%, #f97316 100%);
-    }
-
-    .debug-progress-meta {
-      min-height: 16px;
-      color: var(--muted);
-      font-size: 11px;
-    }
-
-    .debug-progress-error {
-      min-height: 16px;
-      color: var(--error);
-      font-size: 11px;
-      line-height: 1.45;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-
-    .debug-control-bar {
-      display: none;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .run-control-bar {
-      display: none;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    .debug-progress-panel[data-mode='debug'].is-visible .debug-control-bar,
-    .debug-progress-panel[data-mode='run'].is-visible .run-control-bar {
-      display: flex;
-    }
-
-    .debug-progress-panel[data-mode='run'].is-visible .debug-control-bar,
-    .debug-progress-panel[data-mode='debug'].is-visible .run-control-bar {
-      display: none;
-    }
-
-    .debug-control-label {
-      color: var(--muted);
-      font-size: 11px;
-      font-weight: 600;
-    }
-
-    .debug-control-actions {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-
-    .debug-control-btn {
-      min-height: 28px;
-      padding: 0 10px;
-      border-radius: 10px;
-      font-size: 11px;
-    }
-
-    .debug-control-btn.is-active {
-      background: var(--primary-soft);
-      color: var(--primary);
-      border-color: rgba(37, 99, 235, 0.22);
     }
 
     .toast-stack {
@@ -289,10 +152,10 @@
 
     .hero-top {
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto auto;
+      grid-template-columns: auto minmax(0, 1fr) auto auto auto;
       align-items: center;
-      gap: 12px;
-      margin-bottom: 10px;
+      gap: 8px;
+      margin-bottom: 4px;
     }
 
     .app-logo {
@@ -318,23 +181,23 @@
       justify-self: start;
     }
 
-    .badge {
-      justify-self: end;
-      padding: 6px 10px;
-      border-radius: 999px;
-      background: var(--primary-soft);
-      color: var(--primary);
-      font-size: 12px;
-      font-weight: 700;
+    html[data-layout='popup'] .title {
+      font-size: 15px;
     }
 
     .hero-tutorial {
-      justify-self: center;
+      justify-self: start;
       min-height: 30px;
       padding: 6px 12px;
       border-radius: 999px;
       font-size: 12px;
       white-space: nowrap;
+    }
+
+    html[data-layout='popup'] .hero-tutorial {
+      min-height: 26px;
+      padding: 4px 8px;
+      font-size: 11px;
     }
 
     .main-tabs {
@@ -895,11 +758,19 @@
     }
 
     .card-toolbar {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
       width: 100%;
       padding-bottom: 2px;
+      flex-wrap: nowrap;
+    }
+
+    .card-toolbar button {
+      flex: 0 0 auto;
+      font-size: 11px;
+      padding: 5px 8px;
+      white-space: nowrap;
     }
 
     .file-name {
@@ -927,6 +798,62 @@
       margin-top: 10px;
     }
 
+    .card-run-inputs {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(248, 250, 253, 0.9);
+    }
+
+    .card-run-inputs[hidden] {
+      display: none;
+    }
+
+    .card-run-inputs__title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #334155;
+      margin-bottom: 8px;
+    }
+
+    .card-run-inputs__list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .card-run-inputs__empty {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .card-run-input {
+      display: grid;
+      gap: 4px;
+    }
+
+    .card-run-input label {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .card-run-input label code {
+      font-size: 11px;
+      color: #2563eb;
+      background: rgba(37, 99, 235, 0.08);
+      padding: 0 4px;
+      border-radius: 4px;
+    }
+
+    .card-run-input input {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 12px;
+      background: #fff;
+    }
+
     .card-cache-empty {
       padding: 10px 12px;
       border-radius: 12px;
@@ -946,6 +873,12 @@
       border-radius: 14px;
       background: rgba(255, 255, 255, 0.9);
       box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+      cursor: pointer;
+    }
+
+    .card-cache-item:hover {
+      border-color: rgba(37, 99, 235, 0.35);
+      background: rgba(255, 255, 255, 0.97);
     }
 
     .card-cache-item.is-active {
@@ -1433,6 +1366,38 @@
       box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
     }
 
+    .button-import,
+    .button-export {
+      background: #fde047 !important;
+      color: #713f12 !important;
+      border-color: #eab308 !important;
+    }
+    .button-import:hover,
+    .button-export:hover {
+      background: #facc15 !important;
+      box-shadow: 0 6px 16px rgba(234, 179, 8, 0.3);
+    }
+
+    .button-delete {
+      background: #fecaca !important;
+      color: #991b1b !important;
+      border-color: #f87171 !important;
+    }
+    .button-delete:hover {
+      background: #fca5a5 !important;
+      box-shadow: 0 6px 16px rgba(248, 113, 113, 0.3);
+    }
+
+    .button-sidebar {
+      background: #ddd6fe !important;
+      color: #5b21b6 !important;
+      border-color: #a78bfa !important;
+    }
+    .button-sidebar:hover {
+      background: #c4b5fd !important;
+      box-shadow: 0 6px 16px rgba(167, 139, 250, 0.3);
+    }
+
     .status {
       min-height: 18px;
       color: var(--muted);
@@ -1453,4 +1418,125 @@
       margin-top: 12px;
       padding-top: 12px;
       border-top: 1px dashed #d8dfea;
+    }
+
+    /* ── 自动化执行进度显示面板（找回的进度弹窗） ── */
+    .debug-progress-panel {
+      display: none;
+      margin-top: 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--panel);
+      font-size: 12px;
+      color: var(--text);
+      box-shadow: var(--shadow);
+    }
+
+    .debug-progress-panel.is-visible {
+      display: block;
+    }
+
+    html[data-layout='popup'] .debug-progress-panel {
+      margin-top: 8px;
+    }
+
+    .debug-progress-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .debug-progress-title {
+      font-weight: 700;
+      font-size: 12px;
+      color: var(--text);
+    }
+
+    .debug-progress-text {
+      color: var(--muted);
+      font-size: 11px;
+      margin-top: 1px;
+      line-height: 1.2;
+    }
+
+    .debug-progress-percent {
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--text);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .debug-progress-track {
+      height: 6px;
+      background: #e5e7eb;
+      border-radius: 999px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+
+    .debug-progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #2563eb, #60a5fa);
+      transition: width 160ms ease;
+    }
+
+    .debug-progress-panel.is-error .debug-progress-fill {
+      background: var(--error);
+    }
+
+    .debug-progress-meta {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 2px;
+      min-height: 14px;
+      word-break: break-all;
+    }
+
+    .debug-progress-error {
+      color: var(--error);
+      font-size: 11px;
+      min-height: 14px;
+      word-break: break-all;
+    }
+
+    .run-control-bar {
+      display: none;
+      margin-top: 8px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .debug-progress-panel.is-visible .run-control-bar {
+      display: flex;
+    }
+
+    .debug-control-label {
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .debug-control-actions {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+
+    .debug-control-btn {
+      font-size: 10px;
+      padding: 1px 6px;
+      line-height: 1.4;
+      border-radius: 4px;
+    }
+
+    .debug-control-btn.is-active {
+      background: var(--primary, #2563eb);
+      color: #fff;
+      border-color: var(--primary, #2563eb);
     }

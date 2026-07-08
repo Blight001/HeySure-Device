@@ -137,7 +137,7 @@ async function waitForTabComplete(tabId, timeoutMs = 15000) {
 
 async function navigateTabToUrl(tabId = 0, pageUrl = '') {
     const normalizedTabId = Number(tabId || 0) || 0;
-    const normalizedPageUrl = String(pageUrl || '').trim();
+    const normalizedPageUrl = normalizeTargetUrl(String(pageUrl || '').trim());
     if (!normalizedTabId || !isHttpPageUrl(normalizedPageUrl)) {
         return null;
     }
@@ -147,7 +147,7 @@ async function navigateTabToUrl(tabId = 0, pageUrl = '') {
         throw new Error('未找到可跳转的目标标签页');
     }
 
-    const currentUrl = String(tab.url || '').trim();
+    const currentUrl = normalizeTargetUrl(String(tab.url || '').trim());
     if (currentUrl === normalizedPageUrl) {
         return tab;
     }
@@ -862,7 +862,6 @@ async function saveStandaloneProgressState(state = {}) {
         message: String(state.message || '').trim(),
         phase: String(state.phase || '').trim(),
         mode: String(state.mode || '').trim(),
-        isLooping: state.isLooping === true,
         kind: String(state.kind || '').trim(),
         errorReason: String(state.errorReason || '').trim(),
         stepIndex: Number(state.stepIndex || 0) || 0,
@@ -885,185 +884,11 @@ async function saveStandaloneProgressState(state = {}) {
     return nextState;
 }
 
-async function loadStandaloneDebugControlState() {
-    const stored = await runtimeStateStorage.get([STANDALONE_DEBUG_CONTROL_STATE_KEY]).catch(() => ({}));
-    const state = stored && typeof stored === 'object' ? stored[STANDALONE_DEBUG_CONTROL_STATE_KEY] : null;
-    if (!state || typeof state !== 'object') {
-        return null;
-    }
-
-    return {
-        tabId: Number(state.tabId || 0) || null,
-        cardName: String(state.cardName || '').trim(),
-        mode: String(state.mode || 'loop').trim() || 'loop',
-        stepBudget: Math.max(0, Number(state.stepBudget || 0) || 0),
-        running: state.running !== false,
-        isLooping: state.isLooping === true,
-        stopRequested: state.stopRequested === true,
-        updatedAt: String(state.updatedAt || '').trim()
-    };
-}
-
-async function saveStandaloneDebugControlState(state = {}) {
-    const mode = String(state.mode || 'loop').trim() || 'loop';
-    const nextState = {
-        tabId: Number(state.tabId || 0) || null,
-        cardName: String(state.cardName || '').trim(),
-        mode,
-        stepBudget: Math.max(0, Number(state.stepBudget || 0) || 0),
-        running: state.running !== false,
-        isLooping: state.isLooping === true,
-        stopRequested: state.stopRequested === true,
-        updatedAt: new Date().toISOString()
-    };
-
-    await runtimeStateStorage.set({
-        [STANDALONE_DEBUG_CONTROL_STATE_KEY]: nextState
-    }).catch(() => {});
-    return nextState;
-}
-
-async function clearStandaloneDebugControlState() {
-    await runtimeStateStorage.remove([STANDALONE_DEBUG_CONTROL_STATE_KEY]).catch(() => {});
-}
-
-function createStopError() {
-    const error = new Error('执行已停止');
-    error.name = 'StopError';
-    error.code = 'STOPPED';
-    return error;
-}
-
-function isStopError(error) {
-    return Boolean(error) && (error.code === 'STOPPED' || error.name === 'StopError');
-}
-
-async function throwIfStopped(tabId = 0) {
-    const normalizedTabId = Number(tabId || 0) || 0;
-    if (!normalizedTabId) {
-        return;
-    }
-
-    const control = await loadStandaloneDebugControlState().catch(() => null);
-    if (!control || Number(control.tabId || 0) !== normalizedTabId) {
-        return;
-    }
-
-    if (control.stopRequested === true || control.running === false) {
-        throw createStopError();
-    }
-}
-
-async function sleepWithStandaloneStopCheck(ms = 0, tabId = 0, intervalMs = 200) {
-    const durationMs = Math.max(0, Number(ms) || 0);
-    const normalizedTabId = Number(tabId || 0) || 0;
-    if (!normalizedTabId || durationMs <= 0) {
-        if (durationMs > 0) {
-            await sleep(durationMs);
-        }
-        return;
-    }
-
-    const deadline = Date.now() + durationMs;
-    while (Date.now() < deadline) {
-        await throwIfStopped(normalizedTabId);
-        await sleep(Math.min(Math.max(50, Number(intervalMs) || 200), Math.max(0, deadline - Date.now())));
-    }
-    await throwIfStopped(normalizedTabId);
-}
-
-async function waitForTabCompleteWithStandaloneStopCheck(tabId, timeoutMs = 30000) {
-    const normalizedTabId = Number(tabId || 0) || 0;
-    const tabPromise = waitForTabComplete(normalizedTabId, timeoutMs);
-    const stopPromise = (async () => {
-        while (true) {
-            await throwIfStopped(normalizedTabId);
-            await sleep(150);
-        }
-    })();
-    return Promise.race([tabPromise, stopPromise]);
-}
-
-async function executePageActionWithStandaloneStopCheck(tabId, action) {
-    const normalizedTabId = Number(tabId || 0) || 0;
-    await throwIfStopped(normalizedTabId);
-    const actionPromise = executePageAction(normalizedTabId, action);
-    const stopPromise = (async () => {
-        while (true) {
-            await throwIfStopped(normalizedTabId);
-            await sleep(150);
-        }
-    })();
-    return Promise.race([actionPromise, stopPromise]);
-}
-
-async function waitForStandaloneDebugControl(tabId, emitProgress = async () => {}, details = {}) {
-    const targetTabId = Number(tabId || 0);
-    if (!targetTabId) {
-        return { mode: 'loop', stepBudget: 0 };
-    }
-
-    const pollIntervalMs = Math.max(100, Number(details.pollIntervalMs || 250));
-    let pausedNoticeShown = false;
-
-    while (true) {
-        const control = await loadStandaloneDebugControlState().catch(() => null);
-        if (!control || Number(control.tabId || 0) !== targetTabId) {
-            return { mode: 'loop', stepBudget: 0 };
-        }
-
-        if (control.stopRequested === true) {
-            throw createStopError();
-        }
-
-        if (control.running === false) {
-            return control;
-        }
-
-        const mode = String(control.mode || 'loop').trim() || 'loop';
-        const stepBudget = Math.max(0, Number(control.stepBudget || 0) || 0);
-
-        if (mode === 'loop') {
-            return control;
-        }
-
-        if (mode === 'step' && stepBudget > 0) {
-            await saveStandaloneDebugControlState({
-                ...control,
-                stepBudget: stepBudget - 1
-            }).catch(() => {});
-            return {
-                ...control,
-                stepBudget: stepBudget - 1
-            };
-        }
-
-        if (!pausedNoticeShown) {
-            await emitProgress({
-                message: mode === 'step'
-                    ? `${formatStepProgressLabel(details.stepIndex, details.stepTotal, details.stepName)} · 等待继续`
-                    : `${formatStepProgressLabel(details.stepIndex, details.stepTotal, details.stepName)} · 调试已暂停`,
-                phase: mode === 'step' ? 'debug_step_wait' : 'debug_pause',
-                mode: details.mode || 'debug',
-                stepIndex: details.stepIndex,
-                stepTotal: details.stepTotal,
-                stepName: details.stepName,
-                previousStepName: String(details.previousStepName || '').trim(),
-                nextStepName: String(details.nextStepName || '').trim(),
-                progress: details.progress
-            }).catch(() => {});
-            pausedNoticeShown = true;
-        }
-
-        await sleepWithStandaloneStopCheck(pollIntervalMs, targetTabId);
-    }
-}
-
 async function syncStandaloneSession(payload = {}, senderTabId = null) {
     const tabId = Number(payload.tabId || senderTabId || 0) || null;
     const providedCardData = payload.cardData && typeof payload.cardData === 'object' ? payload.cardData : null;
     if (!tabId || !providedCardData) {
-        throw new Error('缺少可同步的调试卡片');
+        throw new Error('缺少可同步的自动化卡片');
     }
 
     const normalizedCard = normalizeStandaloneSteps(providedCardData);

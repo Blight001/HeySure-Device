@@ -59,7 +59,7 @@
 
 | 分类 | 工具 | 功能说明 |
 |------|------|----------|
-| 自动化卡片 | `manage_card`   | 卡片唯一入口（管理 + 执行合一）：rules 获取步骤类型与运行规则（写卡片前必看，write 会按规范校验拒绝非法步骤类型）、list 列出全部卡片、get 获取卡片完整 JSON、write 创建/覆盖卡片、delete 删除卡片、run 在当前活动标签页执行卡片（可指定账号/邮箱/验证码，耗时操作）。run 失败时返回结构化现场（errorCode + 失败步骤 stepIndex/selector + failureSnapshot 候选元素 + context 实际凭证），页面停留在失败现场，修复卡片后可用 `start_step` 从失败步骤续跑，形成「失败 → 修卡 → 续跑」闭环。旧工具名 `get_status`/`run_card`/`write_card` 仍兼容执行（分别等价 list/run/write） |
+| 自动化卡片 | `manage_card`   | 卡片唯一入口（管理 + 执行合一）：rules 获取步骤类型与运行规则（写卡片前必看，write 和局部步骤编辑都会按规范校验拒绝非法步骤类型）、list 列出全部卡片、get 获取卡片完整 JSON、write 创建/覆盖完整卡片、patch_step 修改某一步、insert_step 插入步骤、delete_step 删除步骤、move_step 移动步骤、delete 删除整张卡片、run 在当前活动标签页执行卡片（可指定账号/邮箱/验证码，耗时操作）。步骤索引使用 1-based，与失败结果 stepIndex 对齐；insert_step 不传 step_index 时默认追加。run 失败时返回结构化现场（errorCode + 失败步骤 stepIndex/selector + failureSnapshot 候选元素 + context 实际凭证），页面停留在失败现场，修复卡片后可用 `start_step` 从失败步骤续跑，形成「失败 → 修卡 → 续跑」闭环。旧工具名 `get_status`/`run_card`/`write_card` 仍兼容执行（分别等价 list/run/write） |
 | 自动化卡片 | `save_cookies`  | 抓取当前页面的 Cookie + localStorage + sessionStorage，可选上传到指定服务器 |
 | 导航与搜索 | `browser_tab`   | 标签页管理与导航：list / switch / replace / navigate / close / back / forward |
 | 页面观察   | `browser_observe`    | 感知当前视口的可交互元素、媒体、可见文本与 iframe 边界，返回带 tag/selector/name/placeholder/ariaLabel 等基本信息的 items 列表（含临时 id）；支持用 selector/text 定位构造卡片步骤或 ref 快速操作，便于卡片创建/修改与表单信息填入 |

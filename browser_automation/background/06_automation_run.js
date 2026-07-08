@@ -106,6 +106,105 @@ async function runStandaloneCard(payload = {}) {
     const MAX_STEP_RETRIES = 3;
     let tabId = 0;
     let currentCardName = '';
+
+    // ── 执行明细采集 ─────────────────────────────────────────────────────────
+    // 把每一步的开始 / 完成 / 重试 / 跳过与各自耗时累积成结构化 trace，随最终结果
+    // （成功或失败）一并返回给 MCP/AI —— 之前结果只有最终状态，过程细节仅通过 task:progress
+    // 实时推送、结束后无从查看。现在返回 result.execution：完整执行过程、每步尝试次数、每步耗时。
+    const runStartedAtMs = Date.now();
+    const runStartedAt = new Date(runStartedAtMs).toISOString();
+    const executionTrace = [];
+    const traceTiming = new Map(); // stepIndex -> { startMs, attemptStartMs }
+    const findTraceEntry = (idx) => executionTrace.find((entry) => entry.stepIndex === idx);
+    // 由 emitProgress 单点驱动：每次进度上报都带 phase/stepIndex/stepName/kind/errorReason，
+    // 据此推导每步状态与耗时，无需改动十几处步骤分支。
+    const recordExecutionTrace = (state) => {
+        try {
+            const phase = String(state.phase || '');
+            const idx = Number(state.stepIndex) || 0;
+            if (!idx) return;
+            const now = Date.now();
+            if (phase === 'step_start') {
+                let entry = findTraceEntry(idx);
+                if (!entry) {
+                    entry = {
+                        stepIndex: idx,
+                        stepName: String(state.stepName || ''),
+                        status: 'running',
+                        attempts: 0,
+                        startedAt: new Date(now).toISOString(),
+                        finishedAt: '',
+                        durationMs: 0,
+                        attemptDetails: []
+                    };
+                    executionTrace.push(entry);
+                    traceTiming.set(idx, { startMs: now, attemptStartMs: now });
+                } else {
+                    const timing = traceTiming.get(idx) || { startMs: now };
+                    timing.attemptStartMs = now;
+                    traceTiming.set(idx, timing);
+                }
+                entry.attempts += 1;
+                return;
+            }
+            const entry = findTraceEntry(idx);
+            if (!entry) return;
+            const timing = traceTiming.get(idx) || { startMs: now, attemptStartMs: now };
+            const attemptMs = Math.max(0, now - (timing.attemptStartMs || now));
+            const totalMs = Math.max(0, now - (timing.startMs || now));
+            if (phase === 'step_complete') {
+                entry.status = state.kind === 'error' ? 'completed_with_warning' : 'success';
+                entry.finishedAt = new Date(now).toISOString();
+                entry.durationMs = totalMs;
+                entry.message = String(state.message || '');
+                entry.attemptDetails.push({ attempt: entry.attempts, result: 'success', durationMs: attemptMs });
+            } else if (phase === 'step_skip') {
+                entry.status = 'skipped';
+                entry.finishedAt = new Date(now).toISOString();
+                entry.durationMs = totalMs;
+                entry.message = String(state.message || '');
+                entry.attemptDetails.push({ attempt: entry.attempts, result: 'skipped', durationMs: attemptMs });
+            } else if (phase === 'step_retry') {
+                // step_retry 同时用于「重试」(retrying:true) 与「达上限最终失败」(retrying:false)
+                entry.attemptDetails.push({
+                    attempt: entry.attempts,
+                    result: 'failed',
+                    error: String(state.errorReason || state.message || ''),
+                    durationMs: attemptMs
+                });
+                if (state.retrying === false) {
+                    entry.status = 'failed';
+                    entry.finishedAt = new Date(now).toISOString();
+                    entry.durationMs = totalMs;
+                    entry.errorReason = String(state.errorReason || '');
+                    entry.errorCode = String(state.errorCode || '');
+                }
+            }
+        } catch (_traceError) {}
+    };
+    const buildExecutionSummary = () => {
+        const finishedMs = Date.now();
+        const stepsTotal = Array.isArray(executionState?.cardData?.steps)
+            ? executionState.cardData.steps.length
+            : (Array.isArray(cardData.steps) ? cardData.steps.length : 0);
+        const succeeded = executionTrace.filter((entry) => entry.status === 'success' || entry.status === 'completed_with_warning').length;
+        const failed = executionTrace.filter((entry) => entry.status === 'failed').length;
+        const skipped = executionTrace.filter((entry) => entry.status === 'skipped').length;
+        const retries = executionTrace.reduce((sum, entry) => sum + Math.max(0, (entry.attempts || 1) - 1), 0);
+        return {
+            startedAt: runStartedAt,
+            finishedAt: new Date(finishedMs).toISOString(),
+            durationMs: finishedMs - runStartedAtMs,
+            stepsTotal,
+            stepsExecuted: executionTrace.length,
+            succeeded,
+            failed,
+            skipped,
+            retries,
+            steps: executionTrace
+        };
+    };
+
     const emitProgress = async (message, kind = '') => {
         try {
             const payloadState = typeof message === 'object' && message !== null ? { ...message } : { message: String(message || '') };
@@ -119,6 +218,7 @@ async function runStandaloneCard(payload = {}) {
             payloadState.tabId = tabId;
             payloadState.cardName = currentCardName;
             payloadState.running = payloadState.running === false ? false : true;
+            recordExecutionTrace(payloadState);
             await saveStandaloneProgressState(payloadState);
             await chrome.runtime.sendMessage({
                 type: 'card-run-progress',
@@ -912,6 +1012,7 @@ async function runStandaloneCard(payload = {}) {
             progress: 100,
             phase: 'finished'
         });
+        result.execution = buildExecutionSummary();
         return result;
     }
 
@@ -944,6 +1045,7 @@ async function runStandaloneCard(payload = {}) {
         progress: 100,
         phase: 'finished'
     });
+    result.execution = buildExecutionSummary();
     return result;
     } catch (error) {
         if (isTabStopped(tabId) || isStopError(error)) {
@@ -968,7 +1070,7 @@ async function runStandaloneCard(payload = {}) {
                 }).catch(() => {});
                 // finished message will be sent by the stop handler
             } catch (_e) {}
-            return { success: false, stopped: true, cardName: currentCardName };
+            return { success: false, stopped: true, cardName: currentCardName, execution: buildExecutionSummary() };
         }
 
         // 卡片执行失败时主动释放状态
@@ -1017,6 +1119,12 @@ async function runStandaloneCard(payload = {}) {
                 };
             }
         } catch (_ctxError) {}
+
+        // 完整执行明细（每步过程/尝试次数/耗时）挂到 error 上，供 09_agent_socket.js
+        // 失败结果一并回传，让 AI 即使失败也能看到到失败前每一步都发生了什么。
+        try {
+            error.execution = buildExecutionSummary();
+        } catch (_execError) {}
 
         throw error;
     } finally {

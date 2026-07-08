@@ -151,7 +151,7 @@ function effectiveAgentToolDefs() {
     return [
         {
             name: 'manage_card',
-            description: '自动化卡片唯一入口（管理 + 执行合一）。action=rules 返回卡片步骤类型（10 种 type 及其字段、默认超时）与运行规则（失败重试、变量输入、Cookie 自动保存等）——写卡片前必须先调用，字段与步骤类型只能取自规范，不要凭空编造；action=list 列出所有已保存卡片的基本信息（id、名称、步骤数、保存时间、是否选中）；action=get 读取指定卡片完整 JSON；action=write 创建新卡片或用同一个 id 覆盖已有卡片（需 cardData，至少含 name/website/steps，写入前会按规范校验并拒绝非法步骤类型）；action=delete 删除卡片；action=run 在当前活动标签页执行卡片，可用 inputs 按变量键覆盖各 type 步骤的输入文本（默认用步骤 text），执行中通过 task:progress 及时反馈完整过程（每步开始/完成/重试/错误），最终返回结果（可能耗时数分钟，例如等待邮箱验证码；同一时间只能有一个 run；失败操作最多重试 3 次）。run 失败时返回结构化现场：errorCode、失败步骤 stepIndex/stepName/selector、failureSnapshot（当前页 URL/标题 + 近似候选元素）与 context（已用到的变量值）；页面停留在失败现场——修复卡片（write）后用 action=run + start_step=stepIndex 并通过 inputs 回传已用到的变量值即可从失败步骤继续，不必从头执行。',
+            description: '自动化卡片唯一入口（管理 + 执行合一）。action=rules 返回卡片步骤类型（10 种 type 及其字段、默认超时）与运行规则（失败重试、变量输入、Cookie 自动保存等）——写卡片前必须先调用，字段与步骤类型只能取自规范，不要凭空编造；action=list 列出所有已保存卡片的基本信息（id、名称、步骤数、保存时间、是否选中）；action=get 读取指定卡片完整 JSON；action=write 创建新卡片或用同一个 id 覆盖已有卡片（需 cardData，至少含 name/website/steps，写入前会按规范校验并拒绝非法步骤类型）；action=delete 删除卡片；action=run 在当前活动标签页执行卡片，可用 inputs 按变量键覆盖各 type 步骤的输入文本（默认用步骤 text），执行中通过 task:progress 及时反馈完整过程（每步开始/完成/重试/错误），最终返回结果（可能耗时数分钟，例如等待邮箱验证码；同一时间只能有一个 run；失败操作最多重试 3 次）。无论成功或失败，结果都含 execution 字段——完整执行明细：startedAt/finishedAt/durationMs 总耗时、stepsTotal/stepsExecuted/succeeded/failed/skipped/retries 统计，以及 steps[]（每步 stepIndex/stepName/status/attempts/durationMs 与 attemptDetails 逐次尝试的耗时和错误），可据此复盘每一步实际发生了什么、卡在哪一步、耗时多久。run 失败时另返回结构化现场：errorCode、失败步骤 stepIndex/stepName/selector、failureSnapshot（当前页 URL/标题 + 近似候选元素）与 context（已用到的变量值）；页面停留在失败现场——修复卡片（write）后用 action=run + start_step=stepIndex 并通过 inputs 回传已用到的变量值即可从失败步骤继续，不必从头执行。',
             input_schema: {
                 type: 'object',
                 properties: {
@@ -163,7 +163,8 @@ function effectiveAgentToolDefs() {
                     account: { type: 'string', description: '可选：兼容别名，等价于 inputs.account（用于名为 account 的变量与 Cookie 命名）。' },
                     password: { type: 'string', description: '可选：兼容别名，等价于 inputs.password（用于名为 password 的变量与 Cookie 命名）。' },
                     email: { type: 'string', description: '可选：兼容别名，等价于 inputs.email（用于名为 email 的变量）。' },
-                    start_step: { type: 'number', description: '可选：action=run 时从第 N 步开始执行（1-based，序号与失败结果 stepIndex 一致；卡片 website 自动插入的 navigate 前置步骤算第 1 步）。用于失败修复后续跑：页面停留在失败现场，跳过已成功的步骤直接继续；同时通过 inputs 回传已用到的变量值。' }
+                    start_step: { type: 'number', description: '可选：action=run 时从第 N 步开始执行（1-based，序号与失败结果 stepIndex 一致；卡片 website 自动插入的 navigate 前置步骤算第 1 步）。用于失败修复后续跑：页面停留在失败现场，跳过已成功的步骤直接继续；同时通过 inputs 回传已用到的变量值。' },
+                    timeout_seconds: { type: 'number', description: '可选：action=run 的结果等待上限（秒），默认 900。含多次等待邮箱验证码等超长卡片可上调（上限 1800）；调用方据此等待，避免长任务被过早判定超时而拿不到完整 execution 明细。' }
                 },
                 required: ['action']
             }
@@ -686,6 +687,8 @@ async function runAgentToolCommand(tool, args, taskId = null) {
                         cookiesSaved: false,
                         stopped: false,
                         ...extra,
+                        // 完整执行明细（每步过程 / 尝试次数 / 每步耗时），失败也一并带回
+                        ...(runErr && runErr.execution ? { execution: runErr.execution } : {}),
                         ...(failure ? {
                             errorCode: failure.errorCode || '',
                             stepIndex: failure.stepIndex,
@@ -774,12 +777,21 @@ function summarizeAgentResult(tool, result) {
                 return `${result.overwritten ? '已覆盖' : '已创建'}自动化卡片: ${result.id}（现共 ${result.cardCount} 张）`;
             }
             if (result.cardName) {
+                const exec = result.execution && typeof result.execution === 'object' ? result.execution : null;
+                let execTag = '';
+                if (exec) {
+                    const secs = (Number(exec.durationMs || 0) / 1000).toFixed(1);
+                    execTag = `（${Number(exec.stepsExecuted || 0)}/${Number(exec.stepsTotal || 0)} 步，耗时 ${secs}s`
+                        + (Number(exec.retries || 0) > 0 ? `，重试 ${exec.retries} 次` : '')
+                        + (Number(exec.skipped || 0) > 0 ? `，跳过 ${exec.skipped} 步` : '')
+                        + '）';
+                }
                 if (result.success === false) {
                     const reason = String(result.error || result.errorReason || result.message || '未知原因').trim();
                     const codeTag = String(result.errorCode || '').trim();
-                    return `执行失败: ${result.cardName} - ${codeTag ? `[${codeTag}] ` : ''}${reason}`;
+                    return `执行失败: ${result.cardName} - ${codeTag ? `[${codeTag}] ` : ''}${reason}${execTag}`;
                 }
-                return `执行完成: ${result.cardName}`;
+                return `执行完成: ${result.cardName}${execTag}`;
             }
         }
         if (tool === 'browser_tab') {

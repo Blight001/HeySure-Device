@@ -64,17 +64,6 @@ function buildFileName(account = '', password = '') {
     return `cookie_${timestamp}.json`;
 }
 
-function buildCaptureFileName(cardName = '', account = '', password = '') {
-    const baseName = sanitizeFilePart(cardName) || 'automation';
-    const normalizedAccount = sanitizeFilePart(account);
-    const normalizedPassword = sanitizeFilePart(password);
-    if (normalizedAccount && normalizedPassword) {
-        return `${baseName}_${normalizedAccount}_${normalizedPassword}.json`;
-    }
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    return `${baseName}_${timestamp}.json`;
-}
-
 function buildCaptureFileName(account = '', password = '') {
     return buildFileName(account, password);
 }

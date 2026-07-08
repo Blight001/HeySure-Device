@@ -319,8 +319,7 @@ async function runStandaloneCard(payload = {}) {
             codeTime: '',
             code_time: '',
             points: Number(cardData.points || 0) || 0,
-            cookiesSaved: false,
-            cookiesSavedByCaptureStep: false
+            cookiesSaved: false
         };
 
     let index = 0;
@@ -623,7 +622,6 @@ async function runStandaloneCard(payload = {}) {
         if (stepType === 'save_cookies') {
             const captureAccount = String(context.email || context.account || result.account || payload.account || '').trim();
             const capturePassword = String(context.code || result.password || payload.password || '').trim();
-            result.cookiesSavedByCaptureStep = true;
             if (!captureAccount || !capturePassword) {
                 result.cookieSaveError = '获取Cookie 步骤缺少账号或验证码，已跳过保存';
                 await emitProgress({
@@ -1000,45 +998,6 @@ async function runStandaloneCard(payload = {}) {
     }
 
     result.success = true;
-
-    if (result.cookiesSavedByCaptureStep === true) {
-        await emitProgress({
-            message: 'Cookie 已在步骤中保存，跳过最终自动保存',
-            progress: 97,
-            phase: 'save_cookies'
-        });
-        await emitProgress({
-            message: `本地执行完成: ${currentCardName || '未命名卡片'}`,
-            progress: 100,
-            phase: 'finished'
-        });
-        result.execution = buildExecutionSummary();
-        return result;
-    }
-
-    await emitProgress({
-        message: '自动化步骤执行完成，正在保存 Cookie（隐式自动保存，可在卡片中用 save_cookies 步骤显式控制）',
-        progress: 97,
-        phase: 'save_cookies'
-    });
-
-    try {
-        const saveResult = await saveCardResult(cardData, result, tabId);
-        result.cookiesSaved = true;
-        result.savedFileName = saveResult.fileName;
-        result.cookieCount = saveResult.cookieCount;
-        result.browserStorageCount = saveResult.browserStorageCount;
-        result.pageUrl = saveResult.pageUrl;
-        result.pageTitle = saveResult.pageTitle;
-        await emitProgress({
-            message: `Cookie 已自动保存（${saveResult.cookieCount || 0} cookies + ${saveResult.browserStorageCount || 0} storage）`,
-            progress: 99,
-            phase: 'save_cookies'
-        });
-    } catch (error) {
-        result.cookiesSaved = false;
-        result.cookieSaveError = error.message;
-    }
 
     await emitProgress({
         message: `本地执行完成: ${currentCardName || '未命名卡片'}`,

@@ -670,46 +670,6 @@ async function executePageAction(tabId, action) {
     return result && result.result ? result.result : result;
 }
 
-async function saveCardResult(cardData, payload, tabId) {
-    const snapshot = await collectTabCookieSnapshot(tabId);
-    const pageUrl = snapshot.pageUrl;
-    const pageTitle = snapshot.pageTitle;
-    const cookies = snapshot.cookies;
-    const browserStorage = snapshot.browserStorage;
-
-    const account = String(payload.account || '').trim();
-    const password = String(payload.password || '').trim();
-    const fileName = buildCaptureFileName(cardData?.name || 'automation', account, password);
-    const savePayload = {
-        account,
-        password,
-        card_name: String(cardData?.name || '').trim(),
-        pageUrl,
-        pageTitle,
-        cookies,
-        browserStorage,
-        capturedAt: new Date().toISOString(),
-        source: 'standalone-automation'
-    };
-
-    const jsonText = JSON.stringify(savePayload, null, 2);
-    const downloadUrl = `data:application/json;charset=utf-8,${encodeURIComponent(jsonText)}`;
-    await chrome.downloads.download({
-        url: downloadUrl,
-        filename: `automation_capture/${fileName}`,
-        saveAs: false,
-        conflictAction: 'overwrite'
-    });
-
-    return {
-        fileName,
-        cookieCount: cookies.length,
-        browserStorageCount: browserStorage.length,
-        pageUrl,
-        pageTitle
-    };
-}
-
 async function collectTabCookieSnapshot(tabId) {
     const currentTab = await chrome.tabs.get(tabId).catch(() => null);
     const pageSnapshot = await readPageSnapshot(tabId).catch(() => null);

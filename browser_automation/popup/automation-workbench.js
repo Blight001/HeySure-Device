@@ -56,6 +56,12 @@ const sidebarRefreshCardButton = document.getElementById('sidebar-refresh-card')
 const sidebarCloseButton = document.getElementById('sidebar-close');
 const sidebarStepListNode = document.getElementById('sidebar-step-list');
 const sidebarEditorMetaNode = document.getElementById('sidebar-editor-meta');
+const sidebarFlowCanvasNode = document.getElementById('sidebar-flow-canvas');
+const sidebarFlowSvgNode = document.getElementById('sidebar-flow-svg');
+const sidebarFlowNodesNode = document.getElementById('sidebar-flow-nodes');
+const sidebarFlowEmptyNode = document.getElementById('sidebar-flow-empty');
+const sidebarFlowConnectButton = document.getElementById('sidebar-flow-connect');
+const sidebarFlowLayoutButton = document.getElementById('sidebar-flow-layout');
 
 const debugProgressPanel = document.getElementById('debug-progress-panel');
 const debugProgressTextNode = document.getElementById('debug-progress-text');
@@ -70,6 +76,12 @@ let activeDebugErrorReason = '';
 let debugProgressAutoHideTimer = null;
 
 const runtimeStateStorage = chrome.storage.session || chrome.storage.local;
+
+let sidebarFlowState = { version: 1, start: '', nodes: [], edges: [] };
+let sidebarSelectedFlowNodeId = '';
+let sidebarFlowConnectMode = false;
+let sidebarFlowConnectSourceId = '';
+let sidebarFlowDragState = null;
 
 const {
     sanitizeFilePart,
@@ -566,6 +578,7 @@ const STEP_TYPE_LABELS = {
     click: '点击元素',
     type: '输入内容',
     wait: '等待条件',
+    condition: '判断分支',
     wait_verification_code: '等待验证码',
     get_credits: '获取积分',
     save_cookies: '获取Cookie',
@@ -703,6 +716,507 @@ function getCardTypeStepVariables(cardData = {}) {
 
 function isSidebarLayout() {
     return String(document.documentElement?.dataset.layout || '').trim() === 'sidebar';
+}
+
+function sanitizeSidebarStepIdPart(value = '') {
+    const text = String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_\-\u4e00-\u9fa5]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+    return text || 'step';
+}
+
+function buildSidebarStepId(step = {}, index = 0, usedIds = new Set()) {
+    const explicit = String(step?.id || step?.step_id || step?.nodeId || '').trim();
+    let base = explicit || `${sanitizeSidebarStepIdPart(step?.name || step?.type || 'step')}_${index + 1}`;
+    base = base.replace(/\s+/g, '_');
+    let candidate = base;
+    let suffix = 2;
+    while (usedIds.has(candidate)) {
+        candidate = `${base}_${suffix}`;
+        suffix += 1;
+    }
+    usedIds.add(candidate);
+    return candidate;
+}
+
+function ensureSidebarStepIds(steps = []) {
+    const usedIds = new Set();
+    return (Array.isArray(steps) ? steps : []).map((step, index) => {
+        const source = step && typeof step === 'object' ? step : {};
+        return {
+            ...source,
+            id: buildSidebarStepId(source, index, usedIds)
+        };
+    });
+}
+
+function getSidebarStepId(step = {}, index = 0) {
+    return String(step?.id || step?.step_id || step?.nodeId || `step_${index + 1}`).trim();
+}
+
+function buildSidebarFlowEdgeId(from = '', to = '', label = '', index = 0) {
+    const fromPart = sanitizeSidebarStepIdPart(from);
+    const toPart = sanitizeSidebarStepIdPart(to);
+    const labelPart = sanitizeSidebarStepIdPart(label || 'next');
+    return `edge_${fromPart}_${toPart}_${labelPart}_${index + 1}`;
+}
+
+function getSidebarFlowLayoutForIndex(index = 0) {
+    const col = index % 2;
+    const row = Math.floor(index / 2);
+    return {
+        x: 34 + col * 220,
+        y: 34 + row * 126
+    };
+}
+
+function normalizeSidebarFlowForSteps(flow = null, steps = []) {
+    const safeSteps = ensureSidebarStepIds(steps);
+    const stepIds = safeSteps.map((step, index) => getSidebarStepId(step, index)).filter(Boolean);
+    const stepIdSet = new Set(stepIds);
+    const hasExplicitFlow = !!(flow && typeof flow === 'object' && !Array.isArray(flow));
+    const source = hasExplicitFlow ? flow : {};
+    const sourceNodes = Array.isArray(source.nodes) ? source.nodes : [];
+    const sourceEdges = Array.isArray(source.edges) ? source.edges : [];
+    const nodeById = new Map();
+
+    sourceNodes.forEach((node) => {
+        const id = String(node?.id || node?.stepId || '').trim();
+        if (!id || !stepIdSet.has(id)) {
+            return;
+        }
+        nodeById.set(id, {
+            id,
+            x: Number.isFinite(Number(node.x)) ? Number(node.x) : undefined,
+            y: Number.isFinite(Number(node.y)) ? Number(node.y) : undefined
+        });
+    });
+
+    const nodes = safeSteps.map((step, index) => {
+        const id = getSidebarStepId(step, index);
+        const existing = nodeById.get(id) || {};
+        const fallback = getSidebarFlowLayoutForIndex(index);
+        return {
+            id,
+            x: Number.isFinite(Number(existing.x)) ? Math.max(0, Number(existing.x)) : fallback.x,
+            y: Number.isFinite(Number(existing.y)) ? Math.max(0, Number(existing.y)) : fallback.y
+        };
+    });
+
+    let edges = sourceEdges
+        .map((edge, index) => {
+            const from = String(edge?.from || edge?.source || edge?.fromId || '').trim();
+            const to = String(edge?.to || edge?.target || edge?.toId || '').trim();
+            if (!from || !to || !stepIdSet.has(from) || !stepIdSet.has(to) || from === to) {
+                return null;
+            }
+            const label = String(edge?.label || edge?.branch || edge?.condition || 'next').trim() || 'next';
+            return {
+                id: String(edge?.id || '').trim() || buildSidebarFlowEdgeId(from, to, label, index),
+                from,
+                to,
+                label
+            };
+        })
+        .filter(Boolean);
+
+    const edgeKeys = new Set();
+    edges = edges.filter((edge) => {
+        const key = `${edge.from}::${edge.to}::${edge.label}`;
+        if (edgeKeys.has(key)) {
+            return false;
+        }
+        edgeKeys.add(key);
+        return true;
+    });
+
+    if (edges.length === 0 && !hasExplicitFlow && stepIds.length > 1) {
+        edges = stepIds.slice(0, -1).map((from, index) => {
+            const to = stepIds[index + 1];
+            return {
+                id: buildSidebarFlowEdgeId(from, to, 'next', index),
+                from,
+                to,
+                label: 'next'
+            };
+        });
+    }
+
+    const start = String(source.start || source.start_node_id || source.startNodeId || '').trim();
+    return {
+        version: 1,
+        start: stepIdSet.has(start) ? start : (stepIds[0] || ''),
+        nodes,
+        edges
+    };
+}
+
+function getSidebarFlowNode(stepId = '') {
+    const id = String(stepId || '').trim();
+    return sidebarFlowState.nodes.find((node) => String(node.id || '') === id) || null;
+}
+
+function getSidebarFlowStepById(steps = [], stepId = '') {
+    const id = String(stepId || '').trim();
+    return (Array.isArray(steps) ? steps : []).find((step, index) => getSidebarStepId(step, index) === id) || null;
+}
+
+function buildSidebarFlowNodeMeta(step = {}) {
+    const selector = String(step?.selector || '').trim();
+    const url = String(step?.url || '').trim();
+    const text = String(step?.text || step?.wait_for_text || '').trim();
+    const script = String(step?.script || '').trim();
+    const mode = String(step?.condition_mode || step?.condition || '').trim();
+    const value = selector || url || text || script || mode;
+    if (!value) {
+        return '';
+    }
+    return value.length > 42 ? `${value.slice(0, 39)}...` : value;
+}
+
+function getSidebarFlowCanvasSize(nodes = []) {
+    const maxX = nodes.reduce((value, node) => Math.max(value, Number(node.x || 0)), 0);
+    const maxY = nodes.reduce((value, node) => Math.max(value, Number(node.y || 0)), 0);
+    return {
+        width: Math.max(680, maxX + 230),
+        height: Math.max(360, maxY + 130)
+    };
+}
+
+function renderSidebarFlowCanvas(cardData = null) {
+    if (!isSidebarLayout() || !sidebarFlowCanvasNode || !sidebarFlowSvgNode || !sidebarFlowNodesNode) {
+        return;
+    }
+
+    const steps = ensureSidebarStepIds(Array.isArray(cardData?.steps) ? cardData.steps : collectSidebarSteps());
+    sidebarFlowState = normalizeSidebarFlowForSteps(cardData?.flow || sidebarFlowState, steps);
+    if (!sidebarSelectedFlowNodeId || !steps.some((step, index) => getSidebarStepId(step, index) === sidebarSelectedFlowNodeId)) {
+        sidebarSelectedFlowNodeId = sidebarFlowState.start || getSidebarStepId(steps[0] || {}, 0);
+    }
+    if (sidebarFlowConnectSourceId && !steps.some((step, index) => getSidebarStepId(step, index) === sidebarFlowConnectSourceId)) {
+        sidebarFlowConnectSourceId = '';
+    }
+
+    const size = getSidebarFlowCanvasSize(sidebarFlowState.nodes);
+    sidebarFlowSvgNode.setAttribute('width', String(size.width));
+    sidebarFlowSvgNode.setAttribute('height', String(size.height));
+    sidebarFlowSvgNode.style.width = `${size.width}px`;
+    sidebarFlowSvgNode.style.height = `${size.height}px`;
+    sidebarFlowNodesNode.style.width = `${size.width}px`;
+    sidebarFlowNodesNode.style.height = `${size.height}px`;
+    sidebarFlowCanvasNode.classList.toggle('is-connect-mode', sidebarFlowConnectMode);
+    if (sidebarFlowEmptyNode) {
+        sidebarFlowEmptyNode.classList.toggle('is-hidden', steps.length > 0);
+    }
+    if (sidebarFlowConnectButton) {
+        sidebarFlowConnectButton.classList.toggle('is-active', sidebarFlowConnectMode);
+        sidebarFlowConnectButton.setAttribute('aria-pressed', sidebarFlowConnectMode ? 'true' : 'false');
+        sidebarFlowConnectButton.textContent = sidebarFlowConnectSourceId ? '选择目标' : '连线';
+    }
+
+    const nodeMap = new Map(sidebarFlowState.nodes.map((node) => [String(node.id || ''), node]));
+    const edgeMarkup = sidebarFlowState.edges.map((edge) => {
+        const from = nodeMap.get(edge.from);
+        const to = nodeMap.get(edge.to);
+        if (!from || !to) {
+            return '';
+        }
+        const sx = Number(from.x || 0) + 168;
+        const sy = Number(from.y || 0) + 36;
+        const tx = Number(to.x || 0);
+        const ty = Number(to.y || 0) + 36;
+        const c1x = sx + Math.max(48, Math.abs(tx - sx) / 2);
+        const c2x = tx - Math.max(48, Math.abs(tx - sx) / 2);
+        const path = `M ${sx} ${sy} C ${c1x} ${sy}, ${c2x} ${ty}, ${tx} ${ty}`;
+        const midX = (sx + tx) / 2;
+        const midY = (sy + ty) / 2 - 6;
+        const label = String(edge.label || 'next').trim() || 'next';
+        return `
+          <path class="sidebar-flow-edge" data-flow-edge-id="${escapeHtml(edge.id)}" d="${escapeHtml(path)}" marker-end="url(#sidebar-flow-arrow)"></path>
+          <text class="sidebar-flow-edge-label" x="${midX}" y="${midY}">${escapeHtml(label)}</text>
+        `;
+    }).join('');
+    sidebarFlowSvgNode.innerHTML = `
+      <defs>
+        <marker id="sidebar-flow-arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L0,6 L9,3 z" fill="#64748b"></path>
+        </marker>
+      </defs>
+      ${edgeMarkup}
+    `;
+
+    sidebarFlowNodesNode.innerHTML = steps.map((step, index) => {
+        const id = getSidebarStepId(step, index);
+        const node = nodeMap.get(id) || getSidebarFlowLayoutForIndex(index);
+        const type = String(step?.type || 'navigate').trim() || 'navigate';
+        const name = String(step?.name || `步骤${index + 1}`).trim() || `步骤${index + 1}`;
+        const meta = buildSidebarFlowNodeMeta(step);
+        const classes = [
+            'sidebar-flow-node',
+            `is-type-${type.replace(/[^a-z0-9_-]+/gi, '-')}`,
+            id === sidebarSelectedFlowNodeId ? 'is-selected' : '',
+            id === sidebarFlowConnectSourceId ? 'is-connect-source' : ''
+        ].filter(Boolean).join(' ');
+        return `
+          <div class="${classes}" data-flow-node-id="${escapeHtml(id)}" data-step-index="${index}" style="left:${Math.max(0, Number(node.x || 0))}px;top:${Math.max(0, Number(node.y || 0))}px;">
+            <div class="sidebar-flow-node__top">
+              <span class="sidebar-flow-node__badge">#${index + 1}</span>
+              <span class="sidebar-flow-node__type">${escapeHtml(formatStepTypeLabel(type))}</span>
+            </div>
+            <div class="sidebar-flow-node__title">${escapeHtml(name)}</div>
+            ${meta ? `<div class="sidebar-flow-node__meta">${escapeHtml(meta)}</div>` : ''}
+          </div>
+        `;
+    }).join('');
+}
+
+function selectSidebarFlowNode(stepId = '', options = {}) {
+    const id = String(stepId || '').trim();
+    if (!id) {
+        return;
+    }
+    sidebarSelectedFlowNodeId = id;
+    const currentCard = collectSidebarCardDataFromForm();
+    renderSidebarFlowCanvas(currentCard);
+    const safeId = typeof CSS !== 'undefined' && CSS && typeof CSS.escape === 'function' ? CSS.escape(id) : id.replace(/"/g, '\\"');
+    const card = sidebarStepListNode?.querySelector(`[data-sidebar-step-card][data-step-id="${safeId}"]`);
+    if (card) {
+        card.classList.add('is-expanded');
+        const button = card.querySelector('[data-sidebar-step-action="toggle"]');
+        if (button) {
+            button.textContent = '收起详情';
+            button.setAttribute('aria-expanded', 'true');
+        }
+        if (options.scroll !== false) {
+            card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+    }
+}
+
+function setSidebarFlowConnectMode(enabled = false) {
+    sidebarFlowConnectMode = enabled === true;
+    sidebarFlowConnectSourceId = sidebarFlowConnectMode ? sidebarFlowConnectSourceId : '';
+    renderSidebarFlowCanvas(collectSidebarCardDataFromForm());
+    return sidebarFlowConnectMode;
+}
+
+function toggleSidebarFlowConnectMode() {
+    return setSidebarFlowConnectMode(!sidebarFlowConnectMode);
+}
+
+function addSidebarFlowEdge(from = '', to = '', preferredLabel = '') {
+    const sourceId = String(from || '').trim();
+    const targetId = String(to || '').trim();
+    if (!sourceId || !targetId || sourceId === targetId) {
+        return null;
+    }
+    const currentSteps = collectSidebarSteps();
+    const sourceStep = getSidebarFlowStepById(currentSteps, sourceId) || {};
+    let label = String(preferredLabel || '').trim();
+    if (!label) {
+        const sourceType = String(sourceStep.type || '').trim().toLowerCase();
+        if (sourceType === 'condition') {
+            const usedLabels = new Set(sidebarFlowState.edges
+                .filter((edge) => edge.from === sourceId)
+                .map((edge) => String(edge.label || '').trim().toLowerCase()));
+            label = usedLabels.has('true') ? (usedLabels.has('false') ? 'next' : 'false') : 'true';
+        } else {
+            label = 'next';
+        }
+    }
+
+    const exists = sidebarFlowState.edges.some((edge) => edge.from === sourceId && edge.to === targetId && String(edge.label || 'next') === label);
+    if (exists) {
+        return null;
+    }
+    const edge = {
+        id: buildSidebarFlowEdgeId(sourceId, targetId, label, sidebarFlowState.edges.length),
+        from: sourceId,
+        to: targetId,
+        label
+    };
+    sidebarFlowState = {
+        ...sidebarFlowState,
+        edges: [...sidebarFlowState.edges, edge]
+    };
+    return edge;
+}
+
+function handleSidebarFlowNodeClick(stepId = '') {
+    const id = String(stepId || '').trim();
+    if (!id) {
+        return false;
+    }
+    if (sidebarFlowConnectMode) {
+        if (!sidebarFlowConnectSourceId) {
+            sidebarFlowConnectSourceId = id;
+            selectSidebarFlowNode(id, { scroll: false });
+            renderSidebarFlowCanvas(collectSidebarCardDataFromForm());
+            return true;
+        }
+        const edge = addSidebarFlowEdge(sidebarFlowConnectSourceId, id);
+        sidebarFlowConnectSourceId = '';
+        setSidebarFlowConnectMode(false);
+        syncSidebarEditorToHiddenJson();
+        if (edge) {
+            showActionToast(`已连接 ${edge.label}`, 'success');
+        }
+        return true;
+    }
+    selectSidebarFlowNode(id);
+    return true;
+}
+
+function deleteSidebarFlowEdge(edgeId = '') {
+    const id = String(edgeId || '').trim();
+    if (!id) {
+        return null;
+    }
+    const edge = sidebarFlowState.edges.find((item) => String(item.id || '') === id) || null;
+    sidebarFlowState = {
+        ...sidebarFlowState,
+        edges: sidebarFlowState.edges.filter((item) => String(item.id || '') !== id)
+    };
+    syncSidebarEditorToHiddenJson();
+    renderSidebarFlowCanvas(collectSidebarCardDataFromForm());
+    return edge;
+}
+
+function applySidebarFlowAutoLayout() {
+    const currentCard = collectSidebarCardDataFromForm();
+    const steps = ensureSidebarStepIds(Array.isArray(currentCard?.steps) ? currentCard.steps : []);
+    const stepIds = steps.map((step, index) => getSidebarStepId(step, index));
+    if (stepIds.length === 0) {
+        return null;
+    }
+    const start = sidebarFlowState.start && stepIds.includes(sidebarFlowState.start) ? sidebarFlowState.start : stepIds[0];
+    const outgoing = new Map();
+    sidebarFlowState.edges.forEach((edge) => {
+        if (!outgoing.has(edge.from)) {
+            outgoing.set(edge.from, []);
+        }
+        outgoing.get(edge.from).push(edge.to);
+    });
+    const depth = new Map([[start, 0]]);
+    const queue = [start];
+    while (queue.length > 0) {
+        const id = queue.shift();
+        const nextDepth = (depth.get(id) || 0) + 1;
+        (outgoing.get(id) || []).forEach((targetId) => {
+            if (!depth.has(targetId)) {
+                depth.set(targetId, nextDepth);
+                queue.push(targetId);
+            }
+        });
+    }
+    stepIds.forEach((id, index) => {
+        if (!depth.has(id)) {
+            depth.set(id, Math.max(0, ...Array.from(depth.values())) + index + 1);
+        }
+    });
+    const byDepth = new Map();
+    stepIds.forEach((id) => {
+        const level = depth.get(id) || 0;
+        if (!byDepth.has(level)) {
+            byDepth.set(level, []);
+        }
+        byDepth.get(level).push(id);
+    });
+    const nodePositions = new Map();
+    Array.from(byDepth.keys()).sort((a, b) => a - b).forEach((level) => {
+        const ids = byDepth.get(level) || [];
+        ids.forEach((id, position) => {
+            nodePositions.set(id, {
+                x: 34 + position * 220,
+                y: 34 + level * 126
+            });
+        });
+    });
+    sidebarFlowState = {
+        ...sidebarFlowState,
+        start,
+        nodes: stepIds.map((id) => ({
+            id,
+            ...(nodePositions.get(id) || getSidebarFlowLayoutForIndex(stepIds.indexOf(id)))
+        }))
+    };
+    syncSidebarEditorToHiddenJson();
+    renderSidebarFlowCanvas(collectSidebarCardDataFromForm());
+    return sidebarFlowState;
+}
+
+function beginSidebarFlowNodeDrag(event, stepId = '') {
+    if (!event || event.button !== 0) {
+        return false;
+    }
+    if (sidebarFlowConnectMode) {
+        return false;
+    }
+    const id = String(stepId || '').trim();
+    const node = getSidebarFlowNode(id);
+    if (!id || !node || !sidebarFlowCanvasNode) {
+        return false;
+    }
+    event.preventDefault();
+    selectSidebarFlowNode(id, { scroll: false });
+    const rect = sidebarFlowCanvasNode.getBoundingClientRect();
+    sidebarFlowDragState = {
+        id,
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+        startX: Number(node.x || 0),
+        startY: Number(node.y || 0),
+        scrollLeft: sidebarFlowCanvasNode.scrollLeft,
+        scrollTop: sidebarFlowCanvasNode.scrollTop,
+        rectLeft: rect.left,
+        rectTop: rect.top
+    };
+    const onMove = (moveEvent) => {
+        if (!sidebarFlowDragState) {
+            return;
+        }
+        const dx = moveEvent.clientX - sidebarFlowDragState.startClientX;
+        const dy = moveEvent.clientY - sidebarFlowDragState.startClientY;
+        const nextX = Math.max(0, sidebarFlowDragState.startX + dx);
+        const nextY = Math.max(0, sidebarFlowDragState.startY + dy);
+        sidebarFlowState = {
+            ...sidebarFlowState,
+            nodes: sidebarFlowState.nodes.map((item) => item.id === id ? { ...item, x: nextX, y: nextY } : item)
+        };
+        renderSidebarFlowCanvas(collectSidebarCardDataFromForm());
+    };
+    const onUp = () => {
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        sidebarFlowDragState = null;
+        syncSidebarEditorToHiddenJson();
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    return true;
+}
+
+function applyExecutionStatusToSidebarFlowStep(stepIndex, status = 'pending') {
+    if (!sidebarFlowNodesNode || !sidebarStepListNode) {
+        return;
+    }
+    const idx = Number(stepIndex);
+    const card = sidebarStepListNode.querySelector(`[data-sidebar-step-card][data-step-index="${Math.max(0, idx - 1)}"]`);
+    const stepId = String(card?.dataset?.stepId || '').trim();
+    if (!stepId) {
+        return;
+    }
+    const safeStepId = typeof CSS !== 'undefined' && CSS && typeof CSS.escape === 'function' ? CSS.escape(stepId) : stepId.replace(/"/g, '\\"');
+    const node = sidebarFlowNodesNode.querySelector(`[data-flow-node-id="${safeStepId}"]`);
+    if (!node) {
+        return;
+    }
+    node.classList.remove('is-pending', 'is-success', 'is-error', 'is-running');
+    if (status) {
+        node.classList.add(`is-${status}`);
+    }
 }
 
 function normalizeSidebarPopupsInput(value = '') {
@@ -915,11 +1429,13 @@ function updateSidebarEditorMeta(cardData = null) {
     }
 
     const stepsCount = Array.isArray(cardData.steps) ? cardData.steps.length : 0;
+    const edgeCount = Array.isArray(cardData.flow?.edges) ? cardData.flow.edges.length : 0;
     const name = String(cardData.name || '未命名自动化卡片').trim() || '未命名自动化卡片';
     const website = String(cardData.website || '').trim();
     const chips = [
         `<span class="sidebar-editor-meta__chip">卡片: ${escapeHtml(name)}</span>`,
-        `<span class="sidebar-editor-meta__chip">步骤: ${stepsCount}</span>`
+        `<span class="sidebar-editor-meta__chip">节点: ${stepsCount}</span>`,
+        `<span class="sidebar-editor-meta__chip">连线: ${edgeCount}</span>`
     ];
     if (website) {
         chips.push(`<span class="sidebar-editor-meta__chip">站点: ${escapeHtml(website)}</span>`);
@@ -930,6 +1446,7 @@ function updateSidebarEditorMeta(cardData = null) {
 function buildSidebarStepTemplate(stepType = 'navigate') {
     const normalizedType = String(stepType || 'navigate').trim();
     const template = {
+        id: `step_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
         name: `步骤`,
         type: normalizedType
     };
@@ -957,6 +1474,10 @@ function buildSidebarStepTemplate(stepType = 'navigate') {
         template.name = '获取Cookie';
         delete template.selector;
         delete template.text;
+    } else if (normalizedType === 'condition') {
+        template.name = '判断分支';
+        template.condition_mode = 'selector_exists';
+        template.selector = '';
     }
 
     return template;
@@ -983,6 +1504,11 @@ function buildSidebarStepSummary(step = {}) {
     const type = String(step?.type || 'navigate').trim() || 'navigate';
     parts.push(`类型: ${escapeHtml(formatStepTypeLabel(type))}`);
 
+    if (type === 'condition') {
+        const mode = String(step?.condition_mode || step?.condition || 'selector_exists').trim();
+        parts.push(`判断: ${escapeHtml(mode)}`);
+    }
+
     const selector = String(step?.selector || '').trim();
     if (selector) {
         const shortSelector = selector.length > 48 ? `${selector.slice(0, 45)}...` : selector;
@@ -1000,6 +1526,7 @@ function buildSidebarStepSummary(step = {}) {
 
 function buildSidebarStepCardHtml(step = {}, index = 0, expanded = false) {
     const type = String(step?.type || 'navigate').trim() || 'navigate';
+    const stepId = getSidebarStepId(step, index);
     const name = String(step?.name || `步骤${index + 1}`).trim() || `步骤${index + 1}`;
     const selector = String(step?.selector || '').trim();
     const text = String(step?.text || '').trim();
@@ -1007,13 +1534,14 @@ function buildSidebarStepCardHtml(step = {}, index = 0, expanded = false) {
     const url = String(step?.url || '').trim();
     const timeout = String(step?.timeout ?? '').trim();
     const by = String(step?.by || 'css_selector').trim() || 'css_selector';
+    const conditionMode = String(step?.condition_mode || step?.condition || 'selector_exists').trim() || 'selector_exists';
     const script = String(step?.script || '').trim();
     const waitForText = String(step?.wait_for_text || '').trim();
     const waitForElementHidden = String(step?.wait_for_element_hidden || '').trim();
     const optional = step?.optional === true || String(step?.optional || '').trim() === 'true';
 
     return `
-      <div class="sidebar-step-card${expanded ? ' is-expanded' : ''}" data-sidebar-step-card data-step-index="${index}">
+      <div class="sidebar-step-card${expanded ? ' is-expanded' : ''}" data-sidebar-step-card data-step-index="${index}" data-step-id="${escapeHtml(stepId)}">
         <div class="sidebar-step-card__header">
           <div class="sidebar-step-card__title-wrap">
             <h4 class="sidebar-step-card__title">步骤 ${index + 1}-${name} <span class="sidebar-step-status" data-step-status></span></h4>
@@ -1032,6 +1560,7 @@ function buildSidebarStepCardHtml(step = {}, index = 0, expanded = false) {
           <div class="full">
             <label>步骤名称</label>
             <input data-sidebar-step-field="name" type="text" value="${escapeHtml(name)}">
+            <input data-sidebar-step-field="id" type="hidden" value="${escapeHtml(stepId)}">
           </div>
             <div>
               <label>步骤类型</label>
@@ -1041,6 +1570,7 @@ function buildSidebarStepCardHtml(step = {}, index = 0, expanded = false) {
                     ['click', '点击元素'],
                     ['type', '输入内容'],
                     ['wait', '等待条件'],
+                    ['condition', '判断分支'],
                     ['wait_verification_code', '等待验证码'],
                     ['get_credits', '获取积分'],
                     ['save_cookies', '获取Cookie'],
@@ -1054,6 +1584,19 @@ function buildSidebarStepCardHtml(step = {}, index = 0, expanded = false) {
               <label>选择器类型</label>
               <select data-sidebar-step-field="by">
                 ${['css_selector','text','auto'].map((item) => `<option value="${item}"${item === by ? ' selected' : ''}>${item}</option>`).join('')}
+              </select>
+            </div>
+            <div>
+              <label>判断方式</label>
+              <select data-sidebar-step-field="condition_mode">
+                ${[
+                    ['selector_exists', '元素存在'],
+                    ['selector_missing', '元素不存在'],
+                    ['text_exists', '文本存在'],
+                    ['text_missing', '文本不存在'],
+                    ['url_matches', 'URL 匹配'],
+                    ['js', 'JS 表达式']
+                ].map(([value, label]) => `<option value="${value}"${value === conditionMode ? ' selected' : ''}>${label}</option>`).join('')}
               </select>
             </div>
           <div class="full">
@@ -1116,12 +1659,17 @@ function resetSidebarStepStatuses() {
       errEl.hidden = true;
     }
   });
+  if (sidebarFlowNodesNode) {
+    sidebarFlowNodesNode.querySelectorAll('[data-flow-node-id]').forEach((node) => {
+      node.classList.remove('is-pending', 'is-success', 'is-error', 'is-running');
+    });
+  }
 }
 
 function applyExecutionStatusToSidebarStep(stepIndex, status = 'pending', errorReason = '') {
   if (!sidebarStepListNode || !stepIndex) return;
   const idx = Number(stepIndex);
-  const card = sidebarStepListNode.querySelector(`[data-sidebar-step-card][data-step-index="${idx}"]`);
+  const card = sidebarStepListNode.querySelector(`[data-sidebar-step-card][data-step-index="${Math.max(0, idx - 1)}"]`);
   if (!card) return;
 
   card.classList.remove('is-pending', 'is-success', 'is-error', 'is-running');
@@ -1168,6 +1716,7 @@ function applyExecutionStatusToSidebarStep(stepIndex, status = 'pending', errorR
   if (statusEl) {
     statusEl.textContent = label;
   }
+  applyExecutionStatusToSidebarFlowStep(idx, status);
 }
 
 function collectSidebarStepCards() {
@@ -1200,6 +1749,7 @@ function readSidebarStepCard(stepCard, index = 0) {
     const selectorNormalization = normalizeSidebarStepSelectorControl(stepCard, selectorControl);
 
     const step = {
+        id: String(readField('id') || stepCard.dataset.stepId || `step_${index + 1}`).trim() || `step_${index + 1}`,
         name: String(readField('name') || `步骤${index + 1}`).trim() || `步骤${index + 1}`,
         type: String(readField('type') || 'navigate').trim() || 'navigate'
     };
@@ -1209,6 +1759,7 @@ function readSidebarStepCard(stepCard, index = 0) {
     const variable = String(readField('variable') || '').trim();
     const url = String(readField('url') || '').trim();
     const by = String(readField('by') || '').trim();
+    const conditionMode = String(readField('condition_mode') || '').trim();
     const timeoutValue = Number(readField('timeout'));
     const waitForText = String(readField('wait_for_text') || '').trim();
     const waitForElementHidden = String(readField('wait_for_element_hidden') || '').trim();
@@ -1230,6 +1781,9 @@ function readSidebarStepCard(stepCard, index = 0) {
         step.by = 'css_selector';
     } else if (by) {
         step.by = by;
+    }
+    if (conditionMode && String(step.type || '').trim().toLowerCase() === 'condition') {
+        step.condition_mode = conditionMode;
     }
     if (Number.isFinite(timeoutValue)) {
         step.timeout = timeoutValue;
@@ -1253,7 +1807,7 @@ function readSidebarStepCard(stepCard, index = 0) {
 function collectSidebarSteps() {
     const cards = collectSidebarStepCards();
     const steps = cards.map((card, index) => readSidebarStepCard(card, index)).filter(Boolean);
-    return steps;
+    return ensureSidebarStepIds(steps);
 }
 
 function syncSidebarEditorToHiddenJson() {
@@ -1267,6 +1821,8 @@ function syncSidebarEditorToHiddenJson() {
     }
 
     setCardEditorValue(cardData);
+    updateSidebarEditorMeta(cardData);
+    renderSidebarFlowCanvas(cardData);
     return cardData;
 }
 
@@ -1285,7 +1841,8 @@ function collectSidebarCardDataFromForm() {
       }
     }
 
-    const steps = collectSidebarSteps();
+    const steps = ensureSidebarStepIds(collectSidebarSteps());
+    const flow = normalizeSidebarFlowForSteps(sidebarFlowState, steps);
     const popups = normalizeSidebarPopupsInput(String(sidebarCardPopupsInput?.value || ''));
     const points = Number(sidebarCardPointsInput?.value || 0);
     // 不再收集账号/密码/随机密码：输入内容改由各 type 步骤的变量（text 默认值 + 运行前 inputs 覆盖）承载。
@@ -1297,7 +1854,8 @@ function collectSidebarCardDataFromForm() {
         description: String(sidebarCardDescriptionInput?.value || base.description || '').trim(),
         points: Number.isFinite(points) ? points : 0,
         popups,
-        steps
+        steps,
+        flow
     };
 
     if (String(sidebarCardUploadServerUrlInput?.value || '').trim()) {
@@ -1329,9 +1887,6 @@ function renderSidebarCardEditor(cardData) {
     if (sidebarCardPopupsInput) sidebarCardPopupsInput.value = formatSidebarPopupsInput(normalized.popups || []);
     if (sidebarCardUploadServerUrlInput) sidebarCardUploadServerUrlInput.value = String(normalized.upload_server_url || normalized.upload?.server_url || '');
     if (sidebarCardUploadCardKeyInput) sidebarCardUploadCardKeyInput.value = String(normalized.upload_card_key || normalized.upload?.card_key || '');
-    if (sidebarCardRawJsonInput) sidebarCardRawJsonInput.value = stringifyCardData(normalized);
-    updateSidebarEditorMeta(normalized);
-
     const steps = Array.isArray(normalized.steps)
         ? normalized.steps.map((step) => {
             const normalizedSelector = normalizeSelectorInputValue(step?.selector || '');
@@ -1342,18 +1897,23 @@ function renderSidebarCardEditor(cardData) {
             };
         })
         : [];
-    normalized.steps = steps;
+    normalized.steps = ensureSidebarStepIds(steps);
+    normalized.flow = normalizeSidebarFlowForSteps(normalized.flow || null, normalized.steps);
+    sidebarFlowState = normalized.flow;
+    if (sidebarCardRawJsonInput) sidebarCardRawJsonInput.value = stringifyCardData(normalized);
+    updateSidebarEditorMeta(normalized);
+    renderSidebarFlowCanvas(normalized);
     if (!sidebarStepListNode) {
         return;
     }
 
-    if (steps.length === 0) {
+    if (normalized.steps.length === 0) {
         sidebarStepListNode.innerHTML = '<div class="sidebar-step-empty">还没有步骤。先添加一条步骤开始编辑。</div>';
         resetSidebarStepStatuses();
         return;
     }
 
-    sidebarStepListNode.innerHTML = steps.map((step, index) => buildSidebarStepCardHtml(step, index, previousExpandedStates.get(index) === true)).join('');
+    sidebarStepListNode.innerHTML = normalized.steps.map((step, index) => buildSidebarStepCardHtml(step, index, previousExpandedStates.get(index) === true)).join('');
     resetSidebarStepStatuses();
 }
 
@@ -1567,6 +2127,7 @@ globalThis.CookieCaptureAutomationWorkbench = {
     scheduleDebugProgressAutoHide,
     clearDebugProgressAutoHideTimer,
     loadStandaloneProgressState,
+    formatStepTypeLabel,
     setLoopButtonState,
     refreshLoopButtonState,
     sendStopAction,
@@ -1579,6 +2140,20 @@ globalThis.CookieCaptureAutomationWorkbench = {
     isVerificationStepName,
     isEmailStepName,
     isSidebarLayout,
+    sanitizeSidebarStepIdPart,
+    buildSidebarStepId,
+    ensureSidebarStepIds,
+    getSidebarStepId,
+    normalizeSidebarFlowForSteps,
+    renderSidebarFlowCanvas,
+    selectSidebarFlowNode,
+    setSidebarFlowConnectMode,
+    toggleSidebarFlowConnectMode,
+    addSidebarFlowEdge,
+    handleSidebarFlowNodeClick,
+    deleteSidebarFlowEdge,
+    applySidebarFlowAutoLayout,
+    beginSidebarFlowNodeDrag,
     escapeHtml,
     normalizeSidebarPopupsInput,
     formatSidebarPopupsInput,

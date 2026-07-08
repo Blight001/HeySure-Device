@@ -155,6 +155,9 @@ const sidebarStepTemplateSelect = document.getElementById('sidebar-step-template
 const sidebarAddStepButton = document.getElementById('sidebar-add-step');
 const sidebarRefreshCardButton = document.getElementById('sidebar-refresh-card');
 const sidebarCloseButton = document.getElementById('sidebar-close');
+const sidebarFlowCanvasNode = document.getElementById('sidebar-flow-canvas');
+const sidebarFlowConnectButton = document.getElementById('sidebar-flow-connect');
+const sidebarFlowLayoutButton = document.getElementById('sidebar-flow-layout');
 const runControlStopButton = document.getElementById('run-control-stop');
 const sidebarStepListNode = document.getElementById('sidebar-step-list');
 const sidebarEditorMetaNode = document.getElementById('sidebar-editor-meta');
@@ -196,6 +199,12 @@ const {
     isVerificationStepName,
     isEmailStepName,
     isSidebarLayout,
+    renderSidebarFlowCanvas,
+    toggleSidebarFlowConnectMode,
+    handleSidebarFlowNodeClick,
+    deleteSidebarFlowEdge,
+    applySidebarFlowAutoLayout,
+    beginSidebarFlowNodeDrag,
     escapeHtml,
     normalizeSidebarPopupsInput,
     formatSidebarPopupsInput,
@@ -805,6 +814,48 @@ sidebarRefreshCardButton?.addEventListener('click', () => {
     })();
 });
 
+sidebarFlowConnectButton?.addEventListener('click', () => {
+    try {
+        const enabled = toggleSidebarFlowConnectMode();
+        showActionToast(enabled ? '连线模式：先点起点，再点目标节点' : '已退出连线模式', 'info');
+    } catch (error) {
+        showActionToast(error && error.message ? error.message : '切换连线模式失败', 'error');
+    }
+});
+
+sidebarFlowLayoutButton?.addEventListener('click', () => {
+    try {
+        applySidebarFlowAutoLayout();
+        showActionToast('已自动整理流程图', 'success');
+    } catch (error) {
+        showActionToast(error && error.message ? error.message : '自动布局失败', 'error');
+    }
+});
+
+sidebarFlowCanvasNode?.addEventListener('pointerdown', (event) => {
+    const node = event.target && event.target.closest ? event.target.closest('[data-flow-node-id]') : null;
+    if (!node) {
+        return;
+    }
+    beginSidebarFlowNodeDrag(event, String(node.dataset.flowNodeId || '').trim());
+});
+
+sidebarFlowCanvasNode?.addEventListener('click', (event) => {
+    const edge = event.target && event.target.closest ? event.target.closest('[data-flow-edge-id]') : null;
+    if (edge) {
+        const removed = deleteSidebarFlowEdge(String(edge.dataset.flowEdgeId || '').trim());
+        if (removed) {
+            showActionToast('已删除连线', 'success');
+        }
+        return;
+    }
+
+    const node = event.target && event.target.closest ? event.target.closest('[data-flow-node-id]') : null;
+    if (node) {
+        handleSidebarFlowNodeClick(String(node.dataset.flowNodeId || '').trim());
+    }
+});
+
 sidebarCardNameInput?.addEventListener('input', () => syncSidebarEditorToHiddenJson());
 sidebarCardWebsiteInput?.addEventListener('input', () => syncSidebarEditorToHiddenJson());
 sidebarCardDescriptionInput?.addEventListener('input', () => syncSidebarEditorToHiddenJson());
@@ -982,18 +1033,12 @@ chrome.runtime.onMessage.addListener((message) => {
           const err = errorReason;
           if (si > 0) {
             if (phase === 'step_start') {
-              for (let i = 1; i < si; i++) {
-                applyExecutionStatusToSidebarStep(i, 'success');
-              }
               applyExecutionStatusToSidebarStep(si, 'running');
             } else if (phase === 'step_complete') {
               applyExecutionStatusToSidebarStep(si, 'success');
             } else if (phase === 'step_skip') {
               applyExecutionStatusToSidebarStep(si, 'pending');
             } else if (message.kind === 'error') {
-              for (let i = 1; i < si; i++) {
-                applyExecutionStatusToSidebarStep(i, 'success');
-              }
               applyExecutionStatusToSidebarStep(si, 'error', err || text);
             }
           }
@@ -1031,13 +1076,8 @@ chrome.runtime.onMessage.addListener((message) => {
             // 侧边栏步骤最终状态
             if (isSidebarLayout() && typeof applyExecutionStatusToSidebarStep === 'function' && stepIndex > 0) {
               if (success || stopped) {
-                for (let i = 1; i <= stepIndex; i++) {
-                  applyExecutionStatusToSidebarStep(i, 'success');
-                }
+                applyExecutionStatusToSidebarStep(stepIndex, 'success');
               } else {
-                for (let i = 1; i < stepIndex; i++) {
-                  applyExecutionStatusToSidebarStep(i, 'success');
-                }
                 applyExecutionStatusToSidebarStep(stepIndex, 'error', String(message.errorReason || message.message || '执行失败'));
               }
             }

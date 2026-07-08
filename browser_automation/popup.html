@@ -95,6 +95,7 @@
                 <option value="click">点击元素</option>
                 <option value="type">输入内容</option>
                 <option value="wait">等待条件</option>
+                <option value="condition">判断分支</option>
                 <option value="wait_verification_code">等待验证码</option>
                 <option value="get_credits">获取积分</option>
                 <option value="save_cookies">获取Cookie</option>
@@ -104,7 +105,16 @@
               </select>
               <button id="sidebar-add-step" class="button-secondary" type="button">添加步骤</button>
               <button id="sidebar-refresh-card" class="button-secondary" type="button">刷新显示</button>
+              <button id="sidebar-flow-connect" class="button-secondary" type="button" aria-pressed="false">连线</button>
+              <button id="sidebar-flow-layout" class="button-secondary" type="button">自动布局</button>
             </div>
+            <div id="sidebar-flow-canvas" class="sidebar-flow-canvas" aria-label="自动化流程图">
+              <svg id="sidebar-flow-svg" class="sidebar-flow-svg" aria-hidden="true"></svg>
+              <div id="sidebar-flow-nodes" class="sidebar-flow-nodes"></div>
+              <div id="sidebar-flow-empty" class="sidebar-flow-empty">暂无节点，先添加一个步骤。</div>
+            </div>
+            <div class="sidebar-flow-hint">拖拽节点调整位置；点击“连线”后依次点击两个节点创建边；点击连线可删除。</div>
+            <div class="sidebar-step-list-title">节点详情</div>
             <div id="sidebar-step-list" class="sidebar-step-list">
               <div class="sidebar-step-empty">暂无步骤</div>
             </div>

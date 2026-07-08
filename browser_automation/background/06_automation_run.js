@@ -109,6 +109,177 @@ async function pauseAtStep({
     });
 }
 
+function getRunStepId(step = {}, index = 0) {
+    return String(step?.id || step?.step_id || step?.nodeId || `step_${index + 1}`).trim();
+}
+
+function buildRunFlowPlan(cardData = {}) {
+    const steps = Array.isArray(cardData.steps) ? cardData.steps : [];
+    const stepIds = steps.map((step, index) => getRunStepId(step, index)).filter(Boolean);
+    const stepIdToIndex = new Map(stepIds.map((id, index) => [id, index]));
+    const flow = cardData.flow && typeof cardData.flow === 'object' && !Array.isArray(cardData.flow)
+        ? cardData.flow
+        : null;
+    const rawEdges = flow && Array.isArray(flow.edges) ? flow.edges : [];
+    const edges = rawEdges
+        .map((edge) => {
+            const from = String(edge?.from || edge?.source || edge?.fromId || '').trim();
+            const to = String(edge?.to || edge?.target || edge?.toId || '').trim();
+            const label = String(edge?.label || edge?.branch || edge?.condition || 'next').trim().toLowerCase() || 'next';
+            if (!from || !to || !stepIdToIndex.has(from) || !stepIdToIndex.has(to) || from === to) {
+                return null;
+            }
+            return { from, to, label };
+        })
+        .filter(Boolean);
+    const edgesByFrom = new Map();
+    edges.forEach((edge) => {
+        if (!edgesByFrom.has(edge.from)) {
+            edgesByFrom.set(edge.from, []);
+        }
+        edgesByFrom.get(edge.from).push(edge);
+    });
+    const startId = String(flow?.start || flow?.start_node_id || flow?.startNodeId || '').trim();
+    return {
+        enabled: !!flow && (edges.length > 0 || !!startId),
+        startIndex: stepIdToIndex.has(startId) ? stepIdToIndex.get(startId) : 0,
+        stepIdToIndex,
+        edgesByFrom
+    };
+}
+
+function resolveRunFlowNextIndex(plan, steps = [], currentIndex = 0, outcome = 'next') {
+    const fallback = currentIndex + 1;
+    if (!plan || plan.enabled !== true) {
+        return fallback;
+    }
+    const currentStep = steps[currentIndex] || {};
+    const currentId = getRunStepId(currentStep, currentIndex);
+    if (currentId === '__auto_navigate_start' && Number.isInteger(plan.startIndex)) {
+        return plan.startIndex;
+    }
+    const outgoing = plan.edgesByFrom.get(currentId) || [];
+    if (outgoing.length === 0) {
+        return steps.length;
+    }
+    const normalizedOutcome = String(outcome || 'next').trim().toLowerCase();
+    const preferences = normalizedOutcome === 'true'
+        ? ['true', 'yes', 'success', 'match', 'next', 'default', '']
+        : normalizedOutcome === 'false'
+            ? ['false', 'no', 'else', 'fail', 'failure', 'default', 'next', '']
+            : ['next', 'success', 'default', 'true', ''];
+    let selected = null;
+    for (const label of preferences) {
+        selected = outgoing.find((edge) => String(edge.label || '').trim().toLowerCase() === label) || null;
+        if (selected) {
+            break;
+        }
+    }
+    selected = selected || outgoing[0] || null;
+    if (!selected || !plan.stepIdToIndex.has(selected.to)) {
+        return steps.length;
+    }
+    return plan.stepIdToIndex.get(selected.to);
+}
+
+function formatRunFlowNextStepNames(plan, steps = [], currentIndex = 0) {
+    if (!plan || plan.enabled !== true) {
+        const next = steps[currentIndex + 1];
+        return next ? String(next.name || `步骤${currentIndex + 2}`).trim() : '';
+    }
+    const currentId = getRunStepId(steps[currentIndex] || {}, currentIndex);
+    const outgoing = plan.edgesByFrom.get(currentId) || [];
+    if (outgoing.length === 0) {
+        return '';
+    }
+    return outgoing.slice(0, 3).map((edge) => {
+        const targetIndex = plan.stepIdToIndex.get(edge.to);
+        const target = steps[targetIndex] || {};
+        const targetName = String(target.name || `步骤${Number(targetIndex || 0) + 1}`).trim();
+        const label = String(edge.label || 'next').trim();
+        return label && label !== 'next' ? `${label}→${targetName}` : targetName;
+    }).join(' / ');
+}
+
+async function evaluateConditionStep(tabId, step = {}, context = {}) {
+    const mode = String(step.condition_mode || step.condition || step.mode || '').trim().toLowerCase() || 'selector_exists';
+    const selector = resolveTemplate(step.selector || step.condition_selector || '', context);
+    const text = resolveTemplate(step.text || step.wait_for_text || step.condition_text || '', context);
+    const timeoutMs = Math.max(0, Number(step.timeout || 0) || 0);
+    const intervalMs = Math.max(50, Number(step.poll_interval_ms || 100) || 100);
+
+    if (mode === 'url_matches' || mode === 'url_match') {
+        const tab = await chrome.tabs.get(tabId).catch(() => null);
+        const url = String(tab?.url || '');
+        const pattern = String(text || selector || step.url || '').trim();
+        const matched = pattern ? url.includes(pattern) : false;
+        return { value: matched, detail: pattern ? `URL ${matched ? '包含' : '不包含'} ${pattern}` : '缺少 URL 匹配文本' };
+    }
+
+    if (mode === 'js' || mode === 'script' || mode === 'expression') {
+        const code = String(resolveTemplate(step.expression || step.script || '', context) || '').trim();
+        if (!code) {
+            return { value: false, detail: 'JS 表达式为空' };
+        }
+        const results = await chrome.scripting.executeScript({
+            target: { tabId },
+            args: [code, context],
+            func: async (rawCode, rawContext) => {
+                try {
+                    const body = /\breturn\b|;/.test(rawCode) ? rawCode : `return (${rawCode});`;
+                    const fn = new Function('context', `with (context || {}) { return (async () => { ${body} })(); }`);
+                    return { success: true, value: Boolean(await fn(rawContext || {})) };
+                } catch (error) {
+                    return { success: false, error: error && error.message ? error.message : String(error) };
+                }
+            }
+        });
+        const result = Array.isArray(results) && results[0] ? results[0].result : null;
+        if (!result || result.success !== true) {
+            throw new Error(result?.error || '判断 JS 执行失败');
+        }
+        return { value: result.value === true, detail: `JS=${result.value === true ? 'true' : 'false'}` };
+    }
+
+    if (mode === 'text_exists' || mode === 'text_visible') {
+        const waitResult = await executePageAction(tabId, {
+            type: 'wait',
+            waitForText: text,
+            timeoutMs,
+            intervalMs
+        });
+        return { value: waitResult?.success === true, detail: `文本 ${text || '(空)'} ${waitResult?.success === true ? '存在' : '不存在'}` };
+    }
+
+    if (mode === 'text_missing' || mode === 'text_not_exists') {
+        const waitResult = await executePageAction(tabId, {
+            type: 'wait',
+            waitForText: text,
+            timeoutMs,
+            intervalMs
+        });
+        return { value: waitResult?.success !== true, detail: `文本 ${text || '(空)'} ${waitResult?.success !== true ? '不存在' : '存在'}` };
+    }
+
+    if (mode === 'selector_missing' || mode === 'element_missing' || mode === 'not_exists') {
+        const waitResult = await executePageAction(tabId, {
+            type: 'wait',
+            selector,
+            timeoutMs,
+            intervalMs
+        });
+        return { value: waitResult?.success !== true, detail: `元素 ${selector || '(空)'} ${waitResult?.success !== true ? '不存在' : '存在'}` };
+    }
+
+    const waitResult = await executePageAction(tabId, {
+        type: 'wait',
+        selector,
+        timeoutMs,
+        intervalMs
+    });
+    return { value: waitResult?.success === true, detail: `元素 ${selector || '(空)'} ${waitResult?.success === true ? '存在' : '不存在'}` };
+}
+
 async function runStandaloneCard(payload = {}) {
     const providedCardData = payload.cardData && typeof payload.cardData === 'object'
         ? payload.cardData
@@ -339,7 +510,11 @@ async function runStandaloneCard(payload = {}) {
             cookiesSaved: false
         };
 
-    let index = 0;
+    const initialFlowPlan = buildRunFlowPlan(cardData);
+    const firstRunStepId = getRunStepId((Array.isArray(cardData.steps) ? cardData.steps[0] : null) || {}, 0);
+    let index = initialFlowPlan.enabled === true && firstRunStepId !== '__auto_navigate_start'
+        ? initialFlowPlan.startIndex
+        : 0;
     // 失败修复续跑：run 传 start_step（1-based，与失败结果 stepIndex 同一套序号，
     // 含 website 自动插入的 navigate 前置步骤）时跳过已成功的步骤，页面保持失败现场直接继续。
     const startStepRequest = Math.floor(Number(payload.start_step || payload.startStep || 0) || 0);
@@ -355,12 +530,19 @@ async function runStandaloneCard(payload = {}) {
             phase: 'resume_from_step'
         });
     }
+    let flowTransitionCount = 0;
+    const maxFlowTransitions = Math.max(120, (Array.isArray(cardData.steps) ? cardData.steps.length : 0) * 20);
     while (index < (Array.isArray(executionState.cardData?.steps) ? executionState.cardData.steps.length : 0)) {
         if (isTabStopped(tabId)) {
             throw createStopError();
         }
+        flowTransitionCount += 1;
+        if (flowTransitionCount > maxFlowTransitions) {
+            throw new Error(`流程跳转次数超过上限 ${maxFlowTransitions}，请检查 flow.edges 是否存在无出口循环`);
+        }
         const activeCardData = executionState.cardData || cardData;
         const steps = Array.isArray(activeCardData.steps) ? activeCardData.steps : [];
+        const runFlowPlan = buildRunFlowPlan(activeCardData);
         if (index >= steps.length) {
             break;
         }
@@ -383,6 +565,10 @@ async function runStandaloneCard(payload = {}) {
 
         const stepType = String(step.type || '').trim().toLowerCase();
         const stepName = String(step.name || `步骤${index + 1}`).trim() || `步骤${index + 1}`;
+        const advanceToNextStep = (outcome = 'next') => {
+            const nextIndex = resolveRunFlowNextIndex(runFlowPlan, steps, index, outcome);
+            return Number.isInteger(nextIndex) && nextIndex >= 0 ? nextIndex : steps.length;
+        };
         // 智能填充提示，需在 step_start 进度上报（下方）之前声明，避免 TDZ 崩溃
         let magicFillNote = '';
         const liveTotalSteps = steps.length;
@@ -393,9 +579,7 @@ async function runStandaloneCard(payload = {}) {
         const attemptInfo = (retryFailedStepInRunMode && currentAttempt > 1) ? ` (尝试 ${currentAttempt}/${maxAttempts})` : '';
         const stepLabel = formatStepProgressLabel(index + 1, liveTotalSteps, stepName) + attemptInfo;
         const previousStepName = index > 0 ? String(steps[index - 1]?.name || `步骤${index}`).trim() || `步骤${index}` : '';
-        const nextStepName = index + 1 < liveTotalSteps
-            ? String(steps[index + 1]?.name || `步骤${index + 2}`).trim() || `步骤${index + 2}`
-            : '';
+        const nextStepName = formatRunFlowNextStepNames(runFlowPlan, steps, index);
         const handleStepFailure = async ({
             error,
             message = '',
@@ -551,7 +735,7 @@ async function runStandaloneCard(payload = {}) {
                         stepName
                     });
                 }
-                index += 1;
+                index = advanceToNextStep('next');
                 continue;
             } catch (error) {
                 const handled = await handleStepFailure({
@@ -584,7 +768,7 @@ async function runStandaloneCard(payload = {}) {
                     stepTotal: liveTotalSteps,
                     stepName
                 });
-                index += 1;
+                index = advanceToNextStep('next');
                 continue;
             }
 
@@ -610,7 +794,7 @@ async function runStandaloneCard(payload = {}) {
                 stepTotal: liveTotalSteps,
                 stepName
             });
-            index += 1;
+            index = advanceToNextStep('next');
             continue;
         }
 
@@ -644,7 +828,7 @@ async function runStandaloneCard(payload = {}) {
                     stepTotal: liveTotalSteps,
                     stepName
                 });
-                index += 1;
+                index = advanceToNextStep('next');
                 continue;
             } catch (error) {
                 const handled = await handleStepFailure({
@@ -704,6 +888,42 @@ async function runStandaloneCard(payload = {}) {
             waitForTextHidden: resolveTemplate(step.wait_for_text_hidden || '', context)
         };
 
+        if (stepType === 'condition') {
+            try {
+                const conditionResult = await evaluateConditionStep(tabId, step, context);
+                const branch = conditionResult.value === true ? 'true' : 'false';
+                const variableKey = String(step.variable || step.id || '').trim();
+                if (variableKey) {
+                    context[variableKey] = branch;
+                }
+                await emitProgress({
+                    message: `${stepLabel} · 判断为 ${branch}${conditionResult.detail ? `（${conditionResult.detail}）` : ''}`,
+                    progress: stepEndProgress,
+                    phase: 'step_complete',
+                    stepIndex: index + 1,
+                    stepTotal: liveTotalSteps,
+                    stepName,
+                    nextStepName: formatRunFlowNextStepNames(runFlowPlan, steps, index)
+                });
+                index = advanceToNextStep(branch);
+                continue;
+            } catch (error) {
+                const handled = await handleStepFailure({
+                    error,
+                    message: error && error.message ? error.message : `${stepLabel} · 判断步骤失败，已暂停等待修改`,
+                    retryMessage: error && error.message ? `${stepLabel} · ${error.message}，正在重试` : `${stepLabel} · 判断步骤失败，正在重试`,
+                    errorReason: error && error.message ? error.message : `判断步骤失败: ${stepName}`,
+                    stepType: 'condition',
+                    selector: resolvedSelector,
+                    errorCode: 'CONDITION_FAILED'
+                });
+                if (handled === 'max_reached') {
+                    throw makeStepFailureError(`${stepLabel} 失败（判断失败）`);
+                }
+                continue;
+            }
+        }
+
         if (stepType === 'wait') {
             try {
                 const waitResult = await executePageAction(tabId, {
@@ -727,7 +947,7 @@ async function runStandaloneCard(payload = {}) {
                     stepTotal: liveTotalSteps,
                     stepName
                 });
-                index += 1;
+                index = advanceToNextStep('next');
                 continue;
             } catch (error) {
                 const handled = await handleStepFailure({
@@ -764,7 +984,7 @@ async function runStandaloneCard(payload = {}) {
                     stepTotal: liveTotalSteps,
                     stepName
                 });
-                index += 1;
+                index = advanceToNextStep('next');
                 continue;
             } catch (error) {
                 const handled = await handleStepFailure({
@@ -827,7 +1047,7 @@ async function runStandaloneCard(payload = {}) {
                     stepTotal: liveTotalSteps,
                     stepName
                 });
-                index += 1;
+                index = advanceToNextStep('next');
                 continue;
             } catch (error) {
                 const handled = await handleStepFailure({
@@ -873,7 +1093,7 @@ async function runStandaloneCard(payload = {}) {
                     stepName
                 });
             }
-            index += 1;
+            index = advanceToNextStep('next');
             continue;
         }
 
@@ -914,7 +1134,7 @@ async function runStandaloneCard(payload = {}) {
                     stepTotal: liveTotalSteps,
                     stepName
                 });
-                index += 1;
+                index = advanceToNextStep('next');
                 continue;
             }
 
@@ -941,7 +1161,7 @@ async function runStandaloneCard(payload = {}) {
             stepTotal: liveTotalSteps,
             stepName
         });
-        index += 1;
+        index = advanceToNextStep('next');
     }
 
     if (maxRetriesExceeded) {
@@ -1174,4 +1394,3 @@ async function captureCurrentTab(payload = {}) {
     }
     return base;
 }
-

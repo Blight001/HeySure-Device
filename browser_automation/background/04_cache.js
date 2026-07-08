@@ -1,14 +1,100 @@
+function sanitizeStepIdPart(value = '') {
+    const text = String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9_\-\u4e00-\u9fa5]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+    return text || 'step';
+}
+
+function ensureStepIds(steps = []) {
+    const usedIds = new Set();
+    return (Array.isArray(steps) ? steps : []).map((step, index) => {
+        const source = step && typeof step === 'object' ? step : {};
+        const explicit = String(source.id || source.step_id || source.nodeId || '').trim();
+        const base = (explicit || `${sanitizeStepIdPart(source.name || source.type || 'step')}_${index + 1}`).replace(/\s+/g, '_');
+        let candidate = base;
+        let suffix = 2;
+        while (usedIds.has(candidate)) {
+            candidate = `${base}_${suffix}`;
+            suffix += 1;
+        }
+        usedIds.add(candidate);
+        return { ...source, id: candidate };
+    });
+}
+
+function normalizeFlowData(flow = null, steps = []) {
+    if (!flow || typeof flow !== 'object' || Array.isArray(flow)) {
+        return undefined;
+    }
+    const stepIds = steps.map((step, index) => String(step?.id || `step_${index + 1}`).trim()).filter(Boolean);
+    const stepIdSet = new Set(stepIds);
+    const nodes = (Array.isArray(flow.nodes) ? flow.nodes : [])
+        .map((node) => {
+            const id = String(node?.id || node?.stepId || '').trim();
+            if (!id || !stepIdSet.has(id)) {
+                return null;
+            }
+            return {
+                id,
+                x: Number.isFinite(Number(node.x)) ? Number(node.x) : 0,
+                y: Number.isFinite(Number(node.y)) ? Number(node.y) : 0
+            };
+        })
+        .filter(Boolean);
+    const nodeIds = new Set(nodes.map((node) => node.id));
+    stepIds.forEach((id, index) => {
+        if (!nodeIds.has(id)) {
+            nodes.push({ id, x: 34 + (index % 2) * 220, y: 34 + Math.floor(index / 2) * 126 });
+        }
+    });
+    const edgeKeys = new Set();
+    const edges = (Array.isArray(flow.edges) ? flow.edges : [])
+        .map((edge, index) => {
+            const from = String(edge?.from || edge?.source || edge?.fromId || '').trim();
+            const to = String(edge?.to || edge?.target || edge?.toId || '').trim();
+            if (!from || !to || !stepIdSet.has(from) || !stepIdSet.has(to) || from === to) {
+                return null;
+            }
+            const label = String(edge?.label || edge?.branch || edge?.condition || 'next').trim() || 'next';
+            const key = `${from}::${to}::${label}`;
+            if (edgeKeys.has(key)) {
+                return null;
+            }
+            edgeKeys.add(key);
+            return {
+                id: String(edge?.id || '').trim() || `edge_${sanitizeStepIdPart(from)}_${sanitizeStepIdPart(to)}_${sanitizeStepIdPart(label)}_${index + 1}`,
+                from,
+                to,
+                label
+            };
+        })
+        .filter(Boolean);
+    const start = String(flow.start || flow.start_node_id || flow.startNodeId || '').trim();
+    return {
+        version: 1,
+        start: stepIdSet.has(start) ? start : (stepIds[0] || ''),
+        nodes,
+        edges
+    };
+}
+
 function normalizeCardData(cardData) {
     if (!cardData || typeof cardData !== 'object' || Array.isArray(cardData)) {
         throw new Error('自动化卡片内容格式不正确');
     }
 
-    const steps = Array.isArray(cardData.steps) ? [...cardData.steps] : [];
+    const steps = ensureStepIds(Array.isArray(cardData.steps) ? cardData.steps : []);
     if (steps.length === 0) {
         throw new Error('自动化卡片缺少 steps 步骤');
     }
 
     const normalized = { ...cardData, steps };
+    const flow = normalizeFlowData(cardData.flow, steps);
+    if (flow) {
+        normalized.flow = flow;
+    }
     if (!String(normalized.name || '').trim()) {
         normalized.name = `automation_${Date.now()}`;
     }
@@ -192,13 +278,15 @@ function normalizeStandaloneSteps(cardData) {
     if (!firstMeaningfulStep || String(firstMeaningfulStep.type || '').trim().toLowerCase() !== 'navigate') {
         if (normalizedCard.website) {
             steps.unshift({
+                id: '__auto_navigate_start',
                 name: '访问网站',
                 type: 'navigate',
                 url: normalizedCard.website
             });
         }
     }
-    return { ...normalizedCard, steps };
+    const normalizedSteps = ensureStepIds(steps);
+    return { ...normalizedCard, steps: normalizedSteps, flow: normalizeFlowData(normalizedCard.flow, normalizedSteps) || normalizedCard.flow };
 }
 
 function extractEmailAddress(text = '') {

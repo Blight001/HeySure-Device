@@ -6,6 +6,7 @@ const AUTOMATION_CARD_CACHE_NAME_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_CACHE
 const AUTOMATION_CARD_CACHE_TIME_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_CACHE_TIME_KEY;
 const AUTOMATION_CARD_CACHE_LIST_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_CACHE_LIST_KEY;
 const AUTOMATION_CARD_SELECTED_ID_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_SELECTED_ID_KEY;
+const AUTOMATION_CARD_RUN_INPUTS_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_RUN_INPUTS_KEY;
 const LAST_MAIN_PANEL_KEY = shared.STORAGE_KEYS.LAST_MAIN_PANEL_KEY;
 const STANDALONE_PROGRESS_STATE_KEY = shared.STORAGE_KEYS.STANDALONE_PROGRESS_STATE_KEY;
 
@@ -185,7 +186,7 @@ function buildCardListLabel(item = {}, isSelected = false) {
     };
 }
 
-function renderCardCacheList(state = { items: [], selectedId: '' }) {
+async function renderCardCacheList(state = { items: [], selectedId: '' }) {
     if (!cardCacheListNode) {
         return;
     }
@@ -225,14 +226,25 @@ function renderCardCacheList(state = { items: [], selectedId: '' }) {
     if (cardFileNameNode) {
         cardFileNameNode.textContent = selectedItem ? selectedItem.cardData?.name || selectedItem.cardName || '未命名自动化卡片' : '未选择卡片';
     }
-    renderCardRunInputs(selectedItem ? selectedItem.cardData : null);
+    await renderCardRunInputs(selectedItem ? selectedItem.cardData : null);
 }
 
 // 运行前「变量输入」面板：为选中卡片的每个 type 步骤渲染一个输入框，默认值=步骤 text；
 // 开始执行/循环执行时把这些框收集为 inputs 传给后台，按变量键覆盖对应步骤的输入文本。
-function renderCardRunInputs(cardData) {
+async function renderCardRunInputs(cardData) {
     if (!cardRunInputsNode) {
         return;
+    }
+
+    const targetCardName = String((cardData && cardData.name) || '').trim();
+
+    // 无论是否有变量，都先尝试保存上一个卡片的输入值（切换或清空时）
+    const previousCardName = cardRunInputsNode.dataset.cardName || '';
+    if (previousCardName && previousCardName !== targetCardName) {
+        const prevVals = collectCardRunInputs();
+        if (Object.keys(prevVals).length > 0) {
+            saveCardRunInputsForCard(previousCardName, prevVals).catch(() => {});
+        }
     }
 
     const variables = getCardTypeStepVariables(cardData || {});
@@ -252,6 +264,7 @@ function renderCardRunInputs(cardData) {
         cardRunInputsNode.hidden = true;
         cardRunInputsNode.innerHTML = '';
         delete cardRunInputsNode.dataset.cardSignature;
+        delete cardRunInputsNode.dataset.cardName;
         return;
     }
 
@@ -263,12 +276,15 @@ function renderCardRunInputs(cardData) {
         `;
         cardRunInputsNode.hidden = false;
         delete cardRunInputsNode.dataset.cardSignature;
+        cardRunInputsNode.dataset.cardName = targetCardName;  // 记录当前卡片名（即使无变量）
         return;
     }
 
-    // 保留用户已填写的值：运行/保存会触发 renderCardCacheList → 本函数重渲染，
-    // 若每次都重置为默认文本，用户刚填的覆盖值会在框里"闪回"默认，造成"填了又没了"的错觉。
-    // 仅当仍是同一张卡片（变量键+默认文本+卡名签名一致）时保留；切换到别的卡片则回到该卡默认值。
+    // 保留用户已填写的值：
+    // - 同一 DOM 会话用 previousValues
+    // - 持久化缓存（loadCardRunInputsCache）让跨 popup 打开、卡片切换后仍记住上次输入
+    // - 最后才回退到卡片定义里的 defaultText
+    // 优先级：DOM 现值 > 缓存值 > 默认 text
     const signature = `${String(cardData.name || '')}::${uniqueVariables.map((item) => `${item.key}=${item.defaultText}`).join('|')}`;
     const sameCard = cardRunInputsNode.dataset.cardSignature === signature;
     const previousValues = {};
@@ -281,10 +297,24 @@ function renderCardRunInputs(cardData) {
         });
     }
 
+    // 从缓存加载本卡片上次用户输入（跨 popup 打开也有效）
+    let savedValues = {};
+    try {
+        const cache = await loadCardRunInputsCache();
+        savedValues = cache[targetCardName] || {};
+    } catch (_e) {
+        savedValues = {};
+    }
+
     const rows = uniqueVariables.map((item) => {
-        const currentValue = Object.prototype.hasOwnProperty.call(previousValues, item.key)
-            ? previousValues[item.key]
-            : item.defaultText;
+        let currentValue;
+        if (Object.prototype.hasOwnProperty.call(previousValues, item.key)) {
+            currentValue = previousValues[item.key];
+        } else if (Object.prototype.hasOwnProperty.call(savedValues, item.key)) {
+            currentValue = savedValues[item.key];
+        } else {
+            currentValue = item.defaultText;
+        }
         return `
       <div class="card-run-input">
         <label>步骤${item.stepIndex} · ${escapeHtml(item.label)} · <code>${escapeHtml(item.key)}</code></label>
@@ -293,12 +323,16 @@ function renderCardRunInputs(cardData) {
     `;
     }).join('');
     cardRunInputsNode.dataset.cardSignature = signature;
+    cardRunInputsNode.dataset.cardName = targetCardName;
 
     cardRunInputsNode.innerHTML = `
       <div class="card-run-inputs__title">变量输入（运行前可覆盖，共 ${uniqueVariables.length} 项）</div>
       <div class="card-run-inputs__list">${rows}</div>
     `;
     cardRunInputsNode.hidden = false;
+
+    // 绑定自动保存：用户打字时记住到缓存
+    attachRunInputsAutoSave(targetCardName);
 }
 
 // 收集面板里各变量框的当前值为 { 变量键: 值 } 对象；无面板/无变量时返回空对象。
@@ -314,6 +348,49 @@ function collectCardRunInputs() {
         }
     });
     return inputs;
+}
+
+// 变量输入持久化：把用户在「变量输入」面板填的值按卡片名称记住到 storage，
+// 下次打开同一卡片时自动带回上次填写的内容，而不是重置为步骤默认 text。
+async function loadCardRunInputsCache() {
+    try {
+        const stored = await chrome.storage.local.get([AUTOMATION_CARD_RUN_INPUTS_KEY]);
+        const data = stored && stored[AUTOMATION_CARD_RUN_INPUTS_KEY];
+        return (data && typeof data === 'object' && !Array.isArray(data)) ? data : {};
+    } catch (_e) {
+        return {};
+    }
+}
+
+async function saveCardRunInputsForCard(cardName, inputs = {}) {
+    const name = String(cardName || '').trim();
+    if (!name) return;
+    try {
+        const cache = await loadCardRunInputsCache();
+        cache[name] = { ...(inputs || {}) };
+        await chrome.storage.local.set({ [AUTOMATION_CARD_RUN_INPUTS_KEY]: cache });
+    } catch (_e) {}
+}
+
+function attachRunInputsAutoSave(cardName) {
+    if (!cardRunInputsNode) return;
+    const name = String(cardName || '').trim();
+    if (!name) return;
+
+    let saveTimer = null;
+    const scheduleSave = () => {
+        if (saveTimer) clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => {
+            const vals = collectCardRunInputs();
+            saveCardRunInputsForCard(name, vals).catch(() => {});
+            saveTimer = null;
+        }, 250);
+    };
+
+    cardRunInputsNode.querySelectorAll('[data-run-input-key]').forEach((el) => {
+        el.addEventListener('input', scheduleSave);
+        el.addEventListener('change', scheduleSave);
+    });
 }
 
 function normalizeProgressValue(value = 0) {
@@ -1234,7 +1311,7 @@ async function saveCardCacheState(items = [], selectedId = '') {
 
 async function refreshCardCacheUi() {
     const state = await loadCardCacheState().catch(() => ({ items: [], selectedId: '' }));
-    renderCardCacheList(state);
+    await renderCardCacheList(state);
     return state;
 }
 
@@ -1253,7 +1330,7 @@ async function selectCardCacheItem(cardId) {
     } else {
         setCardEditorValue(item.cardData);
     }
-    renderCardCacheList({
+    await renderCardCacheList({
         items: state.items,
         selectedId: item.id
     });
@@ -1283,7 +1360,7 @@ async function upsertCardCache(cardData, options = {}) {
 
     const nextSelectedId = options.select === false ? state.selectedId || nextItem.id : nextItem.id;
     await saveCardCacheState(nextItems, nextSelectedId);
-    renderCardCacheList({ items: nextItems, selectedId: nextSelectedId });
+    await renderCardCacheList({ items: nextItems, selectedId: nextSelectedId });
     return {
         cardData: safeCardData,
         cardName: safeCardData.name,
@@ -1318,7 +1395,7 @@ async function saveEditorCardToCache() {
         : parseEditorCardData(getCardEditorValue(), { allowEmptySteps: true });
     const saved = await saveCardCache(cardData);
     const state = await loadCardCacheState().catch(() => ({ items: [], selectedId: '' }));
-    renderCardCacheList(state);
+    await renderCardCacheList(state);
     return saved;
 }
 
@@ -1347,6 +1424,8 @@ globalThis.CookieCaptureAutomationWorkbench = {
     getCardTypeStepVariables,
     renderCardRunInputs,
     collectCardRunInputs,
+    loadCardRunInputsCache,
+    saveCardRunInputsForCard,
     normalizeProgressValue,
     setDebugProgress,
     resetDebugProgress,

@@ -398,7 +398,7 @@ async function executePageAction(tabId, action) {
                 return elements[Math.min(index, elements.length - 1)] || null;
             };
 
-            const waitForElement = async (selector, timeoutMs = 10000, intervalMs = 200, shouldBeVisible = true) => {
+            const waitForElement = async (selector, timeoutMs = 5000, intervalMs = 200, shouldBeVisible = true) => {
                 const deadline = Date.now() + Math.max(0, Number(timeoutMs) || 0);
                 while (Date.now() <= deadline) {
                     const element = pickElement(selector, payload.nth || 0);
@@ -459,7 +459,7 @@ async function executePageAction(tabId, action) {
 
             const actionType = normalize(payload.type || '');
             const selector = normalize(payload.selector || '');
-            const timeoutMs = Number.isFinite(Number(payload.timeoutMs)) ? Number(payload.timeoutMs) : 15000;
+            const timeoutMs = Number.isFinite(Number(payload.timeoutMs)) ? Number(payload.timeoutMs) : 5000;
             const intervalMs = Number.isFinite(Number(payload.intervalMs)) ? Number(payload.intervalMs) : 200;
             const text = normalize(payload.text || '');
             const waitForText = normalize(payload.waitForText || '');
@@ -505,7 +505,7 @@ async function executePageAction(tabId, action) {
                     return { success: false, error: `未找到可输入元素: ${selector}`, code: 'ELEMENT_NOT_FOUND' };
                 }
 
-                // P0 fix: pre-validate element type to fail fast with actionable error (no silent 3x retry waste)
+                // P0 fix: pre-validate element type to fail fast with actionable error (no retry on failure)
                 if (!isTypeableElement(element)) {
                     const tag = String(element.tagName || '').toLowerCase();
                     const role = String(element.getAttribute && element.getAttribute('role') || '').toLowerCase();

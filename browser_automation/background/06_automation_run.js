@@ -5,7 +5,7 @@ function buildDetailedFailureReason({
     stepType = '',
     reason = '',
     attempt = 1,
-    maxAttempts = 3,
+    maxAttempts = 1,
     selector = '',
     extra = ''
 } = {}) {
@@ -130,7 +130,7 @@ async function runStandaloneCard(payload = {}) {
     const stepProgressSpan = totalSteps > 0 ? (stepProgressEnd - stepProgressStart) / totalSteps : 0;
     const retryFailedStepInRunMode = true;
     const stepRetryDelayMs = Math.max(1000, Number(payload.step_retry_delay_ms || payload.stepRetryDelayMs || payload.retryDelayMs || 2000));
-    const MAX_STEP_RETRIES = 3;
+    const MAX_STEP_RETRIES = 3; // 仅 wait 步骤使用；其他动作步骤失败后不重试（maxAttempts=1）
     let tabId = 0;
     let currentCardName = '';
 
@@ -290,7 +290,7 @@ async function runStandaloneCard(payload = {}) {
         throw createStopError();
     }
 
-    // 重试控制：执行失败最多尝试 3 次，避免无限循环
+    // 重试控制：wait 步骤最多尝试 3 次，其他动作步骤失败后不反复尝试（直接失败）
     let stepAttempt = 1;
     let lastFailedStepIndex = -1;
     let maxRetriesExceeded = false;
@@ -380,7 +380,6 @@ async function runStandaloneCard(payload = {}) {
             stepAttempt++;
         }
         const currentAttempt = stepAttempt;
-        const maxAttempts = MAX_STEP_RETRIES;
 
         const stepType = String(step.type || '').trim().toLowerCase();
         const stepName = String(step.name || `步骤${index + 1}`).trim() || `步骤${index + 1}`;
@@ -390,6 +389,7 @@ async function runStandaloneCard(payload = {}) {
         const liveStepSpan = liveTotalSteps > 0 ? (stepProgressEnd - stepProgressStart) / liveTotalSteps : 0;
         const stepStartProgress = Math.min(stepProgressEnd, stepProgressStart + (index * liveStepSpan));
         const stepEndProgress = Math.min(stepProgressEnd, stepProgressStart + ((index + 1) * liveStepSpan));
+        const maxAttempts = (stepType === 'wait') ? MAX_STEP_RETRIES : 1;
         const attemptInfo = (retryFailedStepInRunMode && currentAttempt > 1) ? ` (尝试 ${currentAttempt}/${maxAttempts})` : '';
         const stepLabel = formatStepProgressLabel(index + 1, liveTotalSteps, stepName) + attemptInfo;
         const previousStepName = index > 0 ? String(steps[index - 1]?.name || `步骤${index}`).trim() || `步骤${index}` : '';
@@ -541,7 +541,7 @@ async function runStandaloneCard(payload = {}) {
                     });
                 } else {
                     await chrome.tabs.update(tabId, { url });
-                    await waitForTabComplete(tabId, Number(step.timeout || 30000));
+                    await waitForTabComplete(tabId, Number(step.timeout || 5000));
                     await emitProgress({
                         message: `${stepLabel} · 已跳转`,
                         progress: stepEndProgress,
@@ -694,7 +694,7 @@ async function runStandaloneCard(payload = {}) {
             nth: step.nth,
             clearFirst: step.clear_first === true || step.clearFirst === true,
             clickBeforeType: step.click_before_type === true || step.clickBeforeType === true,
-            timeoutMs: Number(step.timeout || 15000),
+            timeoutMs: Number(step.timeout || 5000),
             intervalMs: Number(step.poll_interval_ms || step.click_poll_interval_ms || 200),
             defaultValue: step.default,
             default: step.default,
@@ -945,7 +945,7 @@ async function runStandaloneCard(payload = {}) {
     }
 
     if (maxRetriesExceeded) {
-        throw makeStepFailureError('卡片执行失败：步骤重试已达 3 次上限');
+        throw makeStepFailureError('卡片执行失败：步骤重试已达上限');
     }
 
     result.success = true;

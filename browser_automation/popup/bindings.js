@@ -80,6 +80,7 @@ const AUTOMATION_CARD_CACHE_NAME_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_CACHE
 const AUTOMATION_CARD_CACHE_TIME_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_CACHE_TIME_KEY;
 const AUTOMATION_CARD_CACHE_LIST_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_CACHE_LIST_KEY;
 const AUTOMATION_CARD_SELECTED_ID_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_SELECTED_ID_KEY;
+const AUTOMATION_CARD_RUN_INPUTS_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_RUN_INPUTS_KEY;
 const LAST_MAIN_PANEL_KEY = shared.STORAGE_KEYS.LAST_MAIN_PANEL_KEY;
 const STANDALONE_PROGRESS_STATE_KEY = shared.STORAGE_KEYS.STANDALONE_PROGRESS_STATE_KEY;
 
@@ -1089,7 +1090,7 @@ void (async () => {
             setCardFileName('未选择卡片');
         }
     } catch (_error) {
-        renderCardCacheList({ items: [], selectedId: '' });
+        void renderCardCacheList({ items: [], selectedId: '' });
         if (isSidebarLayout()) {
             renderSidebarCardEditor({ name: '未命名自动化卡片', steps: [] });
             syncSidebarEditorToHiddenJson();

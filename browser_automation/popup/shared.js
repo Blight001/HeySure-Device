@@ -15,6 +15,7 @@ const STORAGE_KEYS = {
     AUTOMATION_CARD_CACHE_TIME_KEY: 'cookie-capture-automation-card-cache-time',
     AUTOMATION_CARD_CACHE_LIST_KEY: 'cookie-capture-automation-card-cache-list',
     AUTOMATION_CARD_SELECTED_ID_KEY: 'cookie-capture-automation-card-cache-selected-id',
+    AUTOMATION_CARD_RUN_INPUTS_KEY: 'cookie-capture-automation-card-run-inputs',
     LAST_MAIN_PANEL_KEY: 'cookie-capture-last-main-panel',
     STANDALONE_PROGRESS_STATE_KEY: 'cookie-capture-standalone-progress-state',
 

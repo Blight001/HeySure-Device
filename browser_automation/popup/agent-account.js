@@ -62,6 +62,7 @@
         const status = (state && state.status) || 'disconnected';
         const bound = state && state.boundAiConfigId;
         const hasAi = bound != null;
+        const lastError = (state && state.lastErrorReason) ? String(state.lastErrorReason) : '';
         let cls = 'is-red';
         let label = STATUS_LABELS[status] || '未连接';
 
@@ -76,15 +77,17 @@
         statusLabel.textContent = label;
 
         if (connStatus) {
-            connStatus.textContent = status === 'enrolled'
-                ? '已连接到服务器'
-                : status === 'connected'
-                    ? '已连接（同步中）'
-                    : status === 'connecting'
-                        ? '连接中…'
-                        : status === 'error'
-                            ? '连接错误'
-                            : '未连接到服务器';
+            if (status === 'enrolled') {
+                connStatus.textContent = '已连接到服务器';
+            } else if (status === 'connected') {
+                connStatus.textContent = '已连接（同步中）';
+            } else if (status === 'connecting') {
+                connStatus.textContent = '连接中…';
+            } else if (status === 'error') {
+                connStatus.textContent = lastError ? `连接错误：${lastError}` : '连接错误';
+            } else {
+                connStatus.textContent = '未连接到服务器';
+            }
         }
         if (aiStatus) {
             aiStatus.textContent = hasAi ? `已分配（#${bound}）` : '未分配';

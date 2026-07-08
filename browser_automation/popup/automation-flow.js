@@ -74,6 +74,7 @@ const AUTOMATION_CARD_CACHE_NAME_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_CACHE
 const AUTOMATION_CARD_CACHE_TIME_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_CACHE_TIME_KEY;
 const AUTOMATION_CARD_CACHE_LIST_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_CACHE_LIST_KEY;
 const AUTOMATION_CARD_SELECTED_ID_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_SELECTED_ID_KEY;
+const AUTOMATION_CARD_RUN_INPUTS_KEY = shared.STORAGE_KEYS.AUTOMATION_CARD_RUN_INPUTS_KEY;
 const LAST_MAIN_PANEL_KEY = shared.STORAGE_KEYS.LAST_MAIN_PANEL_KEY;
 const STANDALONE_PROGRESS_STATE_KEY = shared.STORAGE_KEYS.STANDALONE_PROGRESS_STATE_KEY;
 
@@ -274,7 +275,7 @@ async function clearCardCache() {
     if (cardFileInput) {
         cardFileInput.value = '';
     }
-    renderCardCacheList({ items: [], selectedId: '' });
+    void renderCardCacheList({ items: [], selectedId: '' });
     setCardFileName('未选择卡片');
 }
 
@@ -300,7 +301,7 @@ async function deleteSelectedCardCache() {
             AUTOMATION_CARD_CACHE_NAME_KEY,
             AUTOMATION_CARD_CACHE_TIME_KEY
         ]);
-        renderCardCacheList({ items: [], selectedId: '' });
+        void renderCardCacheList({ items: [], selectedId: '' });
         setCardFileName('未选择卡片');
         return deletedItem;
     }
@@ -314,7 +315,7 @@ async function deleteSelectedCardCache() {
     } else {
         setCardEditorValue(nextItem.cardData);
     }
-    renderCardCacheList({
+    void renderCardCacheList({
         items: nextItems,
         selectedId: nextSelectedId
     });
@@ -425,7 +426,7 @@ async function importSelectedCardFilesToCache() {
     if (selectedItem) {
         const state = await loadCardCacheState().catch(() => ({ items: [], selectedId: '' }));
         await saveCardCacheState(state.items, selectedItem.id);
-        renderCardCacheList({
+        void renderCardCacheList({
             items: state.items,
             selectedId: selectedItem.id
         });
@@ -461,9 +462,9 @@ async function importAndStartCard() {
     showActionToast('正在启动自动化流程...', 'info');
 
     try {
-        // 先收集用户在变量输入框里填写的值：后续 saveCardCache/importSelectedCardFilesToCache
-        // 会触发 renderCardCacheList → renderCardRunInputs 重渲染，把输入框重置回默认值，
-        // 所以必须在任何重渲染之前采集，否则运行时拿到的又是初始默认值。
+        // 先收集用户在变量输入框里填写的值。
+        // 现在变量输入会持久化到缓存（即使重渲染或重开 popup 也不会丢失上次填的值），
+        // 但在重渲染前采集仍是最稳妥的做法。
         const runInputs = typeof collectCardRunInputs === 'function' ? collectCardRunInputs() : {};
         await savePreset();
         const imported = await importSelectedCardFilesToCache().catch(() => null);
@@ -526,8 +527,8 @@ async function loopCard() {
     showActionToast('正在启动执行...', 'info');
 
     try {
-        // 同 importAndStartCard：在任何重渲染（saveCardCache 等）之前先采集用户输入的变量值，
-        // 否则输入框被重置回默认值，循环执行拿到的就是初始默认值。
+        // 同 importAndStartCard：在重渲染前采集用户输入的变量值。
+        // 变量输入已支持持久化缓存，跨打开不会重置。
         const loopInputs = typeof collectCardRunInputs === 'function' ? collectCardRunInputs() : {};
         const imported = await importSelectedCardFilesToCache().catch(() => null);
         const cardData = imported?.selectedItem?.cardData || await resolveCardForRun();

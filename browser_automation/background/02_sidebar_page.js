@@ -1,13 +1,14 @@
-async function injectCardEditorSidebar(tabId, width = 820) {
+async function injectCardEditorSidebar(tabId, width = 820, options = {}) {
     const sidebarUrl = chrome.runtime.getURL('popup.html?layout=sidebar');
+    const forceClose = !!options.forceClose;
     const results = await chrome.scripting.executeScript({
         target: { tabId },
-        args: [sidebarUrl, width],
-        func: async (iframeUrl, panelWidth) => {
+        args: [sidebarUrl, width, forceClose],
+        func: async (iframeUrl, panelWidth, forceClose) => {
             const rootId = '__automation_card_sidebar_root__';
             const existing = document.getElementById(rootId);
-            if (existing) {
-                existing.remove();
+            if (existing || forceClose) {
+                if (existing) existing.remove();
                 return { success: true, closed: true };
             }
 
@@ -124,7 +125,8 @@ async function openCardEditorSidebar(payload = {}) {
 
     const tabId = Number(tab.id);
     const width = Math.max(520, Number(payload.width || 820));
-    const result = await injectCardEditorSidebar(tabId, width);
+    const forceClose = !!payload.forceClose;
+    const result = await injectCardEditorSidebar(tabId, width, { forceClose });
     if (result?.opened === true) {
         await saveCardSidebarState({ tabId, width, open: true });
     } else if (result?.closed === true) {

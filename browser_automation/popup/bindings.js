@@ -763,10 +763,11 @@ sidebarCloseButton?.addEventListener('click', () => {
     try {
         window.parent && window.parent.postMessage({ type: 'close-card-sidebar' }, '*');
     } catch (_e) {}
-    // Also notify background to update state (the sendMessage will toggle/close)
-    void openCardEditorSidebar().catch((error) => {
-        // ignore if already closed
-    });
+
+    // Also ask background to force-close (ensures removal even if postMessage has issues in the frame)
+    chrome.runtime.sendMessage({
+        type: 'close-card-sidebar'
+    }).catch(() => {});
 });
 
 sidebarAddStepButton?.addEventListener('click', () => {

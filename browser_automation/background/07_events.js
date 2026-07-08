@@ -323,6 +323,32 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         return true;
     }
 
+    if (message.type === 'close-card-sidebar') {
+        (async () => {
+            try {
+                // Force close by calling the injector (it removes if exists)
+                const result = await openCardEditorSidebar({ forceClose: true });
+                sendResponse(result);
+            } catch (error) {
+                // Try direct removal via executeScript as fallback
+                try {
+                    const tabId = _sender?.tab?.id;
+                    if (tabId) {
+                        await chrome.scripting.executeScript({
+                            target: { tabId },
+                            func: () => {
+                                const host = document.getElementById('__automation_card_sidebar_root__');
+                                if (host) host.remove();
+                            }
+                        });
+                    }
+                } catch (_) {}
+                sendResponse({ success: true, closed: true });
+            }
+        })();
+        return true;
+    }
+
     if (message.type === 'card-sidebar-state-update') {
         (async () => {
             try {

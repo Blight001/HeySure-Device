@@ -1133,17 +1133,62 @@ function nudgeAgentSocket() {
     }
 }
 
+// Offscreen document: MV3 service workers are reclaimed when idle, while an
+// offscreen document can stay resident and ping us. Each ping wakes/resets this
+// worker and gives nudgeAgentSocket() a chance to repair the Socket.IO session.
+let ensureAgentOffscreenPromise = null;
+async function ensureAgentOffscreen() {
+    if (ensureAgentOffscreenPromise) {
+        return ensureAgentOffscreenPromise;
+    }
+    ensureAgentOffscreenPromise = (async () => {
+        try {
+            if (!chrome.offscreen || typeof chrome.offscreen.createDocument !== 'function') {
+                return;
+            }
+            if (typeof chrome.offscreen.hasDocument === 'function' && await chrome.offscreen.hasDocument()) {
+                return;
+            }
+            await chrome.offscreen.createDocument({
+                url: 'offscreen.html',
+                reasons: [chrome.offscreen.Reason.WORKERS],
+                justification: '保持 AI 自动化插件后台连接，并定期唤醒 Service Worker 检查 Agent Socket.IO 会话。'
+            });
+        } catch (_error) {
+            // createDocument can race with another wake of this service worker;
+            // the desired end state is simply "an offscreen document exists".
+        }
+    })().finally(() => {
+        ensureAgentOffscreenPromise = null;
+    });
+    return ensureAgentOffscreenPromise;
+}
+
 try {
     chrome.alarms.create(AGENT_KEEPALIVE_ALARM, { periodInMinutes: 0.5 });
 } catch (_error) {}
 
 chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm && alarm.name === AGENT_KEEPALIVE_ALARM) {
+        void ensureAgentOffscreen();
         nudgeAgentSocket();
     }
 });
 
+chrome.runtime.onMessage.addListener((message) => {
+    if (message && message.type === 'offscreen:keepalive') {
+        nudgeAgentSocket();
+        return false;
+    }
+    return false;
+});
+
+chrome.runtime.onInstalled.addListener(() => {
+    void ensureAgentOffscreen();
+});
+
 chrome.runtime.onStartup.addListener(() => {
+    void ensureAgentOffscreen();
     void restoreAndConnectAgent();
 });
 
@@ -1333,4 +1378,5 @@ chrome.runtime.onMessage.addListener((message, _sender, _sendResponse) => {
 });
 
 // 模块加载即尝试恢复连接（SW 被唤醒时）。
+void ensureAgentOffscreen();
 void restoreAndConnectAgent();

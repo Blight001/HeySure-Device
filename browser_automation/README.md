@@ -83,6 +83,7 @@
 ```
 browser_automation/
 ├── background.js               # importScripts 入口（先加载 vendor/socket.io.js）
+├── offscreen.html / offscreen.js # MV3 常驻保活文档：定时唤醒 SW，维护 Agent Socket.IO 连接
 ├── background/
 │   ├── 00_core.js
 │   ├── 01_state.js
@@ -118,7 +119,7 @@ browser_automation/
 
 - Chrome Extension Manifest V3
 - 原生 JavaScript (ES Modules)
-- Chrome APIs: cookies、storage、scripting、tabs、downloads、alarms 等
+- Chrome APIs: cookies、storage、scripting、tabs、downloads、alarms、offscreen 等
 - Socket.IO（`socket.io-client`，已打包到 `vendor/socket.io.js`）用于与 HeySure 服务器同步
 
 > `vendor/socket.io.js` 由 `device/extension/node_modules/socket.io-client` 经 esbuild 打包为

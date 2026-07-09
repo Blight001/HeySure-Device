@@ -51,6 +51,7 @@
     "alarms",
     "cookies",
     "downloads",
+    "offscreen",
     "scripting",
     "storage",
     "tabs"

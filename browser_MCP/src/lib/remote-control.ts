@@ -20,6 +20,23 @@ import { getSettings, getAuth } from './storage'
 import { getIceServers, DEFAULT_ICE_SERVERS, type IceServer } from './client'
 
 type SignalSender = (event: string, payload: any) => void
+type ChromeDebuggerApi = typeof chrome.debugger
+
+const debuggerApi = (chrome as any).debugger as ChromeDebuggerApi | undefined
+
+function hasDebuggerApi(): boolean {
+  return !!(
+    debuggerApi?.attach &&
+    debuggerApi?.detach &&
+    debuggerApi?.sendCommand &&
+    debuggerApi?.onEvent?.addListener &&
+    debuggerApi?.onDetach?.addListener
+  )
+}
+
+function debuggerUnavailableError(): Error {
+  return new Error('当前浏览器不支持 chrome.debugger API，无法使用远程控制')
+}
 
 /** Best-effort resolve of the server ICE config for the current session. */
 async function resolveIceServers(): Promise<IceServer[]> {
@@ -73,7 +90,11 @@ const FRAME_OPTS = { format: 'jpeg', quality: 85, maxWidth: 2560, maxHeight: 144
 // ── CDP helpers ─────────────────────────────────────────────────────────────
 function cdp(tabId: number, method: string, params: any = {}): Promise<any> {
   return new Promise((resolve, reject) => {
-    chrome.debugger.sendCommand({ tabId }, method, params, (res) => {
+    if (!debuggerApi?.sendCommand) {
+      reject(debuggerUnavailableError())
+      return
+    }
+    debuggerApi.sendCommand({ tabId }, method, params, (res) => {
       const err = chrome.runtime.lastError
       if (err) reject(new Error(err.message)); else resolve(res)
     })
@@ -82,7 +103,11 @@ function cdp(tabId: number, method: string, params: any = {}): Promise<any> {
 
 function attach(tabId: number): Promise<void> {
   return new Promise((resolve, reject) => {
-    chrome.debugger.attach({ tabId }, '1.3', () => {
+    if (!debuggerApi?.attach) {
+      reject(debuggerUnavailableError())
+      return
+    }
+    debuggerApi.attach({ tabId }, '1.3', () => {
       const err = chrome.runtime.lastError
       // "Already attached" is fine — reuse the existing session.
       if (err && !/already attached/i.test(err.message)) reject(new Error(err.message))
@@ -100,7 +125,11 @@ const selfDetaching = new Set<number>()
 function detach(tabId: number): void {
   selfDetaching.add(tabId)
   try {
-    chrome.debugger.detach({ tabId }, () => {
+    if (!debuggerApi?.detach) {
+      selfDetaching.delete(tabId)
+      return
+    }
+    debuggerApi.detach({ tabId }, () => {
       void chrome.runtime.lastError
       // If the tab wasn't attached, no onDetach fires — drop the guard next tick
       // so a later genuine external detach isn't wrongly ignored.
@@ -115,6 +144,7 @@ function detach(tabId: number): void {
 // operator can still drive the tab strip / address bar and navigate away.
 async function startCapture(session: RcSession): Promise<boolean> {
   const tabId = session.tabId
+  if (!hasDebuggerApi()) return false
   if (session.attaching || session.attached) return session.attached
   let tab: chrome.tabs.Tab
   try { tab = await chrome.tabs.get(tabId) } catch { return false }
@@ -157,9 +187,13 @@ function toOffscreen(event: string, payload: any): void {
 /** Register the debugger event + detach listeners once. */
 export function initRemoteControl(): void {
   if (listenersBound) return
+  if (!hasDebuggerApi()) {
+    listenersBound = true
+    return
+  }
   listenersBound = true
 
-  chrome.debugger.onEvent.addListener((source, method, params: any) => {
+  debuggerApi!.onEvent.addListener((source, method, params: any) => {
     if (method !== 'Page.screencastFrame' || source.tabId == null) return
     const session = findSessionByTab(source.tabId)
     if (!session) return
@@ -176,7 +210,7 @@ export function initRemoteControl(): void {
   // to a restricted page (Chrome force-detaches) → keep the session alive and let
   // recovery re-attach once it leaves; or a real external takeover (devtools) on
   // a still-controllable tab → end.
-  chrome.debugger.onDetach.addListener((source) => {
+  debuggerApi!.onDetach.addListener((source) => {
     const tabId = source.tabId
     if (tabId == null) return
     if (selfDetaching.delete(tabId)) return
@@ -218,6 +252,10 @@ export async function handleRcSocketSignal(event: string, data: any, send: Signa
   if (!sessionId) return
 
   if (event === 'rc:start') {
+    if (!hasDebuggerApi()) {
+      send('rc:error', { sessionId, code: 'debugger_unavailable', message: '当前浏览器不支持 chrome.debugger API，无法使用远程控制' })
+      return
+    }
     const tab = await activeTab()
     if (!tab || tab.id == null) {
       send('rc:error', { sessionId, code: 'no_tab', message: '没有可控制的活动标签页' })

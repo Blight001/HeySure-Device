@@ -112,6 +112,7 @@ function refreshPopupStatus() {
 // Server-side bound AI for this device, learned from device:registered. null =
 // none assigned yet → the popup status indicator shows yellow instead of green.
 let boundAiConfigId: number | null = null
+const actionApi = (chrome as any).action as typeof chrome.action | undefined
 
 // ── Status management ─────────────────────────────────────────────────────
 function setStatus(status: DeviceStatus, reason?: string) {
@@ -122,9 +123,13 @@ function setStatus(status: DeviceStatus, reason?: string) {
     disconnected: '#787878', connecting: '#f59e0b',
     connected: '#6366f1',    registered: '#22c55e',  error: '#ef4444',
   }
-  chrome.action.setBadgeBackgroundColor({ color: colors[status] })
-  chrome.action.setBadgeText({ text: status === 'registered' ? '●' : status === 'error' ? '!' : '' })
-  chrome.action.setTitle({ title: `HeySure Agent — ${status}` })
+  try {
+    actionApi?.setBadgeBackgroundColor?.({ color: colors[status] })
+    actionApi?.setBadgeText?.({ text: status === 'registered' ? '●' : status === 'error' ? '!' : '' })
+    actionApi?.setTitle?.({ title: `HeySure Agent — ${status}` })
+  } catch {
+    // Some embedded Chromium hosts expose a partial extension API surface.
+  }
 }
 
 // ── Popup broadcast ───────────────────────────────────────────────────────
@@ -340,7 +345,11 @@ function attachOperationalListeners(s: Socket, agentName: string) {
   // Remote control (WebRTC signaling). Video is CDP-screencast + input is CDP
   // injection (lib/remote-control.ts); the media/input ride a P2P link hosted in
   // the offscreen doc, so only these SDP/ICE messages cross the socket.
-  initRemoteControl()
+  try {
+    initRemoteControl()
+  } catch (err: any) {
+    log('system', 'warn', `远程控制初始化失败，已继续连接服务器: ${err?.message || err}`)
+  }
   for (const ev of ['rc:start', 'rc:answer', 'rc:ice', 'rc:stop']) {
     s.on(ev, (data: any) => { void handleRcSocketSignal(ev, data, rcSend) })
   }
@@ -873,15 +882,21 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // doesn't throw on the already-registered ids. The keepalive alarm is
 // (re)created at module scope above on every service-worker wake, which is
 // what actually matters for an MV3 worker that gets torn down frequently.
+const contextMenusApi = (chrome as any).contextMenus as typeof chrome.contextMenus | undefined
+
 chrome.runtime.onInstalled.addListener(() => {
   void ensureOffscreen()
-  chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({ id: 'hs-ask', title: 'HeySure AI: 询问选中内容', contexts: ['selection'] })
-    chrome.contextMenus.create({ id: 'hs-screenshot', title: 'HeySure AI: 截图分析此页', contexts: ['page'] })
+  if (!contextMenusApi?.removeAll || !contextMenusApi?.create) {
+    log('system', 'warn', '当前浏览器不支持右键菜单 API，已跳过菜单注册')
+    return
+  }
+  contextMenusApi.removeAll(() => {
+    contextMenusApi.create({ id: 'hs-ask', title: 'HeySure AI: 询问选中内容', contexts: ['selection'] })
+    contextMenusApi.create({ id: 'hs-screenshot', title: 'HeySure AI: 截图分析此页', contexts: ['page'] })
   })
 })
 
-chrome.contextMenus.onClicked.addListener(async (info) => {
+contextMenusApi?.onClicked?.addListener(async (info) => {
   if (info.menuItemId === 'hs-ask' && info.selectionText) {
     await chrome.storage.session.set({ _pendingChat: info.selectionText })
   } else if (info.menuItemId === 'hs-screenshot') {

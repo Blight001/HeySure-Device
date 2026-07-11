@@ -1935,7 +1935,8 @@ async function getCardDataForExport() {
         return normalizeCardData(cardData, cardData?.name || 'automation', { allowEmptySteps: true });
     }
 
-    const cachedCard = await loadCardCache().catch(() => null);
+    const cacheState = await loadCardCacheState().catch(() => ({ items: [], selectedId: '' }));
+    const cachedCard = cacheState.items.find((item) => item.id === cacheState.selectedId) || cacheState.items[0];
     if (cachedCard?.cardData) {
         return normalizeCardData(cachedCard.cardData, cachedCard.cardName || cachedCard.cardData?.name || 'automation', { allowEmptySteps: true });
     }

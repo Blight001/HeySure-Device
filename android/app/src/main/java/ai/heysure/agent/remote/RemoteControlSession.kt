@@ -56,6 +56,9 @@ class RemoteControlSession(
     private var videoSource: VideoSource? = null
     private var videoTrack: VideoTrack? = null
     private var dataChannel: DataChannel? = null
+    private val pendingRemoteIce = mutableListOf<IceCandidate>()
+    @Volatile
+    private var remoteDescriptionSet = false
     private var closed = false
     private val inputMutex = Mutex()
     private var activeDragStroke: GestureDescription.StrokeDescription? = null
@@ -159,7 +162,23 @@ class RemoteControlSession(
         val connection = pc ?: return
         if (sdp.isNullOrBlank()) return
         connection.setRemoteDescription(
-            object : NoopSdpObserver() {},
+            object : NoopSdpObserver() {
+                override fun onSetSuccess() {
+                    val queued = synchronized(pendingRemoteIce) {
+                        remoteDescriptionSet = true
+                        pendingRemoteIce.toList().also { pendingRemoteIce.clear() }
+                    }
+                    queued.forEach { candidate ->
+                        if (!connection.addIceCandidate(candidate)) {
+                            reportError("ice_add_failed", "添加排队的远端 ICE 候选失败")
+                        }
+                    }
+                }
+
+                override fun onSetFailure(error: String?) {
+                    fail("answer_failed", "设置远端 SDP answer 失败：${error ?: "unknown"}")
+                }
+            },
             SessionDescription(SessionDescription.Type.ANSWER, sdp),
         )
     }
@@ -169,13 +188,20 @@ class RemoteControlSession(
         candidate ?: return
         val sdp = candidate.optString("candidate")
         if (sdp.isBlank()) return
-        connection.addIceCandidate(
-            IceCandidate(
-                candidate.optString("sdpMid"),
-                candidate.optInt("sdpMLineIndex"),
-                sdp,
-            ),
+        val ice = IceCandidate(
+            candidate.optString("sdpMid"),
+            candidate.optInt("sdpMLineIndex"),
+            sdp,
         )
+        synchronized(pendingRemoteIce) {
+            if (!remoteDescriptionSet) {
+                pendingRemoteIce.add(ice)
+                return
+            }
+        }
+        if (!connection.addIceCandidate(ice)) {
+            reportError("ice_add_failed", "添加远端 ICE 候选失败")
+        }
     }
 
     fun close(reason: String, notifyPeer: Boolean) {
@@ -192,6 +218,10 @@ class RemoteControlSession(
         runCatching { videoSource?.dispose() }
         runCatching { pc?.dispose() }
         activeDragStroke = null
+        synchronized(pendingRemoteIce) {
+            pendingRemoteIce.clear()
+            remoteDescriptionSet = false
+        }
         pc = null
         if (notifyPeer) {
             sendSignal("rc:stopped", JSONObject().put("sessionId", sessionId).put("reason", reason))
@@ -200,9 +230,13 @@ class RemoteControlSession(
     }
 
     private fun fail(code: String, message: String) {
+        reportError(code, message)
+        close(code, notifyPeer = false)
+    }
+
+    private fun reportError(code: String, message: String) {
         sendSignal("rc:error", JSONObject()
             .put("sessionId", sessionId).put("code", code).put("message", message))
-        close(code, notifyPeer = false)
     }
 
     private fun createOffer(connection: PeerConnection) {
@@ -212,10 +246,21 @@ class RemoteControlSession(
         }
         connection.createOffer(object : NoopSdpObserver() {
             override fun onCreateSuccess(desc: SessionDescription) {
-                connection.setLocalDescription(object : NoopSdpObserver() {}, desc)
-                sendSignal("rc:offer", JSONObject()
-                    .put("sessionId", sessionId)
-                    .put("sdp", desc.description))
+                connection.setLocalDescription(object : NoopSdpObserver() {
+                    override fun onSetSuccess() {
+                        sendSignal("rc:offer", JSONObject()
+                            .put("sessionId", sessionId)
+                            .put("sdp", desc.description))
+                    }
+
+                    override fun onSetFailure(error: String?) {
+                        fail("offer_set_failed", "设置本地 SDP offer 失败：${error ?: "unknown"}")
+                    }
+                }, desc)
+            }
+
+            override fun onCreateFailure(error: String?) {
+                fail("offer_create_failed", "创建 SDP offer 失败：${error ?: "unknown"}")
             }
         }, constraints)
     }

@@ -1,0 +1,25 @@
+[Unit]
+# HeySure Linux 服务器端 agent —— systemd 单元模板。
+# install.sh 会据实际安装路径生成一份并写入 /etc/systemd/system/。
+# 手动改用时，替换下面 __APP_DIR__ 为实际目录（含 .venv 与 agent/）。
+Description=HeySure Linux Server Agent (custom device for HeySure AI)
+Documentation=file://__APP_DIR__/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 运维管控通常需要 root（systemctl 控制服务、读取全量日志）。
+# 若追求最小权限：改成专用用户 + 给 systemctl 配 sudo NOPASSWD，见 README「权限」。
+User=root
+WorkingDirectory=__APP_DIR__
+EnvironmentFile=__APP_DIR__/.env
+ExecStart=__APP_DIR__/.venv/bin/python -m agent.main
+Restart=always
+RestartSec=5
+# 断线自动重连由 agent 自身负责；systemd 仅兜底进程级崩溃。
+KillSignal=SIGTERM
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target

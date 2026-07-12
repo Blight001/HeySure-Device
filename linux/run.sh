@@ -1,22 +1,26 @@
 #!/usr/bin/env bash
-# Launcher for the HeySure Agent Linux desktop app. Installs deps and rebuilds
-# robotjs on first run, then starts the app.
+# 开发/手动运行：建 venv、装依赖、前台跑 agent。
+# 生产部署用 systemd，见 install.sh。
 set -euo pipefail
-
 cd "$(dirname "$0")"
 
-export ELECTRON_MIRROR="${ELECTRON_MIRROR:-https://npmmirror.com/mirrors/electron/}"
+PYTHON="${PYTHON:-python3}"
+VENV_DIR="${VENV_DIR:-.venv}"
 
-if [ ! -d node_modules ]; then
-  echo "Installing dependencies..."
-  npm install
-  echo "Rebuilding native modules for Electron..."
-  npm run rebuild || echo "warning: robotjs rebuild failed — keyboard/mouse tools may be unavailable"
+if [ ! -d "$VENV_DIR" ]; then
+  echo "[run] 创建虚拟环境 $VENV_DIR"
+  "$PYTHON" -m venv "$VENV_DIR"
 fi
 
-for bin in wmctrl xdotool; do
-  command -v "$bin" >/dev/null 2>&1 || echo "note: '$bin' not found — install it for full window/input support: sudo apt install $bin"
-done
+# shellcheck disable=SC1091
+source "$VENV_DIR/bin/activate"
+pip install --quiet --upgrade pip
+pip install --quiet -r requirements.txt
 
-echo "Starting HeySure Agent (Linux desktop)..."
-npm run dev
+if [ ! -f .env ]; then
+  echo "[run] 未发现 .env —— 请先 cp .env.example .env 并填写账号密码" >&2
+  exit 1
+fi
+
+echo "[run] 启动 agent（Ctrl-C 退出）"
+exec python -m agent.main

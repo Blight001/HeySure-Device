@@ -1,0 +1,6 @@
+# HeySure Linux 服务器端 agent —— 运行时产物，不要提交
+.venv/
+.env
+__pycache__/
+*.pyc
+*.log

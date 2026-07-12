@@ -1,0 +1,9 @@
+# HeySure Linux 服务器端 agent 依赖
+# python-socketio[client]：Socket.IO v4 客户端（含 websocket 传输），read.md 3.2 要求
+python-socketio[client]>=5.11,<6
+# HTTP 登录（read.md 3.1）
+requests>=2.31
+# 实时系统指标 / 进程 / 网络（manylinux 有预编译 wheel，CentOS/Ubuntu 直接 pip 装）
+psutil>=5.9
+# .env 加载（可选：缺失时 config.py 会用内置极简解析器兜底）
+python-dotenv>=1.0

@@ -89,8 +89,39 @@
             && r.top <= win.innerHeight && r.left <= win.innerWidth;
     }
 
+    // 当前文档根 + 任意层级可访问 ShadowRoot。shadow-patch.js 会在页面
+    // 创建组件时把 closed root 转为 open，因此调用方无需额外点击模式。
+    function enumerateOpenRoots(root) {
+        const roots = [];
+        const queue = [root];
+        const seen = new Set();
+        const enqueueShadow = (el) => {
+            const shadow = el && el.shadowRoot;
+            if (shadow && !seen.has(shadow)) queue.push(shadow);
+        };
+        while (queue.length) {
+            const current = queue.shift();
+            if (!current || seen.has(current)) continue;
+            seen.add(current);
+            roots.push(current);
+            if (isElement(current)) enqueueShadow(current);
+            const doc = current.nodeType === Node.DOCUMENT_NODE ? current : (current.ownerDocument || document);
+            const walker = doc.createTreeWalker(current, NodeFilter.SHOW_ELEMENT);
+            while (walker.nextNode()) enqueueShadow(walker.currentNode);
+        }
+        return roots;
+    }
+
+    function querySelectorDeep(root, selector) {
+        for (const scan of enumerateOpenRoots(root)) {
+            const hit = scan.querySelector(selector);
+            if (hit) return hit;
+        }
+        return null;
+    }
+
     function listIframeElementsIn(doc) {
-        return Array.from(doc.querySelectorAll('iframe,frame'))
+        return enumerateOpenRoots(scanRoot(doc)).flatMap((root) => Array.from(root.querySelectorAll('iframe,frame')))
             .filter((el) => isFrameElement(el) && isVisibleInOwnerViewport(el));
     }
 
@@ -121,7 +152,7 @@
         let parent;
         let resolved = null;
         for (const frameSelector of path) {
-            const frameEl = doc.querySelector(frameSelector);
+            const frameEl = querySelectorDeep(scanRoot(doc), frameSelector);
             if (!isFrameElement(frameEl)) return null;
             const base = tryFrameContext(frameEl);
             if (!base) return null;
@@ -315,7 +346,7 @@
     // ── selector 构建（自愈式 ref 复查）───────────────────────────────────────
     function selectorResolvesTo(selector, el) {
         try {
-            const hits = el.ownerDocument.querySelectorAll(selector);
+            const hits = el.getRootNode().querySelectorAll(selector);
             return hits.length === 1 && hits[0] === el;
         } catch (_error) { return false; }
     }
@@ -371,18 +402,27 @@
         return haystack.some((v) => (exact ? v === target : (v === target || v.includes(target))));
     }
     function findElInDocument(doc, selector, text, frame) {
+        const roots = enumerateOpenRoots(scanRoot(doc));
         if (selector) {
-            const matches = Array.from(doc.querySelectorAll(selector));
-            return matches.find((el) => isHittable(el, frame)) || matches.find(isVisible) || matches[0] || null;
+            const matches = roots.flatMap((root) => Array.from(root.querySelectorAll(selector)));
+            if (matches.length) {
+                const labelled = text
+                    ? matches.filter((el) => textMatches(el, text, true)).concat(matches.filter((el) => textMatches(el, text, false)))
+                    : matches;
+                const candidates = labelled.length ? labelled : matches;
+                return candidates.find((el) => isHittable(el, frame)) || candidates.find(isVisible) || candidates[0] || null;
+            }
         }
         if (text) {
-            const preferred = Array.from(doc.querySelectorAll('button,a,[role="button"],input[type="button"],input[type="submit"],[aria-label],[title]'));
+            const preferred = roots.flatMap((root) => Array.from(root.querySelectorAll('button,a,[role="button"],input[type="button"],input[type="submit"],[aria-label],[title]')));
             const byPreferred = (pred, exact) => preferred.find((el) => pred(el) && textMatches(el, text, exact));
             const byWalk = (pred, exact) => {
-                const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT);
-                while (walker.nextNode()) {
-                    const el = walker.currentNode;
-                    if (pred(el) && textMatches(el, text, exact)) return clickableAncestor(el);
+                for (const root of roots) {
+                    const walker = doc.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+                    while (walker.nextNode()) {
+                        const el = walker.currentNode;
+                        if (pred(el) && textMatches(el, text, exact)) return clickableAncestor(el);
+                    }
                 }
                 return null;
             };
@@ -620,17 +660,6 @@
         return el.matches('a[href],button,input:not([type="hidden"]),select,textarea,summary,label[for],[role="button"],[role="link"],[role="checkbox"],[role="radio"],[role="tab"],[role="menuitem"],[role="menuitemcheckbox"],[role="menuitemradio"],[role="switch"],[contenteditable=""],[contenteditable="true"]');
     }
 
-    // ── 扫描根枚举（含 Shadow DOM）─────────────────────────────────────────────
-    function enumerateScanRoots(root) {
-        const doc = root.ownerDocument || document;
-        const roots = [root];
-        const seen = new Set([root]);
-        const add = (node) => { if (!node || seen.has(node)) return; seen.add(node); roots.push(node); };
-        const walker = doc.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
-        while (walker.nextNode()) { add(walker.currentNode.shadowRoot); }
-        return roots;
-    }
-
     function collectCandidatesIn(root, frame) {
         const out = [];
         const seen = new Set();
@@ -639,7 +668,7 @@
             seen.add(el);
             if (hasInteractiveSemantics(el) && isVisible(el)) out.push({ el, frame });
         };
-        for (const sr of enumerateScanRoots(root)) {
+        for (const sr of enumerateOpenRoots(root)) {
             sr.querySelectorAll(INTERACTIVE).forEach(add);
             const walker = (sr.ownerDocument || document).createTreeWalker(sr, NodeFilter.SHOW_ELEMENT);
             let scanned = 0;
@@ -730,7 +759,7 @@
                 });
             }
         };
-        for (const sr of enumerateScanRoots(root)) { walkText(sr); if (out.length >= limit) break; }
+        for (const sr of enumerateOpenRoots(root)) { walkText(sr); if (out.length >= limit) break; }
         return out;
     }
     function collectVisibleTexts(limit, scopes) {
@@ -877,7 +906,7 @@
             if (center.y < 0 || center.x < 0 || center.y > window.innerHeight || center.x > window.innerWidth) return;
             out.push(mediaRecord(el, frame));
         };
-        for (const sr of enumerateScanRoots(root)) sr.querySelectorAll(MEDIA_SELECTOR).forEach(add);
+        for (const sr of enumerateOpenRoots(root)) sr.querySelectorAll(MEDIA_SELECTOR).forEach(add);
         return out;
     }
     function collectVisibleMedia(scopes) {
@@ -1235,7 +1264,6 @@
             el.dispatchEvent(new MouseEvent('contextmenu', base));
         } else {
             el.dispatchEvent(new MouseEvent('click', base));
-            try { el.click(); } catch (_error) { /* some elements reject synthetic .click() */ }
         }
     }
 

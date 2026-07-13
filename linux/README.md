@@ -27,12 +27,55 @@
 | `disk.usage` | 磁盘使用（df）+ 可选目录 du | 只读 |
 | `network.info` | 网卡 IP / 监听端口 | 只读 |
 | `file.read` | 读文本文件（头/尾，≤512KB） | 只读 |
-| `shell.exec` | 执行任意 shell 命令 | **危险**（可关） |
+| `shell.exec` | 执行任意 shell 命令（一次性） | **危险**（可关） |
+| `console.open` | 新建常驻交互式控制台（PTY），返回 sessionId | **危险**（可关） |
+| `console.send` | 向控制台输入内容（默认带回车），返回新增输出 | **危险**（可关） |
+| `console.read` | 拉取控制台自上次以来的最新输出 | 只读 |
+| `console.list` | 列出所有控制台会话及存活状态 | 只读 |
+| `console.close` | 关闭控制台会话（杀进程组） | **危险**（可关） |
 
 外加传输层能力字 `remote_terminal`（不是 MCP 工具，解锁命令行远程通道）。
 
 `shell.exec` 是「万能」工具：默认开启（因为要「管控」本机），如需更保守的**纯只读画像**，
 设 `HEYSURE_ENABLE_SHELL_EXEC=false` 即可从工具清单里去掉它。
+
+### `console.*`：给 AI 的持续交互式控制台
+
+`shell.exec` 是**一次性**的：起子进程 → 跑完 → 拿全部输出。碰上「安装到一半问你
+`[Y/n]`、让你选镜像源」这类**交互式提示**就废了——命令不退出、也拿不到中间输出。
+
+`console.*` 用 PTY 起一个**常驻 shell 会话**，AI 能像人一样一轮轮操作：
+
+```
+console.open                       → { sessionId: "a1b2c3", output: "[root@host ~]# " }
+console.send  {sessionId, input:"apt install nginx", timeout_seconds:30}
+                                   → output: "... Do you want to continue? [Y/n] "   ← 停在提示符
+console.send  {sessionId, input:"y", timeout_seconds:120}
+                                   → output: "...Setting up nginx... done"           ← 回答后的结果
+console.read  {sessionId, timeout_seconds:20}   → 命令还在跑时，反复拉最新进展
+console.close {sessionId}
+```
+
+要点：
+
+- **只返回「新增」输出**：每次 `send` / `read` 只给上次以来的增量，不会把整屏历史重复灌给 AI。
+- **何时返回**：输出**静默 ~0.4 秒**即返回（说明进程停下来等输入了），不必傻等命令结束；
+  最长等 `timeout_seconds`（`send` 默认 3s、`read` 默认 0=立即取）。命令慢就把它调大。
+- **有状态**：`cd` / 环境变量 / 后台任务在同一会话内跨调用保留。
+- **控制键**：`console.send {sessionId, control:"c"}` = Ctrl+C 中断卡住的命令；`"d"` = Ctrl+D。
+- **只按回车**：`input:""`（默认 `enter:true` 会补回车）。
+- 输出已洗掉 ANSI 转义序列；单次最多回 60K 字符（超出保留**最新**部分）。
+- 最多同时 8 个会话，用完请 `console.close`。会话**不随 socket 断线关闭**（长时间安装可跨重连
+  继续），只在 agent 进程退出时统一回收。
+- 关闭开关：`HEYSURE_ENABLE_CONSOLE=false`。
+
+自检（在目标 Linux 机器上跑，不连服务器）：
+
+```bash
+cd device/linux && python3 selftest_console.py
+```
+
+会真起 PTY 走一遍「命令问确认 → 回答 y → 看结果 → Ctrl+C → 多开 → 关闭」的完整流程。
 
 ## 一键部署（推荐）
 
@@ -71,6 +114,7 @@ cp .env.example .env && vi .env
 | `HEYSURE_SERVICE_NAME` | 否 | 展示名；默认「Linux 服务器 (主机名)」 |
 | `HEYSURE_ENABLE_REMOTE_TERMINAL` | 否 | 命令行远程开关，默认 `true` |
 | `HEYSURE_ENABLE_SHELL_EXEC` | 否 | `shell.exec` 工具开关，默认 `true` |
+| `HEYSURE_ENABLE_CONSOLE` | 否 | `console.*` 交互式控制台工具开关，默认 `true` |
 | `HEYSURE_SHELL` | 否 | PTY/`shell.exec` 默认 shell，默认自动探测 |
 | `HEYSURE_ICON` | 否 | 设备图标 `"1"`~`"8"` / 路径 / URL |
 | `LOG_LEVEL` | 否 | `DEBUG`/`INFO`/`WARNING`，默认 `INFO` |
@@ -107,7 +151,7 @@ TOKEN=$(curl -s -X POST http://<server>:3000/api/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"account":"<账号>","password":"<密码>"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["access_token"])')
 
-# hasRecord=true 且 toolDefs 里是你上报的 11 个工具 = 注册成功、schema 已入库
+# hasRecord=true 且 toolDefs 里是你上报的 16 个工具 = 注册成功、schema 已入库
 curl -s "http://<server>:3000/api/devices/<你的 SERVICE_ID>/mcp-scope" \
   -H "Authorization: Bearer $TOKEN"
 ```
@@ -147,6 +191,7 @@ device/linux/
       network.py       network.info
       packages.py      package.query（dpkg/rpm）
       shell.py         shell.exec（可开关）
+      console.py       console.*：常驻 PTY 会话，供 AI 做多轮交互（可开关）
   requirements.txt
   .env.example
   run.sh               开发/手动运行

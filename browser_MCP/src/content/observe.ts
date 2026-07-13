@@ -19,7 +19,7 @@
 import { isHittable, isVisible, cssPath, textOf, elementArea } from './dom'
 import {
   FrameContext, buildFramePath, elementViewportCenter, elementViewportRect,
-  getAccessibleFrames, isCenterOnMainViewport, isFrameChainVisible, isFrameElement,
+  enumerateOpenRoots, getAccessibleFrames, isCenterOnMainViewport, isFrameChainVisible, isFrameElement,
   isHTMLElement, isLikelyInteractableInFrame,
   isTopmostAtViewport, isVisibleInOwnerViewport, listIframeElementsIn,
   resolveFrameBySelector, scanRoot, tryFrameContext, visitAccessibleFrames,
@@ -242,23 +242,6 @@ interface TaggedElement {
   frame?: FrameContext
 }
 
-function enumerateScanRoots(root: ParentNode): ParentNode[] {
-  const doc = root.ownerDocument || document
-  const roots: ParentNode[] = [root]
-  const seen = new Set<ParentNode>([root])
-  const add = (node: ParentNode | null | undefined) => {
-    if (!node || seen.has(node)) return
-    seen.add(node)
-    roots.push(node)
-  }
-  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_ELEMENT)
-  while (walker.nextNode()) {
-    const el = walker.currentNode as HTMLElement
-    add(el.shadowRoot)
-  }
-  return roots
-}
-
 function collectCandidatesIn(root: ParentNode, frame?: FrameContext): TaggedElement[] {
   const out: TaggedElement[] = []
   const seen = new Set<Element>()
@@ -268,7 +251,7 @@ function collectCandidatesIn(root: ParentNode, frame?: FrameContext): TaggedElem
     if (hasInteractiveSemantics(el) && isVisible(el)) out.push({ el, frame })
   }
 
-  for (const scanRoot of enumerateScanRoots(root)) {
+  for (const scanRoot of enumerateOpenRoots(root)) {
     scanRoot.querySelectorAll(INTERACTIVE).forEach(add)
     const walker = (scanRoot.ownerDocument || document).createTreeWalker(scanRoot, NodeFilter.SHOW_ELEMENT)
     let scanned = 0
@@ -413,7 +396,7 @@ function collectVisibleTextsIn(root: ParentNode, limit: number, frame?: FrameCon
   }
   }
 
-  for (const scanRoot of enumerateScanRoots(root)) {
+  for (const scanRoot of enumerateOpenRoots(root)) {
     walkText(scanRoot)
     if (out.length >= limit) break
   }
@@ -633,7 +616,7 @@ function collectVisibleMediaIn(root: ParentNode, frame?: FrameContext): MediaRec
     if (center.y < 0 || center.x < 0 || center.y > window.innerHeight || center.x > window.innerWidth) return
     out.push(mediaRecord(el, frame))
   }
-  for (const scanRoot of enumerateScanRoots(root)) {
+  for (const scanRoot of enumerateOpenRoots(root)) {
     scanRoot.querySelectorAll(MEDIA_SELECTOR).forEach(add)
   }
   return out
@@ -674,7 +657,7 @@ function isOwnMarkNode(node: Node): boolean {
 function isPageMutation(records: MutationRecord[]): boolean {
   return records.some(record => {
     if (isOwnMarkNode(record.target)) return false
-    return [...record.addedNodes, ...record.removedNodes].some(node => !isOwnMarkNode(node)) ||
+    return [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)].some(node => !isOwnMarkNode(node)) ||
       record.type === 'characterData' ||
       record.type === 'attributes'
   })

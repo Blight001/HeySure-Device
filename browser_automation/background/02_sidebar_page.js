@@ -183,6 +183,31 @@ async function executePageAction(tabId, action) {
 
             const resolveText = (value = '') => normalize(value);
 
+            // 卡片步骤与 MCP browser_action 使用相同的默认深层定位：自动扫描
+            // 当前文档和任意层级开放的 ShadowRoot，不要求卡片声明特殊模式。
+            const enumerateOpenRoots = (root = document) => {
+                const roots = [];
+                const queue = [root];
+                const seen = new Set();
+                while (queue.length) {
+                    const current = queue.shift();
+                    if (!current || seen.has(current)) continue;
+                    seen.add(current);
+                    roots.push(current);
+                    const enqueue = (element) => {
+                        if (element?.shadowRoot && !seen.has(element.shadowRoot)) queue.push(element.shadowRoot);
+                    };
+                    if (current.nodeType === Node.ELEMENT_NODE) enqueue(current);
+                    const ownerDoc = current.nodeType === Node.DOCUMENT_NODE ? current : (current.ownerDocument || document);
+                    const walker = ownerDoc.createTreeWalker(current, NodeFilter.SHOW_ELEMENT);
+                    while (walker.nextNode()) enqueue(walker.currentNode);
+                }
+                return roots;
+            };
+
+            const queryAllDeep = (root, selector) => enumerateOpenRoots(root)
+                .flatMap((scanRoot) => Array.from(scanRoot.querySelectorAll(selector)));
+
             const parseHasText = (selector = '') => {
                 const match = selector.match(/^(.*?):has-text\((['"])(.*?)\2\)\s*$/i);
                 if (!match) {
@@ -271,7 +296,7 @@ async function executePageAction(tabId, action) {
                 }
 
                 try {
-                    const frames = root.querySelectorAll ? root.querySelectorAll('iframe') : [];
+                    const frames = root.querySelectorAll ? queryAllDeep(root, 'iframe') : [];
                     frames.forEach((frame) => {
                         try {
                             const frameDocument = frame.contentDocument || frame.contentWindow?.document || null;
@@ -300,7 +325,7 @@ async function executePageAction(tabId, action) {
                 for (const candidate of candidates) {
                     try {
                         if (candidate.kind === 'css') {
-                            document.querySelectorAll(candidate.value).forEach(pushUnique);
+                            queryAllDeep(document, candidate.value).forEach(pushUnique);
                             continue;
                         }
 
@@ -310,7 +335,7 @@ async function executePageAction(tabId, action) {
                                 continue;
                             }
 
-                            document.querySelectorAll('button, a, input, textarea, select, label, span, div, li, p, option, [role="button"], [contenteditable="true"]').forEach((element) => {
+                            queryAllDeep(document, 'button, a, input, textarea, select, label, span, div, li, p, option, [role="button"], [contenteditable="true"]').forEach((element) => {
                                 const text = `${element.innerText || element.textContent || element.value || ''}`.trim().toLowerCase();
                                 const placeholder = `${element.getAttribute('placeholder') || ''}`.trim().toLowerCase();
                                 const ariaLabel = `${element.getAttribute('aria-label') || ''}`.trim().toLowerCase();
@@ -324,7 +349,7 @@ async function executePageAction(tabId, action) {
                         if (candidate.kind === 'attr') {
                             const attr = candidate.attr;
                             const needle = resolveText(candidate.value).toLowerCase();
-                            document.querySelectorAll('input, textarea, button, select, [role="button"], [contenteditable="true"], *').forEach((element) => {
+                            queryAllDeep(document, 'input, textarea, button, select, [role="button"], [contenteditable="true"], *').forEach((element) => {
                                 const value = `${element.getAttribute(attr) || ''}`.trim().toLowerCase();
                                 if (value.includes(needle)) {
                                     pushUnique(element);
@@ -336,7 +361,7 @@ async function executePageAction(tabId, action) {
                         if (candidate.kind === 'hasText') {
                             const css = candidate.css || '*';
                             const needle = resolveText(candidate.text).toLowerCase();
-                            document.querySelectorAll(css).forEach((element) => {
+                            queryAllDeep(document, css).forEach((element) => {
                                 const text = `${element.innerText || element.textContent || ''}`.trim().toLowerCase();
                                 if (text.includes(needle)) {
                                     pushUnique(element);

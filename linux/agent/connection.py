@@ -19,6 +19,7 @@ from .config import Config
 from .dispatch import TaskDispatcher
 from .remote_terminal import TerminalManager
 from .tools import build_registry
+from .tools.console import get_manager as get_console_manager
 
 logger = logging.getLogger("heysure.conn")
 
@@ -26,7 +27,11 @@ logger = logging.getLogger("heysure.conn")
 class Agent:
     def __init__(self, config: Config) -> None:
         self.config = config
-        self.registry = build_registry(enable_shell_exec=config.enable_shell_exec)
+        self.registry = build_registry(
+            enable_shell_exec=config.enable_shell_exec,
+            enable_console=config.enable_console,
+            default_shell=config.default_shell,
+        )
         self.state: Dict[str, Any] = {
             "token": None,
             "socket_url": config.server,
@@ -183,9 +188,14 @@ class Agent:
         self.sio.wait()
 
     def shutdown(self) -> None:
+        # console.* 会话刻意不随 socket 断线关闭（长时间安装要能跨重连继续），
+        # 只在进程退出时统一回收。
         try:
             if self.terminal:
                 self.terminal.close_all()
+            console = get_console_manager()
+            if console:
+                console.close_all()
         finally:
             if self.sio.connected:
                 self.sio.disconnect()

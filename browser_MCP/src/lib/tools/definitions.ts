@@ -71,7 +71,7 @@ export const BROWSER_TOOLS: AIToolDef[] = [
   },
   {
     name: 'browser_screenshot',
-    description: '对当前标签页截图：可截可视区、整页、某个 CSS/文本匹配的元素，或一块矩形区域，默认返回完整 base64 图片 dataUrl，并保存到服务器用于发送给用户；传 send_to_user:false 可只给 AI 使用（截图被禁用或无权限时返回可读的错误说明）。用途：让 AI「看见」页面。场景：核对页面状态、在无法读取文本时改用视觉理解。',
+    description: '对当前标签页截图：普通前台可视区截图使用 captureVisibleTab，不会显示浏览器调试提示条；整页、元素/区域精确截图及后台标签截图需要 CDP，会短暂显示“正在调试/操控”提示条。默认返回完整 base64 图片 dataUrl，并保存到服务器用于发送给用户；传 send_to_user:false 可只给 AI 使用。页面观察优先用 browser_observe，需要视觉核对时优先使用无 selector/full_page 的普通可视区截图。',
     input_schema: {
       type: 'object',
       properties: {
@@ -111,7 +111,7 @@ export const BROWSER_TOOLS: AIToolDef[] = [
   {
     name: 'browser_action',
     description: '页面交互聚合工具：用 action 指定要做的动作——点击 click（单击）、双击 double_click、右键 right_click、滚动 scroll、输入文本 type、键盘按键 press_key。各动作的参数与原 browser_click/double_click/right_click/scroll/type/press_key 一致，按 action 取用对应字段即可。\n' +
-      '· click：派发完整指针+鼠标事件序列，兼容自定义组件；定位优先级 ref（browser_observe 编号，最稳）> selector > text > 坐标；非坐标点击会先做遮挡检测，被弹窗/遮罩盖住时返回 occluded 诊断（需穿透点击传 force:true）。\n' +
+      '· click：无需选择点击模式；默认自动递归穿透开放的 Shadow DOM 定位控件，完成可见性/遮挡校验后只派发一次完整 pointer+mouse 事件，不启用 chrome.debugger，因此不会触发浏览器“正在调试/操控”提示条。定位优先级 ref（browser_observe 编号，最稳）> selector > text > 坐标；被弹窗/遮罩盖住时返回 occluded 诊断。\n' +
       '· double_click / right_click：双击、右键（上下文菜单），用 selector / text / 坐标定位。\n' +
       '· scroll：滚动页面，返回滚动后的位置、移动像素数与进入视野的小节/标题。\n' +
       '· type：向 input/textarea 输入文本（单字段；多字段请多次 type 或配合 observe 逐字段操作）。\n' +
@@ -124,7 +124,7 @@ export const BROWSER_TOOLS: AIToolDef[] = [
         action:      { type: 'string', enum: ['click', 'double_click', 'right_click', 'scroll', 'type', 'press_key'], description: '要执行的交互动作。' },
         // 通用定位（click/double_click/right_click 用；type/press_key 可用 selector 聚焦）
         ref:         { type: ['number', 'string'],  description: 'browser_observe 返回的元素编号 id（click/double_click/right_click/type 均可用），最稳的定位方式，优先使用。主页面元素是数字；跨域 iframe 内的元素 id 形如 "3:5"（frameId:本地编号），原样回传即可，会自动路由到对应框架。' },
-        selector:    { type: 'string',  description: '目标元素的 CSS selector（click/double_click/right_click 定位；type 指定输入框；press_key 指定先聚焦的元素；scroll 可指定滚动进视口的元素）。' },
+        selector:    { type: 'string',  description: '目标元素的 CSS selector（click 会自动在页面及开放的 Shadow DOM 中递归查找；type 指定输入框；press_key 指定先聚焦的元素；scroll 可指定滚动进视口的元素）。' },
         text:        { type: 'string',  description: 'action=click/double_click/right_click 时用可见文本定位元素；action=type 时为「要输入的文本」。' },
         x:           { type: 'number',  description: 'click/double_click/right_click 的 X 坐标（像素，视口坐标）。' },
         y:           { type: 'number',  description: 'click/double_click/right_click 的 Y 坐标（像素，视口坐标）。' },
@@ -182,7 +182,7 @@ export const BROWSER_TOOLS: AIToolDef[] = [
   // ───── 数据与脚本 ─────────────────────────────────────────────────────
   {
     name: 'browser_evaluate',
-    description: '在页面上下文中执行任意 JavaScript 并返回结果；可用时走 Chrome DevTools Protocol，因此在 CSP 受限页面上也能运行。用途：高级取数/操作的兜底手段。场景：内置工具无法满足时读取复杂数据或触发特殊行为（请谨慎使用）。',
+    description: '在页面上下文中执行任意 JavaScript 并返回结果；使用 Chrome DevTools Protocol 以兼容 CSP 受限页面，因此调用时 Chrome 会短暂显示“正在调试/操控”提示条。仅作为内置工具无法满足时的高级兜底，普通观察、点击和按键不要使用。',
     input_schema: {
       type: 'object',
       properties: {

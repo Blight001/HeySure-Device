@@ -428,6 +428,51 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): P
   }
 }
 
+// Attaching chrome.debugger shows Chrome's "is debugging/controlling this
+// browser" infobar. The bar changes the content viewport after attach resolves,
+// so coordinates measured immediately before or after attach can already be
+// stale when Input.dispatchMouseEvent runs. Always let that browser UI settle
+// before measuring the page, and let it collapse again before the next tool.
+const DEBUGGER_DETACH_SETTLE_MS = 320
+
+async function waitForDebuggerViewportStable(target: chrome.debugger.Debuggee): Promise<void> {
+  await delay(180)
+  const deadline = Date.now() + 1200
+  let previous = ''
+  let stableSamples = 0
+
+  while (Date.now() < deadline) {
+    try {
+      const metrics: any = await chrome.debugger.sendCommand(target, 'Page.getLayoutMetrics')
+      const visual = metrics?.cssVisualViewport || metrics?.visualViewport || {}
+      const layout = metrics?.cssLayoutViewport || metrics?.layoutViewport || {}
+      const sample = [
+        visual.clientWidth, visual.clientHeight, visual.pageX, visual.pageY,
+        layout.clientWidth, layout.clientHeight, layout.pageX, layout.pageY,
+      ].map(value => Number(value || 0).toFixed(2)).join(':')
+      if (sample === previous) stableSamples += 1
+      else { previous = sample; stableSamples = 0 }
+      if (stableSamples >= 2) return
+    } catch {
+      // Some targets do not expose layout metrics until Page.enable. A fixed
+      // settle delay is still safer than measuring in the attach transition.
+      await delay(220)
+      return
+    }
+    await delay(70)
+  }
+}
+
+async function attachDebuggerStable(target: chrome.debugger.Debuggee, timeoutMs = 12000): Promise<void> {
+  await withTimeout(chrome.debugger.attach(target, '1.3'), timeoutMs, 'CDP attach')
+  await waitForDebuggerViewportStable(target)
+}
+
+async function detachDebuggerStable(target: chrome.debugger.Debuggee): Promise<void> {
+  try { await chrome.debugger.detach(target) } catch { /* tab may have closed */ }
+  await delay(DEBUGGER_DETACH_SETTLE_MS)
+}
+
 function boundedTimeout(value: any, fallback: number, min = 1000, max = 30000) {
   const n = Number(value)
   if (!Number.isFinite(n)) return fallback
@@ -618,7 +663,7 @@ async function captureWithDebugger(tab: chrome.tabs.Tab, args: any = {}) {
   let attached = false
   const timeoutMs = boundedTimeout(args.cdp_timeout_ms ?? args.timeout_ms, 12000)
   try {
-    await withTimeout(chrome.debugger.attach(target, '1.3'), timeoutMs, 'CDP attach')
+    await attachDebuggerStable(target, timeoutMs)
     attached = true
 
     await withTimeout(chrome.debugger.sendCommand(target, 'Page.enable'), timeoutMs, 'CDP Page.enable')
@@ -663,7 +708,7 @@ async function captureWithDebugger(tab: chrome.tabs.Tab, args: any = {}) {
     return `data:image/${format === 'jpeg' ? 'jpeg' : format};base64,${result.data}`
   } finally {
     if (attached) {
-      try { await chrome.debugger.detach(target) } catch { /* tab may have closed */ }
+      await detachDebuggerStable(target)
     }
   }
 }
@@ -1100,43 +1145,12 @@ async function toolClick(args: any): Promise<any> {
     force: !!args.force,
   }
 
-  // Cross-origin frame targets resolve to viewport coords *local to that frame*,
-  // which CDP (top-level page coords) can't use — keep the synthetic path there.
-  if (t.frameId !== 0) {
-    const result = await contentMsg(tab.id!, clickMsg, t.frameId)
-    return withAutoObserve(tab, args, result, t.frameId)
-  }
-
-  // Ensure hover (visual cursor + events) + focus happens for *all* clicks,
-  // even when using trusted CDP path (some sites require hover state or :focus).
-  try {
-    await contentMsg(tab.id!, { action: 'hover', ref: t.ref, selector: t.selector, text: t.text, x: t.x, y: t.y }, t.frameId).catch(() => {})
-    await contentMsg(tab.id!, { action: 'focus_target', ref: t.ref, selector: t.selector }, t.frameId).catch(() => {})
-  } catch {}
-
-  // Top frame: ask the content script to resolve + scroll + run the visibility /
-  // occlusion guards, then return the final viewport coords WITHOUT clicking.
-  const resolved = await contentMsg(tab.id!, { ...clickMsg, resolveOnly: true }, t.frameId)
-
-  // Guard tripped (not_visible / occluded) or resolution failed — surface as-is.
-  if (!resolved?.resolved || resolved.success === false) {
-    return withAutoObserve(tab, args, resolved, t.frameId)
-  }
-
-  // Drive a trusted CDP click; fall back to the synthetic dispatch if the
-  // debugger can't attach (restricted page, devtools already open, etc.).
-  try {
-    const cdp = await debuggerClick(tab.id!, resolved.x, resolved.y)
-    const result = { success: true, tag: resolved.tag, text: resolved.text, click_method: cdp.method }
-    return withAutoObserve(tab, args, result, t.frameId)
-  } catch (debuggerErr: any) {
-    const fallback = await contentMsg(tab.id!, clickMsg, t.frameId)
-    return withAutoObserve(tab, args, {
-      ...fallback,
-      click_method: 'synthetic',
-      warning: `Native CDP click failed, fell back to synthetic dispatch: ${debuggerErr?.message || String(debuggerErr)}`,
-    }, t.frameId)
-  }
+  // Normal clicks intentionally avoid chrome.debugger: attaching it displays a
+  // browser infobar and changes the viewport. A single complete DOM pointer/mouse
+  // sequence is more stable for routine controls and cannot accidentally repeat
+  // an irreversible action after an uncertain first click.
+  const result = await contentMsg(tab.id!, clickMsg, t.frameId)
+  return withAutoObserve(tab, args, result, t.frameId)
 }
 
 function observeMsg(args: any) {
@@ -1304,18 +1318,12 @@ async function toolType(args: any): Promise<any> {
   }, frameId)
   if (!args.submit) return withAutoObserve(tab, args, result, frameId)
 
-  try {
-    const pressed = await debuggerPressKey(tab.id!, { key: 'Enter' })
-    return withAutoObserve(tab, args, { ...result, submitted: true, submit_method: pressed.method }, frameId)
-  } catch (debuggerErr: any) {
-    await contentMsg(tab.id!, { action: 'press_key', key: 'Enter' })
-    return withAutoObserve(tab, args, {
-      ...result,
-      submitted: true,
-      submit_method: 'content.KeyboardEvent',
-      warning: `Native submit key dispatch failed, fell back to synthetic KeyboardEvent: ${debuggerErr?.message || String(debuggerErr)}`,
-    }, frameId)
-  }
+  const pressed = await contentMsg(tab.id!, { action: 'press_key', key: 'Enter', submit_form: true }, frameId)
+  return withAutoObserve(tab, args, {
+    ...result,
+    submitted: true,
+    submit_method: pressed?.submit_method || 'content.KeyboardEvent',
+  }, frameId)
 }
 
 async function toolScroll(args: any): Promise<any> {
@@ -1357,7 +1365,7 @@ async function debuggerEvaluate(tabId: number, code: string): Promise<any> {
   }
 
   try {
-    await chrome.debugger.attach(target, '1.3')
+    await attachDebuggerStable(target)
     attached = true
 
     let result: any
@@ -1377,127 +1385,7 @@ async function debuggerEvaluate(tabId: number, code: string): Promise<any> {
     }
   } finally {
     if (attached) {
-      try { await chrome.debugger.detach(target) } catch { /* tab may have closed */ }
-    }
-  }
-}
-
-const SPECIAL_KEY_INFO: Record<string, { key: string; code: string; windowsVirtualKeyCode: number }> = {
-  Enter:      { key: 'Enter',      code: 'Enter',      windowsVirtualKeyCode: 13 },
-  Return:     { key: 'Enter',      code: 'Enter',      windowsVirtualKeyCode: 13 },
-  Escape:     { key: 'Escape',     code: 'Escape',     windowsVirtualKeyCode: 27 },
-  Esc:        { key: 'Escape',     code: 'Escape',     windowsVirtualKeyCode: 27 },
-  Tab:        { key: 'Tab',        code: 'Tab',        windowsVirtualKeyCode: 9 },
-  Backspace:  { key: 'Backspace',  code: 'Backspace',  windowsVirtualKeyCode: 8 },
-  Delete:     { key: 'Delete',     code: 'Delete',     windowsVirtualKeyCode: 46 },
-  Insert:     { key: 'Insert',     code: 'Insert',     windowsVirtualKeyCode: 45 },
-  Home:       { key: 'Home',       code: 'Home',       windowsVirtualKeyCode: 36 },
-  End:        { key: 'End',        code: 'End',        windowsVirtualKeyCode: 35 },
-  PageUp:     { key: 'PageUp',     code: 'PageUp',     windowsVirtualKeyCode: 33 },
-  PageDown:   { key: 'PageDown',   code: 'PageDown',   windowsVirtualKeyCode: 34 },
-  ArrowLeft:  { key: 'ArrowLeft',  code: 'ArrowLeft',  windowsVirtualKeyCode: 37 },
-  ArrowUp:    { key: 'ArrowUp',    code: 'ArrowUp',    windowsVirtualKeyCode: 38 },
-  ArrowRight: { key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 },
-  ArrowDown:  { key: 'ArrowDown',  code: 'ArrowDown',  windowsVirtualKeyCode: 40 },
-  Space:      { key: ' ',          code: 'Space',      windowsVirtualKeyCode: 32 },
-  ' ':        { key: ' ',          code: 'Space',      windowsVirtualKeyCode: 32 },
-}
-
-for (let i = 1; i <= 12; i++) {
-  SPECIAL_KEY_INFO[`F${i}`] = { key: `F${i}`, code: `F${i}`, windowsVirtualKeyCode: 111 + i }
-}
-
-function modifierBits(args: any) {
-  return (args.alt ? 1 : 0) |
-    (args.ctrl ? 2 : 0) |
-    (args.meta ? 4 : 0) |
-    (args.shift ? 8 : 0)
-}
-
-function keyInfo(rawKey: any) {
-  const raw = String(rawKey || '')
-  const special = SPECIAL_KEY_INFO[raw]
-  if (special) return special
-
-  if (/^[a-z]$/i.test(raw)) {
-    const upper = raw.toUpperCase()
-    return { key: raw.length === 1 ? raw : upper, code: `Key${upper}`, windowsVirtualKeyCode: upper.charCodeAt(0) }
-  }
-
-  if (/^[0-9]$/.test(raw)) {
-    return { key: raw, code: `Digit${raw}`, windowsVirtualKeyCode: raw.charCodeAt(0) }
-  }
-
-  if (raw.length === 1) {
-    return { key: raw, code: '', windowsVirtualKeyCode: raw.toUpperCase().charCodeAt(0) }
-  }
-
-  return { key: raw, code: raw, windowsVirtualKeyCode: 0 }
-}
-
-async function debuggerPressKey(tabId: number, args: any): Promise<any> {
-  const info = keyInfo(args.key)
-  const modifiers = modifierBits(args)
-  const target = { tabId }
-  let attached = false
-
-  try {
-    await chrome.debugger.attach(target, '1.3')
-    attached = true
-
-    const printable = info.key.length === 1 && modifiers === 0 && info.key !== '\r'
-    const base: any = {
-      key: info.key,
-      code: info.code,
-      windowsVirtualKeyCode: info.windowsVirtualKeyCode,
-      nativeVirtualKeyCode: info.windowsVirtualKeyCode,
-      modifiers,
-    }
-    if (printable) base.text = info.key
-
-    await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', {
-      ...base,
-      type: printable ? 'keyDown' : 'rawKeyDown',
-    })
-    await chrome.debugger.sendCommand(target, 'Input.dispatchKeyEvent', {
-      ...base,
-      type: 'keyUp',
-      text: undefined,
-    })
-    return { success: true, key: info.key, code: info.code, method: 'debugger.Input.dispatchKeyEvent' }
-  } finally {
-    if (attached) {
-      try { await chrome.debugger.detach(target) } catch { /* tab may have closed */ }
-    }
-  }
-}
-
-// Dispatch a *trusted* mouse click through the CDP debugger at top-level page
-// viewport coordinates. Unlike content-script dispatchEvent (isTrusted=false,
-// which many sites / native default actions reject), this is indistinguishable
-// from a real user click — the fix for "clicked but nothing happened". Throws on
-// restricted pages (chrome://, web store, devtools already attached) so the
-// caller can fall back to the synthetic content-script click.
-async function debuggerClick(tabId: number, x: number, y: number, opts?: {
-  button?: 'left' | 'right' | 'middle'; clickCount?: number
-}): Promise<any> {
-  const target = { tabId }
-  let attached = false
-  try {
-    await chrome.debugger.attach(target, '1.3')
-    attached = true
-    const button = opts?.button ?? 'left'
-    const buttons = button === 'right' ? 2 : button === 'middle' ? 4 : 1
-    const clickCount = opts?.clickCount ?? 1
-    const base = { x, y, button, clickCount }
-    // Move first so hover-gated handlers (menus, tooltips) arm before the press.
-    await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', { type: 'mouseMoved', ...base, buttons: 0, button: 'none', clickCount: 0 })
-    await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', { type: 'mousePressed', ...base, buttons })
-    await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', { type: 'mouseReleased', ...base, buttons: 0 })
-    return { method: 'debugger.Input.dispatchMouseEvent' }
-  } finally {
-    if (attached) {
-      try { await chrome.debugger.detach(target) } catch { /* tab may have closed */ }
+      await detachDebuggerStable(target)
     }
   }
 }
@@ -1727,26 +1615,12 @@ async function toolDrag(args: any): Promise<any> {
 
 async function toolPressKey(args: any): Promise<any> {
   const tab = await getActiveTab()
-  const fallback = () => contentMsg(tab.id!, {
+  const result = await contentMsg(tab.id!, {
     action: 'press_key',
     key: args.key, selector: args.selector,
     ctrl: !!args.ctrl, shift: !!args.shift, alt: !!args.alt, meta: !!args.meta,
   })
-
-  let result: any
-  try {
-    if (args.selector) {
-      await contentMsg(tab.id!, { action: 'focus_target', selector: args.selector })
-    }
-    result = await debuggerPressKey(tab.id!, args)
-  } catch (debuggerErr: any) {
-    result = {
-      ...(await fallback()),
-      method: 'content.KeyboardEvent',
-      warning: `Native key dispatch failed, fell back to synthetic KeyboardEvent: ${debuggerErr?.message || String(debuggerErr)}`,
-    }
-  }
-  return withAutoObserve(tab, args, result)
+  return withAutoObserve(tab, args, { ...result, method: 'content.KeyboardEvent' })
 }
 
 // ── Action-dispatching handlers ───────────────────────────────────────────

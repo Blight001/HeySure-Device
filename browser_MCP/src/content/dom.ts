@@ -5,7 +5,7 @@
 import { FX } from './fx'
 import {
   FrameContext, buildFramePath, hitTargetAtViewport, isElement, isHittableInViewport,
-  isHTMLElement, isTopmostAtViewport, occluderAtViewport, ownerWindow,
+  enumerateOpenRoots, isHTMLElement, isTopmostAtViewport, occluderAtViewport, ownerWindow,
   resolveFrameBySelector, scanRoot, visitAccessibleFrames,
 } from './iframe'
 import { getMarkTarget } from './marks'
@@ -64,7 +64,11 @@ export function textOf(el: Element, max = 200): string {
 // round-trip back to the same node via document.querySelector.
 function selectorResolvesTo(selector: string, el: Element): boolean {
   try {
-    const hits = el.ownerDocument.querySelectorAll(selector)
+    // A selector for an element inside a ShadowRoot is relative to that root,
+    // not to ownerDocument. Keeping the selector root-local lets deep lookup
+    // re-find the element after a web component re-renders.
+    const scope = el.getRootNode() as ParentNode
+    const hits = scope.querySelectorAll(selector)
     return hits.length === 1 && hits[0] === el
   } catch {
     return false
@@ -162,22 +166,35 @@ export function textMatches(el: HTMLElement, text: string, exact = false): boole
 }
 
 function findElInDocument(doc: Document, selector?: string, text?: string, frame?: FrameContext): Element | null {
+  const roots = enumerateOpenRoots(scanRoot(doc))
   if (selector) {
-    const matches = Array.from(doc.querySelectorAll(selector))
-    return matches.find(el => isHittable(el, frame))
-      || matches.find(isVisible)
-      || matches[0]
-      || null
+    const matches = roots.flatMap(root => Array.from(root.querySelectorAll(selector)))
+    if (matches.length) {
+      // When self-healing an observe ref, selector and captured text are both
+      // available. Prefer the same labelled control when several components use
+      // an identical root-local selector such as `button.primary`.
+      const labelled = text
+        ? matches.filter(el => textMatches(el as HTMLElement, text, true))
+          .concat(matches.filter(el => textMatches(el as HTMLElement, text, false)))
+        : matches
+      const candidates = labelled.length ? labelled : matches
+      return candidates.find(el => isHittable(el, frame))
+        || candidates.find(isVisible)
+        || candidates[0]
+        || null
+    }
   }
   if (text) {
-    const preferred = Array.from(doc.querySelectorAll('button,a,[role="button"],input[type="button"],input[type="submit"],[aria-label],[title]')) as HTMLElement[]
+    const preferred = roots.flatMap(root => Array.from(root.querySelectorAll('button,a,[role="button"],input[type="button"],input[type="submit"],[aria-label],[title]'))) as HTMLElement[]
     const byPreferred = (pred: (el: HTMLElement) => boolean, exact: boolean) =>
       preferred.find(el => pred(el) && textMatches(el, text, exact))
     const byWalk = (pred: (el: Element) => boolean, exact: boolean) => {
-      const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT)
-      while (walker.nextNode()) {
-        const el = walker.currentNode as HTMLElement
-        if (pred(el) && textMatches(el, text, exact)) return clickableAncestor(el)
+      for (const root of roots) {
+        const walker = doc.createTreeWalker(root, NodeFilter.SHOW_ELEMENT)
+        while (walker.nextNode()) {
+          const el = walker.currentNode as HTMLElement
+          if (pred(el) && textMatches(el, text, exact)) return clickableAncestor(el)
+        }
       }
       return null
     }
@@ -242,7 +259,6 @@ export function clickLikeUser(el: Element, at?: { x: number; y: number }) {
   el.dispatchEvent(new PointerEvent('pointerup', { ...pointer, buttons: 0 }))
   el.dispatchEvent(new MouseEvent('mouseup', { ...base, buttons: 0 }))
   el.dispatchEvent(new MouseEvent('click', base))
-  try { (el as HTMLElement).click?.() } catch {}
 }
 
 // Resolve a target from observe-id (ref) / selector / text / explicit coords.

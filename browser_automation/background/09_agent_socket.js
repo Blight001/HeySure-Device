@@ -446,8 +446,8 @@ function effectiveAgentToolDefs() {
         // ── 页面交互 ───────────────────────────────────────────────────────
         {
             name: 'browser_action',
-            description: '页面交互聚合工具：用 action 指定要做的动作——点击 click（单击）、双击 double_click、右键 right_click、滚动 scroll、输入文本 type、键盘按键 press_key。定位优先级：selector（observe 返回的稳定 CSS）或 text > ref（临时 id，仅本次有效） > 坐标；非坐标点击会先做遮挡检测，被遮挡时返回 occluded 诊断（需穿透点击传 force:true）。\n' +
-                '· click / double_click / right_click：派发 pointer+mouse 合成事件序列（非 CDP trusted 事件，多数站点的框架事件监听能覆盖，但个别依赖真实用户手势的场景可能无效）。\n' +
+            description: '页面交互聚合工具：用 action 指定要做的动作——点击 click（单击）、双击 double_click、右键 right_click、滚动 scroll、输入文本 type、键盘按键 press_key。click 无需选择模式：默认自动递归穿透开放的 Shadow DOM，并在可见性/遮挡校验后执行点击。定位优先级：selector（observe 返回的稳定 CSS）或 text > ref（临时 id，仅本次有效） > 坐标；被遮挡时返回 occluded 诊断。\n' +
+                '· click / double_click / right_click：派发一套完整且只触发一次的 pointer+mouse 合成事件序列（非 CDP trusted 事件，多数站点的框架事件监听能覆盖，但个别依赖真实用户手势的场景可能无效）。\n' +
                 '· scroll：滚动页面，返回滚动前后位置与移动像素数。\n' +
                 '· type：向 input/textarea/可编辑区输入文本（单字段；多字段请多次 type）；submit:true 时优先调用所在表单的 requestSubmit()（合成键盘事件不会触发浏览器原生 Enter 提交，这里用等效方式兜底）。\n' +
                 '· press_key：在焦点元素或指定 selector 上派发合成键盘事件，可带 Ctrl/Shift/Alt/Meta 修饰键；同样不是 CDP trusted 事件，按 Enter 时会尝试兜底 requestSubmit()。\n' +
@@ -458,7 +458,7 @@ function effectiveAgentToolDefs() {
                 properties: {
                     action: { type: 'string', enum: ['click', 'double_click', 'right_click', 'scroll', 'type', 'press_key'], description: '要执行的交互动作。' },
                     ref: { type: ['number', 'string'], description: 'browser_observe 返回的元素临时 id（click/double_click/right_click/type 均可用）；仅本次 observe 有效。优先推荐使用 observe 返回的 selector 或 text（现包含 tag/name/placeholder 等基本信息），适合构造持久化自动化卡片步骤。' },
-                    selector: { type: 'string', description: '目标元素的 CSS selector（click/double_click/right_click 定位；type 指定输入框；press_key 指定先聚焦的元素；scroll 可指定滚动进视口的元素）。' },
+                    selector: { type: 'string', description: '目标元素的 CSS selector；click 会自动在页面及开放的 Shadow DOM 中递归查找（type 指定输入框；press_key 指定先聚焦的元素；scroll 可指定滚动进视口的元素）。' },
                     text: { type: 'string', description: 'action=click/double_click/right_click 时用可见文本定位元素；action=type 时为「要输入的文本」。' },
                     x: { type: 'number', description: 'click/double_click/right_click 的 X 坐标（像素，视口坐标）。' },
                     y: { type: 'number', description: 'click/double_click/right_click 的 Y 坐标（像素，视口坐标）。' },

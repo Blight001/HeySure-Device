@@ -58,8 +58,46 @@ export function isVisibleInOwnerViewport(el: HTMLElement): boolean {
     && r.top <= win.innerHeight && r.left <= win.innerWidth
 }
 
+// Return the supplied DOM root plus every reachable open ShadowRoot below it.
+// The queue is intentional: newly discovered roots are scanned as well, so
+// nested web components work at arbitrary depth. shadow-patch.ts makes roots
+// created by the page open whenever the extension was present at document_start.
+export function enumerateOpenRoots(root: ParentNode): ParentNode[] {
+  const roots: ParentNode[] = []
+  const queue: ParentNode[] = [root]
+  const seen = new Set<ParentNode>()
+
+  const enqueueShadow = (el: Element) => {
+    const shadow = el.shadowRoot
+    if (shadow && !seen.has(shadow)) queue.push(shadow)
+  }
+
+  while (queue.length) {
+    const current = queue.shift()!
+    if (seen.has(current)) continue
+    seen.add(current)
+    roots.push(current)
+
+    if (isElement(current)) enqueueShadow(current)
+    const doc = (current as Node).ownerDocument || document
+    const walker = doc.createTreeWalker(current, NodeFilter.SHOW_ELEMENT)
+    while (walker.nextNode()) enqueueShadow(walker.currentNode as Element)
+  }
+
+  return roots
+}
+
+function querySelectorDeep(root: ParentNode, selector: string): Element | null {
+  for (const scanRoot of enumerateOpenRoots(root)) {
+    const hit = scanRoot.querySelector(selector)
+    if (hit) return hit
+  }
+  return null
+}
+
 export function listIframeElementsIn(doc: Document): HTMLIFrameElement[] {
-  return Array.from(doc.querySelectorAll('iframe,frame'))
+  return enumerateOpenRoots(scanRoot(doc))
+    .flatMap(root => Array.from(root.querySelectorAll('iframe,frame')))
     .filter((el): el is HTMLIFrameElement => isFrameElement(el) && isVisibleInOwnerViewport(el))
 }
 
@@ -98,7 +136,7 @@ export function resolveFrameByPath(path: string[]): FrameContext | null {
   let resolved: FrameContext | null = null
 
   for (const frameSelector of path) {
-    const frameEl = doc.querySelector(frameSelector)
+    const frameEl = querySelectorDeep(scanRoot(doc), frameSelector)
     if (!isFrameElement(frameEl)) return null
     const base = tryFrameContext(frameEl)
     if (!base) return null

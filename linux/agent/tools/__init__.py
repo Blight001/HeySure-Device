@@ -1,7 +1,7 @@
 """工具装配：把各域模块的 Tool 汇总成 read.md 需要的 toolDefs + 路由表。
 
 用法：
-    registry = build_registry(enable_shell_exec=True)
+    registry = build_registry(enable_shell_exec=True, enable_console=True)
     registry.tool_defs        -> device:register 的 toolDefs（read.md 5）
     registry.capabilities     -> capabilities 工具名清单
     registry.dispatch(tool, args) -> (result, summary)，未知工具抛 KeyError
@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
+from . import console as console_mod
 from . import network, packages, services, storage, system
 from . import shell as shell_mod
 from .base import Tool
@@ -43,7 +44,12 @@ class Registry:
         return {t.name: t.handler for t in self.tools}
 
 
-def build_registry(*, enable_shell_exec: bool) -> Registry:
+def build_registry(
+    *,
+    enable_shell_exec: bool,
+    enable_console: bool = True,
+    default_shell: str = "",
+) -> Registry:
     tools: List[Tool] = []
     tools += system.TOOLS
     tools += services.TOOLS
@@ -51,6 +57,8 @@ def build_registry(*, enable_shell_exec: bool) -> Registry:
     tools += network.TOOLS
     tools += packages.TOOLS
     tools += shell_mod.build_tools(enable_shell_exec)
+    # 持久化交互式控制台（console.*）：一次性的 shell.exec 应付不了交互式提示。
+    tools += console_mod.build_tools(enable_console, default_shell)
     # 唯一性自检：同名工具会让服务器派发歧义（read.md 5.1）。
     seen: Dict[str, int] = {}
     for t in tools:

@@ -252,7 +252,7 @@ export async function doDrag(msg: any) {
 export function doPressKey(msg: any) {
   const key = String(msg.key || '')
   if (!key) throw new Error('key is required')
-  let el: Element | null = msg.selector ? document.querySelector(msg.selector) : null
+  let el: Element | null = msg.selector ? findEl(msg.selector) : null
   if (!el) el = (document.activeElement && document.activeElement !== document.body) ? document.activeElement : document.body
   ;(el as HTMLElement).focus?.()
   const init: KeyboardEventInit = {
@@ -265,16 +265,29 @@ export function doPressKey(msg: any) {
     altKey: !!msg.alt,
     metaKey: !!msg.meta,
   }
+  // type {submit:true}: prefer the form's native submission API and do not also
+  // dispatch Enter to page listeners, which could submit the same form twice.
+  if (msg.submit_form && key === 'Enter') {
+    const form = (el as HTMLElement).closest?.('form') as HTMLFormElement | null
+    if (form) {
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit()
+        return { success: true, key, target: (el as HTMLElement).tagName, submit_method: 'form.requestSubmit' }
+      }
+      form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+      return { success: true, key, target: (el as HTMLElement).tagName, submit_method: 'form.submitEvent' }
+    }
+  }
   el!.dispatchEvent(new KeyboardEvent('keydown', init))
   el!.dispatchEvent(new KeyboardEvent('keypress', init))
   el!.dispatchEvent(new KeyboardEvent('keyup', init))
-  return { success: true, key, target: (el as HTMLElement).tagName }
+  return { success: true, key, target: (el as HTMLElement).tagName, submit_method: 'content.KeyboardEvent' }
 }
 
 export function focusTarget(msg: any) {
   const selector = String(msg.selector || '')
   if (!selector) return { success: true, focused: false, reason: 'selector is empty' }
-  const el = document.querySelector(selector) as HTMLElement | null
+  const el = findEl(selector) as HTMLElement | null
   if (!el) throw new Error(`Element not found: ${selector}`)
   el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' })
   el.focus?.()
@@ -292,7 +305,7 @@ export async function doType(msg: any) {
   // resolveTarget re-finds the input there (self-healing via selector/text).
   const hasRef = msg.ref !== undefined && msg.ref !== null && msg.ref !== ''
   let el = hasRef ? resolveTarget(msg).el as HTMLInputElement | null : null
-  if (!el) el = selector ? document.querySelector(selector) as HTMLInputElement | null : null
+  if (!el) el = selector ? findEl(selector) as HTMLInputElement | null : null
   if (!el) el = document.activeElement as HTMLInputElement | null
 
   if (!el) throw new Error('No input element found — try providing a selector')
@@ -397,7 +410,7 @@ export async function doScroll(msg: any) {
   let beforeElementY = 0
 
   if (msg.selector) {
-    const el = document.querySelector(msg.selector)
+    const el = findEl(msg.selector)
     if (!el) throw new Error(`Element not found: ${msg.selector}`)
     // Instant (not smooth) scrolling: smooth scroll is rAF-driven and never
     // advances in a hidden/background tab, leaving the page where it was. 'auto'
@@ -469,7 +482,7 @@ export async function doWait(msg: any) {
         if (observer) observer.disconnect()
       }
       function check(): boolean {
-        if (document.querySelector(msg.selector)) { cleanup(); resolve(); return true }
+        if (findEl(msg.selector)) { cleanup(); resolve(); return true }
         return false
       }
       function poll() { if (!check()) pollTimer = setTimeout(poll, 250) }

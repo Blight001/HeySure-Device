@@ -76,6 +76,8 @@ class Config:
     enable_remote_terminal: bool = True
     # 万能 shell.exec 工具：默认开启（用户要求「管控」本机），可关成只读画像。
     enable_shell_exec: bool = True
+    # 持久化交互式控制台工具（console.*）：让 AI 应付安装程序的确认/选择等交互式提示。
+    enable_console: bool = True
     # PTY / shell.exec 的默认 shell。
     default_shell: str = ""
     log_level: str = "INFO"
@@ -106,6 +108,7 @@ class Config:
             icon=os.getenv("HEYSURE_ICON", "").strip(),
             enable_remote_terminal=_bool("HEYSURE_ENABLE_REMOTE_TERMINAL", True),
             enable_shell_exec=_bool("HEYSURE_ENABLE_SHELL_EXEC", True),
+            enable_console=_bool("HEYSURE_ENABLE_CONSOLE", True),
             default_shell=os.getenv("HEYSURE_SHELL", "").strip(),
             log_level=os.getenv("LOG_LEVEL", "INFO").strip().upper(),
             hostname=host,

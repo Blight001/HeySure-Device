@@ -64,6 +64,8 @@ export interface NativeInputRequest extends NativeBrowserContext {
   direction?: 'up' | 'down' | 'top' | 'bottom'
   amount?: number
   text?: string
+  /** Click the resolved point before typing. False preserves the current caret. */
+  clickFirst?: boolean
   clearFirst?: boolean
   submit?: boolean
   key?: string

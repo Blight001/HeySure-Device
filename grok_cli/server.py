@@ -38,6 +38,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -578,6 +579,13 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
+    # stdout 重定向到日志文件时 Python 默认块缓冲，日志会长期看似为空；强制行缓冲
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(line_buffering=True)
+        except Exception:
+            pass
+
     parser = argparse.ArgumentParser(description="grok CLI → OpenAI 兼容本地 API 网关")
     parser.add_argument("--command", default=None, help="CLI 命令或完整路径（默认取 GROK_CLI_COMMAND / grok）")
     parser.add_argument("--host", default=None, help="监听地址（默认 127.0.0.1）")

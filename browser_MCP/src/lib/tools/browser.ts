@@ -1398,12 +1398,16 @@ async function autoObserveAfterAction(tab: chrome.tabs.Tab, args: any, frameId =
   try {
     // Watch in the frame the interaction targeted: a change inside a cross-origin
     // iframe is invisible to the top frame's observer.
-    const settle = await contentMsg(tabId, {
-      action: 'await_settle',
-      timeout: waitTimeoutMs,
-      quiet: args.settle_quiet,
-      idle_window: args.settle_idle_window,
-    }, frameId)
+    const settle = await withTimeout(
+      contentMsg(tabId, {
+        action: 'await_settle',
+        timeout: waitTimeoutMs,
+        quiet: args.settle_quiet,
+        idle_window: args.settle_idle_window,
+      }, frameId),
+      waitTimeoutMs + 750,
+      'action settle',
+    )
     changed = !!settle?.changed
     navigated = !!settle?.navigating
   } catch (err: any) {
@@ -1435,7 +1439,16 @@ async function withAutoObserve(tab: chrome.tabs.Tab, args: any, result: any, fra
   // Soft failures (occluded / not_visible / not found) didn't touch the page.
   if (result && result.success === false) return result
 
-  const observed = await autoObserveAfterAction(tab, args, frameId)
+  // Auto-observe is best-effort metadata. Never let a frozen/throttled content
+  // frame hold an already-completed action open until the endpoint's 120s
+  // dispatch deadline. The inner settle and observe calls have their own caps;
+  // this outer cap also covers message channels that Chrome never resolves.
+  const autoObserveCap = actionWaitTimeoutMs(args) + observeWaitTimeoutMs(args) + 1500
+  const observed = await withTimeout(
+    autoObserveAfterAction(tab, args, frameId),
+    Math.min(15000, autoObserveCap),
+    'post-action auto observe',
+  ).catch(() => null)
   if (!observed) return { ...result, page_changed: false }
   const observe = observeDelta(observed.previousObserve, observed.observe)
   return {
@@ -1659,11 +1672,16 @@ async function toolType(args: any): Promise<any> {
       ...context,
       point: resolved.point,
       text: String(args.text ?? ''),
+      // Re-clicking an already-focused editor moves its caret to the point under
+      // the mouse (usually the middle of existing text). Preserve the live caret
+      // for repeated/chunked type calls; the first call still clicks a target
+      // that is not focused yet.
+      clickFirst: resolved.target?.active !== true,
       clearFirst: args.clear_first !== false,
       submit: !!args.submit,
       target: resolved.target,
     })
-    return withAutoObserve(tab, args, {
+    const result = {
       success: true,
       text: String(args.text ?? ''),
       length: String(args.text ?? '').length,
@@ -1672,7 +1690,14 @@ async function toolType(args: any): Promise<any> {
       point: resolved.point,
       target: resolved.target,
       native,
-    }, frameId)
+    }
+    // A normal type mutates the editor on every keystroke. Scanning the whole
+    // page after each chunk adds no useful information and used to delay the
+    // completed result long enough for endpoint delivery to time out. Return
+    // immediately unless submission or an explicit observe request needs the
+    // resulting page state.
+    if (!args.submit && args.observe_after !== true && args.auto_observe !== true) return result
+    return withAutoObserve(tab, args, result, frameId)
   }
   const result = await contentMsg(tab.id!, {
     action: 'type',
@@ -1682,6 +1707,7 @@ async function toolType(args: any): Promise<any> {
     clearFirst: args.clear_first !== false,
     submit: false,
   }, frameId)
+  if (!args.submit && args.observe_after !== true && args.auto_observe !== true) return result
   if (!args.submit) return withAutoObserve(tab, args, result, frameId)
 
   const pressed = await contentMsg(tab.id!, { action: 'press_key', key: 'Enter', submit_form: true }, frameId)

@@ -660,15 +660,18 @@ pub fn native_dismiss_dialog() -> Result<(), String> {
 }
 
 pub fn native_type(
-    point: (i32, i32),
+    point: Option<(i32, i32)>,
     text: &str,
+    click_first: bool,
     clear_first: bool,
     submit: bool,
 ) -> Result<(), String> {
     with_enigo(|enigo| -> Result<(), String> {
-        move_native(enigo, Some(point));
-        let _ = enigo.button(Button::Left, Direction::Click);
-        std::thread::sleep(std::time::Duration::from_millis(80));
+        if click_first {
+            move_native(enigo, point);
+            let _ = enigo.button(Button::Left, Direction::Click);
+            std::thread::sleep(std::time::Duration::from_millis(80));
+        }
         if clear_first {
             dispatch_key(enigo, Key::A, None, &[Key::Control]);
             std::thread::sleep(std::time::Duration::from_millis(25));
@@ -678,9 +681,11 @@ pub fn native_type(
             // click the resolved field point again so subsequent text cannot be
             // delivered to a detached/blurred node.
             std::thread::sleep(std::time::Duration::from_millis(90));
-            move_native(enigo, Some(point));
-            let _ = enigo.button(Button::Left, Direction::Click);
-            std::thread::sleep(std::time::Duration::from_millis(45));
+            if point.is_some() {
+                move_native(enigo, point);
+                let _ = enigo.button(Button::Left, Direction::Click);
+                std::thread::sleep(std::time::Duration::from_millis(45));
+            }
         }
         if !text.is_empty() {
             type_native_text(enigo, text)?;

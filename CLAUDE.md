@@ -24,7 +24,7 @@
 
 ## grok_cli/ — 本地模型网关（不是端侧 agent 壳）
 
-`grok_cli/` 是一个独立的**本地 OpenAI 兼容 API 网关**（纯 Python 标准库，`python server.py` 或 `run.bat` 启动，默认 `127.0.0.1:8100`），把本机 grok CLI 的订阅额度包装成标准 `POST /v1/chat/completions`。它不连接 Connector、不注册为设备；HeySure 服务器把它当成普通 API 模型预设使用（Base URL 填 `http://127.0.0.1:8100/v1/chat/completions`）。详见 [`grok_cli/README.md`](grok_cli/README.md)。
+`grok_cli/` 是一个独立的**本地 OpenAI 兼容 API 网关**（纯 Python 标准库；Windows `run.bat`，Linux 服务器用 `run.sh` 管理依赖/CLI/登录/启停，默认 `127.0.0.1:8100`），把本机 grok CLI 的订阅额度包装成标准 `POST /v1/chat/completions`。它不连接 Connector、不注册为设备；HeySure 服务器把它当成普通 API 模型预设使用（Base URL 填 `http://127.0.0.1:8100/v1/chat/completions`）。详见 [`grok_cli/README.md`](grok_cli/README.md)。
 
 ## 桌面端架构（linux/mac，Electron）
 

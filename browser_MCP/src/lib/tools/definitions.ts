@@ -117,7 +117,7 @@ export const BROWSER_TOOLS: AIToolDef[] = [
       '· type：向 input/textarea 输入文本（单字段；多字段请多次 type 或配合 observe 逐字段操作）。\n' +
       '· press_key：在焦点元素或指定 selector 上按键，可带 Ctrl/Shift/Alt/Meta 修饰键。\n' +
       '· dismiss_dialog：取消当前浏览器原生模态窗口、权限气泡、文件选择器或系统信息对话框；确认离开时选择“留在页面”的安全语义。Windows 原生版会激活目标浏览器并注入 Escape。\n' +
-      '· 自动 observe：click/double_click/right_click/type/press_key 执行后会自动检测页面是否变化并等待加载完毕；若变化，结果里附带增量 observe（observe.delta=true），只返回相对上一次 observe 新增/变化/消失的元素，完整快照不再重复返回；未变化则 page_changed:false。不需要时传 observe_after:false 关闭。\n' +
+      '· 自动 observe：click/double_click/right_click/press_key 执行后默认检测页面变化并等待加载完毕；普通 type 为保证及时返回默认不自动 observe，需要时显式传 observe_after:true。若观察到变化，结果里附带增量 observe（observe.delta=true）。\n' +
       '用途：统一的点击/滚动/输入/键盘入口。场景：先 browser_observe 拿到编号，再 browser_action {action:"click", ref:id} 点击；点击后若页面变了，直接读 observe.items / addedItems / changedItems / removedItems 里的变化元素继续操作；需要全量时再调用 browser_observe。',
     input_schema: {
       type: 'object',
@@ -134,7 +134,7 @@ export const BROWSER_TOOLS: AIToolDef[] = [
         direction:   { type: 'string',  enum: ['up', 'down', 'top', 'bottom'], description: 'action=scroll 的方向：up 上、down 下、top 到顶、bottom 到底。' },
         amount:      { type: 'number',  description: 'action=scroll 的滚动像素数。默认 400。' },
         // type
-        clear_first: { type: 'boolean', description: 'action=type 时输入前先清空字段。默认 true。' },
+        clear_first: { type: 'boolean', description: 'action=type 时输入前先清空字段，默认 true。分段输入时仅第一段使用 true，后续段必须传 false；已聚焦的同一输入框会保留当前光标，不会再次鼠标点击。' },
         submit:      { type: 'boolean', description: 'action=type 时输入后按回车提交。' },
         // press_key
         key:         { type: 'string',  description: 'action=press_key 的键名，如 "Enter"、"Escape"、"Tab"、"ArrowDown"、"a"。' },
@@ -143,7 +143,7 @@ export const BROWSER_TOOLS: AIToolDef[] = [
         alt:         { type: 'boolean', description: 'action=press_key 时按住 Alt。' },
         meta:        { type: 'boolean', description: 'action=press_key 时按住 Meta/Cmd。' },
         // 自动 observe（click/double_click/right_click/type/press_key 生效）
-        observe_after:   { type: 'boolean', description: '点击/输入/按键后若页面变化，是否自动等待加载并在结果里附带增量 observe（只显示相对上一次 observe 的变化元素）。默认 true；传 false 关闭。' },
+        observe_after:   { type: 'boolean', description: '动作后若页面变化，是否自动等待加载并附带增量 observe。点击/按键默认 true；普通 type 默认 false（立即返回），type 需要观察结果时显式传 true。' },
         settle_timeout:  { type: 'number',  description: '自动 observe：等待页面变化稳定的最长时间（毫秒，默认 3000，上限 8000）；遇到持续加载/动画时到此上限即收尾并 observe。' },
         wait_timeout_ms: { type: 'number',  description: '本次 action 后置等待的最大时长（毫秒，默认 3000，上限 8000）；用于等待页面变化稳定并限制自动 observe 的等待。' },
         max_wait_ms:     { type: 'number',  description: 'wait_timeout_ms 的兼容别名。' },

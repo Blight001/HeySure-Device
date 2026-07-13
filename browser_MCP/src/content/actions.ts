@@ -132,6 +132,8 @@ export async function resolveNativeTarget(msg: any) {
 
   const p = topViewportPoint(resolved.x, resolved.y, resolved.frame)
   const rect = (el as HTMLElement).getBoundingClientRect()
+  const active = el.ownerDocument.activeElement
+  const ownsFocus = active === el || (!!active && el.contains(active))
   return {
     success: true,
     resolved: true,
@@ -142,6 +144,7 @@ export async function resolveNativeTarget(msg: any) {
       text: textOf(el, 100),
       selector: cssPath(el),
       role: el.getAttribute('role') || '',
+      active: ownsFocus,
       rect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
     },
   }

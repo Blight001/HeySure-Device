@@ -101,11 +101,36 @@ function rememberTaskOutcome(taskId: string, outcome: any) {
 function emitTaskOutcome(taskId: string, outcome: any) {
   if (!socket?.connected) {
     outcome.unsent = true
+    outcome.sending = false
     return
   }
-  if (outcome.kind === 'result') socket.emit('task:result', outcome.payload)
-  else if (outcome.kind === 'error') socket.emit('task:error', { taskId, userId: outcome.userId, error: outcome.error })
-  outcome.unsent = false
+  if (outcome.sending) return
+
+  const event = outcome.kind === 'result' ? 'task:result' : 'task:error'
+  const payload = outcome.kind === 'result'
+    ? outcome.payload
+    : { taskId, userId: outcome.userId, error: outcome.error }
+  outcome.unsent = true
+  outcome.sending = true
+  outcome.attempts = Number(outcome.attempts || 0) + 1
+
+  // A plain Socket.IO emit only means "queued locally". A transport drop after
+  // that point used to lose the result forever while the server waited 120s.
+  // Require the server handler's ACK and retry until it confirms receipt.
+  socket.timeout(5000).emit(event, payload, (err: any, ack: any) => {
+    outcome.sending = false
+    // Older compatible servers ACK with no response payload; accept that too.
+    if (!err && (ack == null || ack.received === true)) {
+      outcome.unsent = false
+      outcome.attempts = 0
+      return
+    }
+    outcome.unsent = true
+    const delayMs = Math.min(10000, 750 * Math.max(1, outcome.attempts))
+    setTimeout(() => {
+      if (taskOutcomes.get(taskId) === outcome) emitTaskOutcome(taskId, outcome)
+    }, delayMs)
+  })
 }
 
 // Re-deliver outcomes that never reached the server (socket torn down or

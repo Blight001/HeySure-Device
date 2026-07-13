@@ -259,6 +259,8 @@ struct InputRequest {
     amount: Option<i32>,
     #[serde(default)]
     text: Option<String>,
+    #[serde(default = "default_true")]
+    click_first: bool,
     #[serde(default)]
     clear_first: bool,
     #[serde(default)]
@@ -283,6 +285,10 @@ struct InputRequest {
     window: Option<BrowserWindowMetrics>,
     #[serde(default)]
     viewport: Option<Viewport>,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Clone, Copy, Deserialize)]
@@ -876,13 +882,16 @@ fn execute(command: &InputRequest) -> Result<Value, (&'static str, String)> {
             .map_err(map_error)?;
         }
         "type" => {
-            let point = point.ok_or((
-                "BRIDGE_POINT_REQUIRED",
-                "type requires an input-element point".to_string(),
-            ))?;
+            if command.click_first && point.is_none() {
+                return Err((
+                    "BRIDGE_POINT_REQUIRED",
+                    "type requires an input-element point when clickFirst is true".to_string(),
+                ));
+            }
             rc::native_type(
-                point.coordinates(),
+                point.map(MappedPoint::coordinates),
                 command.text.as_deref().unwrap_or(""),
+                command.click_first,
                 command.clear_first,
                 command.submit,
             )

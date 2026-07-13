@@ -12,7 +12,8 @@ import {
   doType, getContent, doScroll, doWait, doAwaitSettle, doEvaluate, doExtract,
   findText, fillForm, doSelect, doHover, storageGet, storageSet, storageRemove,
   storageList, domSnapshot, iframeList, performanceInfo, fileUpload,
-  screenshotTargetInfo, focusTarget, doScreenshotFx,
+  screenshotTargetInfo, focusTarget, doScreenshotFx, resolveNativeTarget,
+  nativeFrameGeometry, nativeViewportMetrics,
 } from './actions'
 import { doFindPopups, doClosePopup } from './popups'
 import { doPageInfo } from './viewport'
@@ -48,6 +49,9 @@ async function handleAction(msg: any): Promise<any> {
     case 'drag':         return doDrag(msg)
     case 'press_key':    return doPressKey(msg)
     case 'focus_target':  return focusTarget(msg)
+    case 'native_resolve_target': return resolveNativeTarget(msg)
+    case 'native_frame_geometry': return nativeFrameGeometry(msg)
+    case 'native_viewport_metrics': return nativeViewportMetrics()
     case 'find_popups':  return doFindPopups(msg)
     case 'close_popup':  return doClosePopup(msg)
     case 'page_info':    return doPageInfo()

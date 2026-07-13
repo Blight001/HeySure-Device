@@ -1,6 +1,6 @@
 # CLAUDE.md — device/ 端侧执行器（壳） (HeySure-Device)
 
-六个端侧客户端（**只是运行在不同端的壳，本身不具备 agent 能力**），连接后端、注册为 endpoint。
+七个端侧客户端（**只是运行在不同端的壳，本身不具备 agent 能力**），连接后端、注册为 endpoint。
 
 **本目录是独立仓库** `HeySure-Device`。各平台（windows / linux / mac / extension / android）代码与资产完全独立，不再共享 `shared/`。
 **桌面端已退化为受控运行器**：不再内置固定原生 MCP 工具，也没有任何设备本地的动态工具授权/管理入口——能力全部来自服务器下发的动态 MCP（`device:tool-config`，含 runtime 工具，Windows 仅支持 powershell/shell），由服务端编排/推理。静态自描述（`toolDefs`）与服务器下发动态 MCP 的边界见 [`read.md`](read.md) 第 5、6 节。
@@ -8,11 +8,12 @@
 画面远程（`rc:*`，WebRTC P2P）与命令行远程（`rt:*`，PTY 走 Socket.IO relay，无需 TURN）——
 统一标准见 [`read.md`](read.md) 第 9 节。
 
-## 六种形态
+## 七种形态
 
 | 子目录 | 形态 | 作用 |
 | --- | --- | --- |
 | `windows/` | Tauri 2 桌面（Windows） | 受控运行器（**原 Electron 壳已迁移为 Tauri**）：登录/注册 + 动态 MCP + runtime 执行（**仅 powershell / shell**）+ **远程连接两条通道**：画面远程（`remote_control`，原生抓屏 xcap→canvas→WebRTC + enigo 键鼠注入，`src/remote-control.ts` / `src-tauri/src/rc.rs`）与命令行远程（`remote_terminal`，ConPTY 交互式终端走 rt:* Socket.IO relay，`src/remote-terminal.ts` / `src-tauri/src/pty.rs`）；见 `windows/README.md`、`doc/tauri2-migration-report.md` 与 [`read.md`](read.md) 第 9 节 |
+| `browser_MCP_win/` | Chrome 扩展 + Windows 原生输入 | 浏览器扩展仅负责 DOM/ARIA/Shadow DOM 感知和坐标解析；点击、输入、滚动、拖拽及标签页快捷键经无需令牌的 `127.0.0.1:38473` 本机回环桥交给 `windows/` 的 Rust/enigo 执行。与普通 `browser_MCP/` 共用感知源码，通过独立构建开关分离执行模式。 |
 | `linux/` | Electron 桌面（X11） | 同上（shell 默认 bash；含 STT/git 独有工具） |
 | `mac/` | Electron 桌面（macOS） | 同上（需系统辅助功能 & 屏幕录制权限） |
 | `extension/` | Chrome MV3 扩展 | 浏览器自动化与轻量客户端（固定工具目录） |
@@ -20,6 +21,10 @@
 | `android/android-adb/` | 宿主电脑 Node.js 进程（方案 B） | 经 ADB 控制手机；息屏/锁屏下也能注入 |
 
 > 安卓两形态（A 本机 App / B 宿主 ADB）都以 `isAndroid:true` 注册，服务端统一识别为 `android` 类型。
+
+## grok_cli/ — 本地模型网关（不是端侧 agent 壳）
+
+`grok_cli/` 是一个独立的**本地 OpenAI 兼容 API 网关**（纯 Python 标准库，`python server.py` 或 `run.bat` 启动，默认 `127.0.0.1:8100`），把本机 grok CLI 的订阅额度包装成标准 `POST /v1/chat/completions`。它不连接 Connector、不注册为设备；HeySure 服务器把它当成普通 API 模型预设使用（Base URL 填 `http://127.0.0.1:8100/v1/chat/completions`）。详见 [`grok_cli/README.md`](grok_cli/README.md)。
 
 ## 桌面端架构（linux/mac，Electron）
 
@@ -98,6 +103,7 @@ Linux 独有：`tools/ear.ts`（STT）、`tools/git.ts`（如存在）。
 | Linux 桌面逻辑（含原共享通用部分） | `device/linux/src/` |
 | macOS 桌面逻辑（含原共享通用部分） | `device/mac/src/` |
 | 浏览器自动化 | `device/extension/src/` |
+| Windows 原生执行版浏览器自动化 | `device/browser_MCP_win/`（构建）+ `device/browser_MCP/src/`（共享感知与路由源码）+ `device/windows/src-tauri/src/browser_bridge.rs`（原生执行） |
 | Android 本机执行 | `device/android/`（独立 Kotlin 工程） |
 | Android ADB 控制 | `device/android/android-adb/` |
 | 工具执行底座（runner） | 各平台 `src/runtime/`（独立） |

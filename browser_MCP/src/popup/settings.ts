@@ -7,6 +7,7 @@ import { state } from './state'
 import { sendToBackground } from './transport'
 import * as dom from './dom'
 import { updateOfflineUi, applyTheme } from './ui'
+import { WINDOWS_NATIVE_BRIDGE_URL } from '../lib/native-bridge'
 
 export function loadSettings(s: AgentSettings) {
   state.serverUrl = s.serverUrl || ''
@@ -17,6 +18,8 @@ export function loadSettings(s: AgentSettings) {
   state.offlineMode = !!s.offlineMode
   dom.cfgOfflineMode.checked = state.offlineMode
   dom.cfgMouseFx.checked = s.mouseFx !== false
+  dom.nativeBridgeCard.classList.toggle('hidden', !__HEYSURE_WINDOWS_NATIVE_INPUT__)
+  dom.cfgNativeBridgeUrl.value = WINDOWS_NATIVE_BRIDGE_URL
   state.localModel = s.aiModel || ''
   state.hasAiKey = !!(s.aiKey?.trim())
   updateOfflineUi()
@@ -33,6 +36,21 @@ const PROVIDER_PRESETS: Record<string, { base: string; model: string }> = {
 }
 
 export function wireSettings() {
+  dom.testNativeBridge.addEventListener('click', async () => {
+    dom.nativeBridgeFeedback.textContent = '检测中…'
+    dom.nativeBridgeFeedback.style.color = 'var(--muted)'
+    try {
+      const response = await fetch(`${WINDOWS_NATIVE_BRIDGE_URL}/v1/health`)
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok || data?.enabled === false) throw new Error(data?.error || `HTTP ${response.status}`)
+      dom.nativeBridgeFeedback.textContent = 'Windows 原生输入桥已连接 ✓'
+      dom.nativeBridgeFeedback.style.color = 'var(--success)'
+    } catch (err: any) {
+      dom.nativeBridgeFeedback.textContent = `连接失败：${err?.message || err}`
+      dom.nativeBridgeFeedback.style.color = 'var(--danger)'
+    }
+  })
+
   dom.cfgAiProvider.addEventListener('change', () => {
     const p = PROVIDER_PRESETS[dom.cfgAiProvider.value]
     if (p) { dom.cfgAiBase.value = p.base; dom.cfgAiModel.value = p.model }

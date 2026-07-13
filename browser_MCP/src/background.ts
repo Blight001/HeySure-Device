@@ -33,6 +33,31 @@ let connectPromise: Promise<void> | null = null
 // at the start of connect() and on logout.
 let authRejected = false
 
+// browser_MCP_win drives the browser with real OS input. A stray click can
+// otherwise open browser-owned permission/file dialogs that content scripts
+// cannot inspect and that block every following page action. Make risky site
+// capabilities fail closed before Chrome presents a prompt. The ordinary
+// browser_MCP build keeps the user's existing content settings unchanged.
+const WINDOWS_BLOCKED_CONTENT_SETTINGS = [
+  'location',
+  'camera',
+  'microphone',
+  'notifications',
+  'popups',
+  'automaticDownloads',
+] as const
+
+async function applyWindowsDialogSafetyPolicy() {
+  if (!__HEYSURE_WINDOWS_NATIVE_INPUT__) return
+  const api = (chrome as any).contentSettings
+  if (!api) return
+  await Promise.allSettled(WINDOWS_BLOCKED_CONTENT_SETTINGS.map(async name => {
+    const setting = api[name]
+    if (typeof setting?.set !== 'function') return
+    await setting.set({ primaryPattern: '<all_urls>', setting: 'block', scope: 'regular' })
+  }))
+}
+
 async function withTaskTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | null = null
   try {
@@ -187,9 +212,11 @@ async function emitRegisterOn(s: Socket): Promise<void> {
   s.emit('device:register', {
     id,
     aiConfigId: null,
-    name:            settings.agentName || '浏览器插件',
+    name:            (__HEYSURE_WINDOWS_NATIVE_INPUT__ && (!settings.agentName || settings.agentName === '浏览器插件'))
+      ? 'Windows 原生浏览器'
+      : (settings.agentName || '浏览器插件'),
     group:           settings.agentGroup || '',
-    platform:        `browser-extension (${navigator?.userAgent?.split(' ').pop() || 'chrome'})`,
+    platform:        `${__HEYSURE_WINDOWS_NATIVE_INPUT__ ? 'browser-windows-native' : 'browser-extension'} (${navigator?.userAgent?.split(' ').pop() || 'chrome'})`,
     os:              { platform: 'browser', arch: 'unknown', release: '1.0', hostname: id },
     // Advertise remote_control alongside the tool names so the server gates live
     // screen control on it (mirrors remote_control.RC_CAPABILITY server-side).
@@ -206,6 +233,7 @@ async function emitRegisterOn(s: Socket): Promise<void> {
     lifecycle:       'registered',
     isWindowsDesktop: false,
     isBrowserExtension: true,
+    browserInputMode: __HEYSURE_WINDOWS_NATIVE_INPUT__ ? 'windows-native' : 'extension-dom',
   })
 }
 
@@ -886,6 +914,7 @@ const contextMenusApi = (chrome as any).contextMenus as typeof chrome.contextMen
 
 chrome.runtime.onInstalled.addListener(() => {
   void ensureOffscreen()
+  void applyWindowsDialogSafetyPolicy()
   if (!contextMenusApi?.removeAll || !contextMenusApi?.create) {
     log('system', 'warn', '当前浏览器不支持右键菜单 API，已跳过菜单注册')
     return
@@ -910,10 +939,12 @@ contextMenusApi?.onClicked?.addListener(async (info) => {
 // ── Auto-connect on browser startup ──────────────────────────────────────
 chrome.runtime.onStartup.addListener(async () => {
   void ensureOffscreen()
+  void applyWindowsDialogSafetyPolicy()
   await restoreAndConnectOnStartup()
 })
 
 void ensureOffscreen()
+void applyWindowsDialogSafetyPolicy()
 void restoreAndConnectOnStartup()
 
 // Login happens in the popup, but the actual socket lives in this service

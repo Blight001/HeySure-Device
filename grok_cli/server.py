@@ -1,0 +1,623 @@
+"""grok_cli — 本地 OpenAI 兼容 API 服务，把 grok CLI 包装成标准聊天接口。
+
+把 grok CLI（或任何输出 streaming-json 的同类 agent CLI）暴露为
+``POST /v1/chat/completions``（支持 stream / 非 stream）+ ``GET /v1/models``，
+这样任何按 OpenAI 格式调用的客户端（包括 HeySure 服务器的普通 API 模型预设）
+都能直接使用本机 CLI 的订阅额度，服务器端无需任何 CLI 特判。
+
+一次请求 = 启动一个 CLI 进程：
+
+    <command> --prompt-file <tmp> --output-format streaming-json -m <model> ...
+
+CLI stdout 输出 JSON Lines：
+    {"type":"thought","data":"..."}   推理增量  → delta.reasoning_content
+    {"type":"text","data":"..."}      正文增量  → delta.content
+    {"type":"end","stopReason":...}   本轮结束  → finish_reason=stop
+
+对话是无状态的：每轮把完整对话（含 system prompt）序列化进 prompt 文件，
+命令行长度与 prompt 大小无关。
+
+纯 Python 标准库实现，无第三方依赖。直接运行：
+
+    python server.py --command C:\\Users\\admin\\.grok\\bin\\grok.exe --port 8100
+
+环境变量（命令行参数优先）：
+    GROK_CLI_COMMAND   CLI 命令或完整路径（默认 "grok"）
+    GROK_CLI_HOST      监听地址（默认 127.0.0.1）
+    GROK_CLI_PORT      监听端口（默认 8100）
+    GROK_CLI_TIMEOUT   单次推理超时秒数（默认 600）
+    GROK_CLI_API_KEY   可选；设置后要求请求携带 Bearer <key>
+    GROK_CLI_MODELS    /v1/models 返回的模型 id 列表（逗号分隔，仅展示用）
+"""
+
+import argparse
+import base64
+import json
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import tempfile
+import threading
+import time
+import urllib.parse
+import urllib.request
+import uuid
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Any, Dict, List, Optional
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+RUNTIME_DIR = os.path.join(BASE_DIR, "runtime")
+IMAGE_MAX_BYTES = 20 * 1024 * 1024
+MAX_BODY_BYTES = 64 * 1024 * 1024
+
+# grok 拒绝创建零内置工具的会话。保留无害的 todo 工具 + read_file：
+# 图片输入会落盘为 RUNTIME_DIR 下的临时文件，多模态 Grok 模型用 read_file
+# 查看像素。Web 搜索与子代理保持关闭；平台自身的 MCP 工具走文本协议。
+CLI_FIXED_ARGS = [
+    "--output-format",
+    "streaming-json",
+    "--verbatim",
+    "--tools",
+    "todo_write,read_file",
+    "--disable-web-search",
+    "--no-subagents",
+]
+
+# 真正的（可能很大的）system prompt 放在 prompt 文件里；命令行上只带这个短包装。
+CLI_SYSTEM_WRAPPER = (
+    "你不是编程助手。接下来的输入由两部分组成：[系统设定] 与 [对话记录]。"
+    "请完全遵循 [系统设定] 中的全部要求与角色设定，以助手身份直接回复"
+    " [对话记录] 中最后一条消息。不要输出角色前缀，不要复述对话记录。"
+)
+
+_ROLE_LABELS = {"user": "User", "assistant": "Assistant", "tool": "Tool Result"}
+
+_DATA_IMAGE_RE = re.compile(
+    r"^data:(image/(?:png|jpeg|jpg|webp|gif));base64,(.+)$",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+class Config:
+    command = os.environ.get("GROK_CLI_COMMAND", "grok")
+    host = os.environ.get("GROK_CLI_HOST", "127.0.0.1")
+    port = int(os.environ.get("GROK_CLI_PORT", "8100") or 8100)
+    timeout = int(os.environ.get("GROK_CLI_TIMEOUT", "600") or 600)
+    api_key = os.environ.get("GROK_CLI_API_KEY", "").strip()
+    models = [
+        m.strip()
+        for m in os.environ.get("GROK_CLI_MODELS", "grok-4.5").split(",")
+        if m.strip()
+    ]
+
+
+# ---------------------------------------------------------------------------
+# 图片落盘（供 grok read_file 查看）
+# ---------------------------------------------------------------------------
+
+def _image_source_from_block(block: Dict[str, Any]) -> str:
+    """从 OpenAI/Anthropic/ACP 图片块中取出 data URL、HTTP URL 或本地路径。"""
+    btype = str(block.get("type") or "").lower()
+    if btype == "image_url":
+        value = block.get("image_url")
+        if isinstance(value, dict):
+            return str(value.get("url") or "").strip()
+        return str(value or "").strip()
+    if btype != "image":
+        return ""
+
+    source = block.get("source")
+    if isinstance(source, dict):
+        source_type = str(source.get("type") or "").lower()
+        data = str(source.get("data") or "").strip()
+        media_type = str(source.get("media_type") or source.get("mime_type") or "image/png")
+        if source_type == "base64" and data:
+            return f"data:{media_type};base64,{data}"
+        return str(source.get("url") or source.get("path") or "").strip()
+
+    value = block.get("data") or block.get("url") or block.get("path")
+    if value and block.get("mimeType") and not str(value).startswith(("data:", "http://", "https://")):
+        return f"data:{block.get('mimeType')};base64,{value}"
+    return str(value or "").strip()
+
+
+def _image_suffix(media_type: str, source: str = "") -> str:
+    normalized = str(media_type or "").split(";", 1)[0].strip().lower()
+    suffix = {
+        "image/png": ".png",
+        "image/jpeg": ".jpg",
+        "image/jpg": ".jpg",
+        "image/webp": ".webp",
+        "image/gif": ".gif",
+    }.get(normalized)
+    if suffix:
+        return suffix
+    path_suffix = os.path.splitext(urllib.parse.urlparse(source).path)[1].lower()
+    return path_suffix if path_suffix in {".png", ".jpg", ".jpeg", ".webp", ".gif"} else ".png"
+
+
+def _write_image(data: bytes, suffix: str, temporary_paths: List[str]) -> str:
+    if not data or len(data) > IMAGE_MAX_BYTES:
+        return ""
+    image_file = tempfile.NamedTemporaryFile(
+        mode="wb", suffix=suffix, prefix="image_", dir=RUNTIME_DIR, delete=False
+    )
+    try:
+        image_file.write(data)
+    finally:
+        image_file.close()
+    image_path = os.path.abspath(image_file.name)
+    temporary_paths.append(image_path)
+    return image_path
+
+
+def _materialize_image(block: Dict[str, Any], temporary_paths: List[str]) -> str:
+    source = _image_source_from_block(block)
+    if not source:
+        return ""
+
+    if os.path.isfile(source):
+        return os.path.abspath(source)
+    if source.lower().startswith("file://"):
+        local_path = urllib.request.url2pathname(urllib.parse.urlparse(source).path)
+        if os.name == "nt" and local_path.startswith("/") and len(local_path) > 2 and local_path[2] == ":":
+            local_path = local_path[1:]
+        if os.path.isfile(local_path):
+            return os.path.abspath(local_path)
+
+    match = _DATA_IMAGE_RE.match(source)
+    if match:
+        encoded = re.sub(r"\s+", "", match.group(2))
+        if len(encoded) > ((IMAGE_MAX_BYTES * 4) // 3) + 8:
+            return ""
+        try:
+            data = base64.b64decode(encoded, validate=True)
+        except Exception:
+            return ""
+        return _write_image(data, _image_suffix(match.group(1)), temporary_paths)
+
+    if source.startswith(("http://", "https://")):
+        try:
+            request = urllib.request.Request(source, headers={"User-Agent": "HeySure-GrokCLI/1.0"})
+            with urllib.request.urlopen(request, timeout=15) as response:
+                media_type = str(response.headers.get_content_type() or "").lower()
+                if not media_type.startswith("image/"):
+                    return ""
+                declared_size = int(response.headers.get("Content-Length") or 0)
+                if declared_size > IMAGE_MAX_BYTES:
+                    return ""
+                data = response.read(IMAGE_MAX_BYTES + 1)
+            return _write_image(data, _image_suffix(media_type, source), temporary_paths)
+        except Exception:
+            return ""
+    return ""
+
+
+# ---------------------------------------------------------------------------
+# 对话序列化
+# ---------------------------------------------------------------------------
+
+def _content_to_text(content: Any, temporary_paths: List[str]) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: List[str] = []
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            btype = block.get("type")
+            if btype == "text":
+                text = str(block.get("text") or "")
+                if text:
+                    parts.append(text)
+            elif btype in ("image_url", "image"):
+                image_path = _materialize_image(block, temporary_paths)
+                if image_path:
+                    parts.append(
+                        "[图片附件]\n"
+                        f"图片绝对路径：{image_path}\n"
+                        "必须使用 read_file 查看这张图片的像素内容，再基于实际画面继续。"
+                    )
+                else:
+                    parts.append("[图片附件读取失败：适配层未能解析或下载该图片。]")
+        return "\n".join(parts)
+    if content is None:
+        return ""
+    return str(content)
+
+
+def _serialize_convo(messages: List[Dict], temporary_paths: List[str]) -> str:
+    """把 OpenAI 格式对话展平为带角色标签的转录文本，system 合并置顶。"""
+    system_parts: List[str] = []
+    lines: List[str] = []
+    for msg in messages or []:
+        if not isinstance(msg, dict):
+            continue
+        role = str(msg.get("role") or "").strip().lower()
+        text = _content_to_text(msg.get("content"), temporary_paths)
+        if role == "system":
+            if text:
+                system_parts.append(text)
+            continue
+        if not text and not msg.get("tool_calls"):
+            continue
+        label = _ROLE_LABELS.get(role, role or "User")
+        lines.append(f"{label}: {text}".rstrip())
+    prompt_parts: List[str] = []
+    if system_parts:
+        prompt_parts.append("[系统设定]\n" + "\n\n".join(system_parts))
+    prompt_parts.append("[对话记录]\n" + ("\n\n".join(lines) if lines else "User: （无内容）"))
+    return "\n\n".join(prompt_parts)
+
+
+# ---------------------------------------------------------------------------
+# CLI 进程
+# ---------------------------------------------------------------------------
+
+def _resolve_cli_argv() -> List[str]:
+    command = str(Config.command or "").strip()
+    if not command:
+        raise RuntimeError("未配置 CLI 命令（GROK_CLI_COMMAND 或 --command）")
+    argv = [tok.strip('"') for tok in shlex.split(command, posix=(os.name != "nt"))]
+    argv = [tok for tok in argv if tok]
+    if not argv:
+        raise RuntimeError("未配置 CLI 命令（GROK_CLI_COMMAND 或 --command）")
+    exe = argv[0]
+    resolved = shutil.which(exe)
+    if resolved is None and not os.path.isfile(exe):
+        raise RuntimeError(f"CLI 命令未找到：{exe}。请安装该 CLI 或用完整路径配置")
+    argv[0] = resolved or exe
+    return argv
+
+
+def _kill_quietly(proc: subprocess.Popen) -> None:
+    try:
+        if proc.poll() is None:
+            proc.kill()
+    except Exception:
+        pass
+
+
+def _unlink_quietly(paths: List[str]) -> None:
+    for path in paths:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
+def _stderr_thread(pipe, sink: List[bytes]) -> None:
+    try:
+        for raw in iter(pipe.readline, b""):
+            sink.append(raw)
+            if len(sink) > 50:
+                del sink[:-50]
+    except Exception:
+        pass
+
+
+def run_cli_turn(model: str, messages: List[Dict]):
+    """生成器：跑一轮 CLI 推理，产出 ("thought"|"text", str) 事件。
+
+    CLI 缺失 / 启动失败 / 无输出异常退出时抛 RuntimeError（带用户可读信息）。
+    """
+    argv = _resolve_cli_argv()
+
+    os.makedirs(RUNTIME_DIR, exist_ok=True)
+    temporary_paths: List[str] = []
+    prompt_text = _serialize_convo(messages, temporary_paths)
+    prompt_file = tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", suffix=".txt", prefix="prompt_",
+        dir=RUNTIME_DIR, delete=False,
+    )
+    try:
+        prompt_file.write(prompt_text)
+    finally:
+        prompt_file.close()
+    temporary_paths.append(prompt_file.name)
+
+    full_argv = argv + [
+        "--prompt-file",
+        prompt_file.name,
+        "--system-prompt-override",
+        CLI_SYSTEM_WRAPPER,
+        "--cwd",
+        RUNTIME_DIR,
+    ] + CLI_FIXED_ARGS
+    if str(model or "").strip():
+        full_argv += ["-m", str(model).strip()]
+
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+    try:
+        proc = subprocess.Popen(
+            full_argv,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=RUNTIME_DIR,
+            creationflags=creationflags,
+        )
+    except OSError as exc:
+        _unlink_quietly(temporary_paths)
+        raise RuntimeError(f"CLI 启动失败：{exc}") from exc
+
+    stderr_tail: List[bytes] = []
+    threading.Thread(target=_stderr_thread, args=(proc.stderr, stderr_tail), daemon=True).start()
+    watchdog = threading.Timer(Config.timeout, _kill_quietly, args=(proc,))
+    watchdog.daemon = True
+    watchdog.start()
+
+    produced_output = False
+    timed_out = False
+    try:
+        for raw in iter(proc.stdout.readline, b""):
+            line = raw.decode("utf-8", errors="replace").strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+            except Exception:
+                continue
+            if not isinstance(event, dict):
+                continue
+            etype = event.get("type")
+            if etype == "thought":
+                data = str(event.get("data") or "")
+                if data:
+                    produced_output = True
+                    yield ("thought", data)
+            elif etype == "text":
+                data = str(event.get("data") or "")
+                if data:
+                    produced_output = True
+                    yield ("text", data)
+            # end / 会话簿记等其他事件类型忽略。
+    finally:
+        timed_out = not watchdog.is_alive() and proc.poll() is not None and not produced_output
+        watchdog.cancel()
+        _kill_quietly(proc)
+        try:
+            proc.wait(timeout=10)
+        except Exception:
+            pass
+        _unlink_quietly(temporary_paths)
+
+    returncode = proc.poll()
+    if returncode not in (0, None) and not produced_output:
+        stderr_text = b"".join(stderr_tail).decode("utf-8", errors="replace").strip()
+        if timed_out:
+            raise RuntimeError(f"CLI 推理超时（超过 {Config.timeout} 秒），进程已终止")
+        detail = stderr_text[-600:] if stderr_text else "（无错误输出）"
+        raise RuntimeError(f"CLI 进程异常退出（退出码 {returncode}）：{detail}")
+
+
+# ---------------------------------------------------------------------------
+# HTTP 层
+# ---------------------------------------------------------------------------
+
+def _estimate_tokens(text: str) -> int:
+    return max(0, len(text) // 4)
+
+
+def _usage(prompt_text: str, completion_text: str) -> Dict[str, int]:
+    prompt_tokens = _estimate_tokens(prompt_text)
+    completion_tokens = _estimate_tokens(completion_text)
+    return {
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": prompt_tokens + completion_tokens,
+    }
+
+
+class Handler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+    server_version = "grok-cli-gateway/1.0"
+
+    # -- 基础 ---------------------------------------------------------------
+
+    def log_message(self, fmt, *args):
+        print(f"[{time.strftime('%H:%M:%S')}] {self.address_string()} {fmt % args}")
+
+    def _json_response(self, status: int, payload: Dict[str, Any]) -> None:
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _error(self, status: int, message: str, err_type: str = "invalid_request_error") -> None:
+        self._json_response(status, {"error": {"message": message, "type": err_type, "code": None}})
+
+    def _check_auth(self) -> bool:
+        if not Config.api_key:
+            return True
+        auth = str(self.headers.get("Authorization") or "")
+        if auth == f"Bearer {Config.api_key}":
+            return True
+        self._error(401, "Invalid API key", "authentication_error")
+        return False
+
+    def _path(self) -> str:
+        return urllib.parse.urlparse(self.path).path.rstrip("/")
+
+    # -- 路由 ---------------------------------------------------------------
+
+    def do_GET(self):
+        path = self._path()
+        if path in ("", "/health"):
+            self._json_response(200, {
+                "service": "grok-cli-gateway",
+                "command": Config.command,
+                "models": Config.models,
+                "endpoint": "/v1/chat/completions",
+            })
+            return
+        if path.endswith("/models"):
+            if not self._check_auth():
+                return
+            now = int(time.time())
+            self._json_response(200, {
+                "object": "list",
+                "data": [
+                    {"id": m, "object": "model", "created": now, "owned_by": "grok-cli"}
+                    for m in Config.models
+                ],
+            })
+            return
+        self._error(404, f"Unknown path: {path}")
+
+    def do_POST(self):
+        path = self._path()
+        if not path.endswith("/chat/completions"):
+            self._error(404, f"Unknown path: {path}（仅支持 /v1/chat/completions）")
+            return
+        if not self._check_auth():
+            return
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            if length <= 0 or length > MAX_BODY_BYTES:
+                self._error(400, "请求体缺失或过大")
+                return
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        except Exception:
+            self._error(400, "请求体不是合法 JSON")
+            return
+        if not isinstance(payload, dict):
+            self._error(400, "请求体必须是 JSON 对象")
+            return
+
+        messages = payload.get("messages")
+        if not isinstance(messages, list) or not messages:
+            self._error(400, "messages 不能为空")
+            return
+        model = str(payload.get("model") or "").strip()
+        stream = bool(payload.get("stream"))
+
+        prompt_preview = json.dumps(messages, ensure_ascii=False)
+        try:
+            if stream:
+                self._handle_stream(model, messages, prompt_preview)
+            else:
+                self._handle_blocking(model, messages, prompt_preview)
+        except (BrokenPipeError, ConnectionError):
+            # 客户端断开：run_cli_turn 的 finally 已负责杀进程和清理临时文件。
+            pass
+
+    # -- 推理 ---------------------------------------------------------------
+
+    def _handle_blocking(self, model: str, messages: List[Dict], prompt_preview: str) -> None:
+        reasoning_parts: List[str] = []
+        text_parts: List[str] = []
+        try:
+            for kind, data in run_cli_turn(model, messages):
+                (reasoning_parts if kind == "thought" else text_parts).append(data)
+        except RuntimeError as exc:
+            self._error(500, str(exc), "server_error")
+            return
+        content = "".join(text_parts)
+        message: Dict[str, Any] = {"role": "assistant", "content": content}
+        reasoning = "".join(reasoning_parts)
+        if reasoning:
+            message["reasoning_content"] = reasoning
+        self._json_response(200, {
+            "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": model or (Config.models[0] if Config.models else "grok"),
+            "choices": [{"index": 0, "message": message, "finish_reason": "stop"}],
+            "usage": _usage(prompt_preview, content + reasoning),
+        })
+
+    def _handle_stream(self, model: str, messages: List[Dict], prompt_preview: str) -> None:
+        completion_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
+        created = int(time.time())
+        model_name = model or (Config.models[0] if Config.models else "grok")
+
+        def chunk(delta: Dict[str, Any], finish_reason: Optional[str] = None,
+                  usage: Optional[Dict[str, int]] = None) -> bytes:
+            obj: Dict[str, Any] = {
+                "id": completion_id,
+                "object": "chat.completion.chunk",
+                "created": created,
+                "model": model_name,
+                "choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}],
+            }
+            if usage is not None:
+                obj["usage"] = usage
+            return b"data: " + json.dumps(obj, ensure_ascii=False).encode("utf-8") + b"\n\n"
+
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "close")
+        self.end_headers()
+
+        self.wfile.write(chunk({"role": "assistant", "content": ""}))
+        self.wfile.flush()
+
+        collected = ""
+        try:
+            for kind, data in run_cli_turn(model, messages):
+                collected += data
+                if kind == "thought":
+                    self.wfile.write(chunk({"reasoning_content": data}))
+                else:
+                    self.wfile.write(chunk({"content": data}))
+                self.wfile.flush()
+        except RuntimeError as exc:
+            # SSE 头已发出，无法改状态码；把错误作为正文增量给到调用方。
+            self.wfile.write(chunk({"content": f"\n[grok-cli-gateway 错误] {exc}"}))
+            self.wfile.flush()
+
+        self.wfile.write(chunk({}, finish_reason="stop", usage=_usage(prompt_preview, collected)))
+        self.wfile.write(b"data: [DONE]\n\n")
+        self.wfile.flush()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="grok CLI → OpenAI 兼容本地 API 网关")
+    parser.add_argument("--command", default=None, help="CLI 命令或完整路径（默认取 GROK_CLI_COMMAND / grok）")
+    parser.add_argument("--host", default=None, help="监听地址（默认 127.0.0.1）")
+    parser.add_argument("--port", type=int, default=None, help="监听端口（默认 8100）")
+    parser.add_argument("--timeout", type=int, default=None, help="单次推理超时秒数（默认 600）")
+    parser.add_argument("--api-key", default=None, help="可选：要求 Bearer 鉴权的 key")
+    parser.add_argument("--models", default=None, help="/v1/models 展示的模型 id（逗号分隔）")
+    args = parser.parse_args()
+
+    if args.command:
+        Config.command = args.command
+    if args.host:
+        Config.host = args.host
+    if args.port:
+        Config.port = args.port
+    if args.timeout:
+        Config.timeout = args.timeout
+    if args.api_key is not None:
+        Config.api_key = args.api_key.strip()
+    if args.models:
+        Config.models = [m.strip() for m in args.models.split(",") if m.strip()]
+
+    os.makedirs(RUNTIME_DIR, exist_ok=True)
+    try:
+        argv = _resolve_cli_argv()
+        print(f"CLI 命令：{argv[0]}")
+    except RuntimeError as exc:
+        print(f"警告：{exc}（服务照常启动，请求到达时会再次检查）")
+
+    server = ThreadingHTTPServer((Config.host, Config.port), Handler)
+    server.daemon_threads = True
+    print(f"grok-cli-gateway 监听 http://{Config.host}:{Config.port}/v1/chat/completions")
+    print(f"模型预设 Base URL 填：http://{Config.host}:{Config.port}/v1/chat/completions，API Key 任意非空值")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
+
+
+if __name__ == "__main__":
+    main()

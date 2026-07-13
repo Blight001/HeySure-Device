@@ -10,7 +10,10 @@ const sharedOpts = {
   platform: 'browser',
   target: 'chrome119',
   format: 'iife',
-  define: { 'process.env.NODE_ENV': '"production"' },
+  define: {
+    'process.env.NODE_ENV': '"production"',
+    '__HEYSURE_WINDOWS_NATIVE_INPUT__': 'false',
+  },
   // Suppress node built-ins warning from socket.io-client's unused paths
   logOverride: { 'unsupported-require-call': 'silent' },
 }

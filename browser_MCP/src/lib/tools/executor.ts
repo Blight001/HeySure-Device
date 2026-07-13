@@ -35,7 +35,7 @@ const SYSTEM_PROMPT = `You are HeySure AI, a browser automation assistant runnin
 You act like a human looking at the page: you only see and interact with what is visible on top — not hidden or background DOM.
 
 Page interaction goes through one tool, browser_action, with an action param:
-click / double_click / right_click / scroll / type / press_key. Page-level
+click / double_click / right_click / scroll / type / press_key / dismiss_dialog. Page-level
 navigation goes through browser_tab with one of 7 actions: list / switch /
 replace / navigate / close / back / forward.
 
@@ -49,7 +49,7 @@ Core interaction loop (prefer this for any click/type):
 4. Re-run browser_observe after anything changes the page (scroll, navigation, opening a menu/popup) to refresh the ids.
 
 Handling obstacles:
-- If browser_action {action:"click"} returns occluded:true, a popup/overlay/ad is covering the target. Re-observe to find the close button and click it, try browser_action {action:"press_key", key:"Escape"}, or use force:true only when deliberate.
+- If browser_action {action:"click"} returns occluded:true, a page popup/overlay/ad is covering the target. Re-observe to find its close button. If it is browser chrome or a system modal with no DOM element, call browser_action {action:"dismiss_dialog"}. Use force:true only when deliberate.
 - If it returns not_visible:true, the element isn't on screen — scroll or expand its container first, then observe again.
 
 Always:

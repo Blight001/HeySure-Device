@@ -113,7 +113,11 @@ fn draw_cursor_overlay(image: &mut image::RgbaImage, mon_left: i32, mon_top: i32
 
         // Determine the cursor's pixel size — monochrome cursors only have
         // hbmMask (double height: AND mask on top, XOR mask on bottom).
-        let size_source = if !hbm_color.is_invalid() { hbm_color } else { hbm_mask };
+        let size_source = if !hbm_color.is_invalid() {
+            hbm_color
+        } else {
+            hbm_mask
+        };
         let mut bmp = BITMAP::default();
         if size_source.is_invalid()
             || GetObjectW(
@@ -126,7 +130,11 @@ fn draw_cursor_overlay(image: &mut image::RgbaImage, mon_left: i32, mon_top: i32
             return;
         }
         let width = bmp.bmWidth;
-        let height = if hbm_color.is_invalid() { bmp.bmHeight / 2 } else { bmp.bmHeight };
+        let height = if hbm_color.is_invalid() {
+            bmp.bmHeight / 2
+        } else {
+            bmp.bmHeight
+        };
         if width <= 0 || height <= 0 {
             free_bitmaps();
             return;
@@ -453,8 +461,12 @@ fn apply(enigo: &mut Enigo, event: &RcInputEvent) {
     // Normalized [0,1] → absolute pixels on the primary display. move_mouse(Abs)
     // re-normalizes by the same metric, so the ratio is DPI-independent.
     let (screen_w, screen_h) = enigo.main_display().unwrap_or((0, 0));
-    let px = |n: Option<f64>| -> i32 { (n.unwrap_or(0.0).clamp(0.0, 1.0) * screen_w as f64).round() as i32 };
-    let py = |n: Option<f64>| -> i32 { (n.unwrap_or(0.0).clamp(0.0, 1.0) * screen_h as f64).round() as i32 };
+    let px = |n: Option<f64>| -> i32 {
+        (n.unwrap_or(0.0).clamp(0.0, 1.0) * screen_w as f64).round() as i32
+    };
+    let py = |n: Option<f64>| -> i32 {
+        (n.unwrap_or(0.0).clamp(0.0, 1.0) * screen_h as f64).round() as i32
+    };
 
     match event.kind.as_str() {
         "move" => {
@@ -524,4 +536,265 @@ fn apply(enigo: &mut Enigo, event: &RcInputEvent) {
         }
         _ => {}
     }
+}
+
+fn native_button(value: &str) -> Button {
+    match value {
+        "right" => Button::Right,
+        "middle" => Button::Middle,
+        _ => Button::Left,
+    }
+}
+
+fn move_native(enigo: &mut Enigo, point: Option<(i32, i32)>) {
+    if let Some((x, y)) = point {
+        let _ = enigo.move_mouse(x, y, Coordinate::Abs);
+    }
+}
+
+/// Inject one click at a physical virtual-desktop coordinate. This is separate
+/// from the normalized remote-control path above: browser_MCP_win has already
+/// mapped a DOM viewport point onto the active monitor's physical rectangle.
+pub fn native_click(x: i32, y: i32, button: &str, double: bool) -> Result<(), String> {
+    with_enigo(|enigo| {
+        move_native(enigo, Some((x, y)));
+        let button = native_button(button);
+        let _ = enigo.button(button, Direction::Click);
+        if double {
+            std::thread::sleep(std::time::Duration::from_millis(70));
+            let _ = enigo.button(button, Direction::Click);
+        }
+    })
+    .ok_or_else(|| "native input lock is unavailable".to_string())
+}
+
+pub fn native_scroll(
+    point: Option<(i32, i32)>,
+    direction: &str,
+    amount: i32,
+) -> Result<(), String> {
+    with_enigo(|enigo| {
+        move_native(enigo, point);
+        match direction {
+            // Keep scrolling a mouse-only operation. Home/End would act on the
+            // address bar if it happened to own keyboard focus.
+            "top" => {
+                let _ = enigo.scroll(100, Axis::Vertical);
+            }
+            "bottom" => {
+                let _ = enigo.scroll(-100, Axis::Vertical);
+            }
+            "up" | "down" => {
+                let signed = if direction == "up" {
+                    amount.abs()
+                } else {
+                    -amount.abs()
+                };
+                let steps = ((signed as f64) / 40.0).round() as i32;
+                let _ = enigo.scroll(
+                    if steps == 0 { signed.signum() } else { steps },
+                    Axis::Vertical,
+                );
+            }
+            _ => {}
+        }
+    })
+    .ok_or_else(|| "native input lock is unavailable".to_string())
+}
+
+pub fn native_key(
+    point: Option<(i32, i32)>,
+    key: &str,
+    ctrl: bool,
+    shift: bool,
+    alt: bool,
+    meta: bool,
+    repeat: u16,
+) -> Result<(), String> {
+    let character = single_char(key);
+    let resolved = character
+        .and_then(ascii_physical_key)
+        .or_else(|| map_named_key(key));
+    if resolved.is_none() && (character.is_none() || ctrl || shift || alt || meta) {
+        return Err(format!("unsupported key or modifier combination: {key}"));
+    }
+    with_enigo(|enigo| {
+        if let Some(point) = point {
+            move_native(enigo, Some(point));
+            let _ = enigo.button(Button::Left, Direction::Click);
+            std::thread::sleep(std::time::Duration::from_millis(45));
+        }
+        if let Some(resolved) = resolved {
+            let event = RcInputEvent {
+                ctrl,
+                shift,
+                alt,
+                meta,
+                ..Default::default()
+            };
+            let mods = modifier_keys(&event);
+            for _ in 0..repeat.clamp(1, 100) {
+                dispatch_key(enigo, resolved, None, &mods);
+                if repeat > 1 {
+                    std::thread::sleep(std::time::Duration::from_millis(55));
+                }
+            }
+        } else if let Some(character) = character {
+            for _ in 0..repeat.clamp(1, 100) {
+                let _ = enigo.text(&character.to_string());
+            }
+        }
+    })
+    .ok_or_else(|| "native input lock is unavailable".to_string())
+}
+
+/// Cancel the currently visible browser-owned modal surface. Chromium uses
+/// Escape for JavaScript alert/confirm/prompt, permission bubbles, HTTP auth,
+/// file pickers and beforeunload prompts. Win32 #32770 dialogs are closed by
+/// browser_bridge before this key is injected.
+pub fn native_dismiss_dialog() -> Result<(), String> {
+    with_enigo(|enigo| {
+        dispatch_key(enigo, Key::Escape, None, &[]);
+    })
+    .ok_or_else(|| "native input lock is unavailable".to_string())
+}
+
+pub fn native_type(
+    point: (i32, i32),
+    text: &str,
+    clear_first: bool,
+    submit: bool,
+) -> Result<(), String> {
+    with_enigo(|enigo| -> Result<(), String> {
+        move_native(enigo, Some(point));
+        let _ = enigo.button(Button::Left, Direction::Click);
+        std::thread::sleep(std::time::Duration::from_millis(80));
+        if clear_first {
+            dispatch_key(enigo, Key::A, None, &[Key::Control]);
+            std::thread::sleep(std::time::Duration::from_millis(25));
+            dispatch_key(enigo, Key::Backspace, None, &[]);
+            // Controlled editors commonly replace their DOM node in response to
+            // the clearing input event. Give that render time to finish, then
+            // click the resolved field point again so subsequent text cannot be
+            // delivered to a detached/blurred node.
+            std::thread::sleep(std::time::Duration::from_millis(90));
+            move_native(enigo, Some(point));
+            let _ = enigo.button(Button::Left, Direction::Click);
+            std::thread::sleep(std::time::Duration::from_millis(45));
+        }
+        if !text.is_empty() {
+            type_native_text(enigo, text)?;
+        }
+        if submit {
+            std::thread::sleep(std::time::Duration::from_millis(45));
+            dispatch_key(enigo, Key::Return, None, &[]);
+        }
+        Ok(())
+    })
+    .ok_or_else(|| "native input lock is unavailable".to_string())?
+}
+
+// enigo 0.2.1's Windows Keyboard::text implementation returns immediately at
+// the first newline or tab. Everything after that character is silently lost.
+// It also builds one large SendInput array for the entire string. Split plain
+// text into bounded chunks and inject control characters explicitly so long,
+// multiline input is complete and page event loops get a chance to keep up.
+const NATIVE_TEXT_CHUNK_CHARS: usize = 256;
+
+fn flush_native_text(enigo: &mut Enigo, chunk: &mut String) -> Result<(), String> {
+    if chunk.is_empty() {
+        return Ok(());
+    }
+    enigo
+        .text(chunk)
+        .map_err(|error| format!("failed to inject text chunk: {error}"))?;
+    chunk.clear();
+    std::thread::sleep(std::time::Duration::from_millis(4));
+    Ok(())
+}
+
+fn type_native_text(enigo: &mut Enigo, text: &str) -> Result<(), String> {
+    let mut chunk = String::new();
+    let mut chunk_chars = 0usize;
+    let mut chars = text.chars().peekable();
+
+    while let Some(character) = chars.next() {
+        match character {
+            '\r' => {
+                flush_native_text(enigo, &mut chunk)?;
+                chunk_chars = 0;
+                if chars.peek() == Some(&'\n') {
+                    chars.next();
+                }
+                enigo
+                    .key(Key::Return, Direction::Click)
+                    .map_err(|error| format!("failed to inject line break: {error}"))?;
+                std::thread::sleep(std::time::Duration::from_millis(8));
+            }
+            '\n' => {
+                flush_native_text(enigo, &mut chunk)?;
+                chunk_chars = 0;
+                enigo
+                    .key(Key::Return, Direction::Click)
+                    .map_err(|error| format!("failed to inject line break: {error}"))?;
+                std::thread::sleep(std::time::Duration::from_millis(8));
+            }
+            '\t' => {
+                flush_native_text(enigo, &mut chunk)?;
+                chunk_chars = 0;
+                enigo
+                    .key(Key::Tab, Direction::Click)
+                    .map_err(|error| format!("failed to inject tab: {error}"))?;
+                std::thread::sleep(std::time::Duration::from_millis(8));
+            }
+            '\0' => return Err("text contains a null byte".to_string()),
+            _ => {
+                chunk.push(character);
+                chunk_chars += 1;
+                if chunk_chars >= NATIVE_TEXT_CHUNK_CHARS {
+                    flush_native_text(enigo, &mut chunk)?;
+                    chunk_chars = 0;
+                }
+            }
+        }
+    }
+    flush_native_text(enigo, &mut chunk)
+}
+
+pub fn native_navigate(url: &str, new_tab: bool) -> Result<(), String> {
+    with_enigo(|enigo| {
+        if new_tab {
+            dispatch_key(enigo, Key::T, None, &[Key::Control]);
+            // Let Chromium create and focus the new tab before addressing its
+            // omnibox. On loaded machines 65 ms was too short and subsequent
+            // text could land in the old page instead.
+            std::thread::sleep(std::time::Duration::from_millis(180));
+        }
+        // Always focus/select the address bar, including after Ctrl+T. This
+        // makes navigation deterministic even when a new-tab extension steals
+        // focus into its page immediately after creation.
+        dispatch_key(enigo, Key::L, None, &[Key::Control]);
+        std::thread::sleep(std::time::Duration::from_millis(90));
+        let _ = enigo.text(url);
+        std::thread::sleep(std::time::Duration::from_millis(40));
+        dispatch_key(enigo, Key::Return, None, &[]);
+    })
+    .ok_or_else(|| "native input lock is unavailable".to_string())
+}
+
+pub fn native_drag(from: (i32, i32), to: (i32, i32)) -> Result<(), String> {
+    with_enigo(|enigo| {
+        move_native(enigo, Some(from));
+        let _ = enigo.button(Button::Left, Direction::Press);
+        std::thread::sleep(std::time::Duration::from_millis(80));
+        const STEPS: i32 = 24;
+        for step in 1..=STEPS {
+            let x = from.0 + (to.0 - from.0) * step / STEPS;
+            let y = from.1 + (to.1 - from.1) * step / STEPS;
+            let _ = enigo.move_mouse(x, y, Coordinate::Abs);
+            std::thread::sleep(std::time::Duration::from_millis(12));
+        }
+        let _ = enigo.button(Button::Left, Direction::Release);
+    })
+    .ok_or_else(|| "native input lock is unavailable".to_string())
 }

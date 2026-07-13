@@ -61,13 +61,24 @@
 
           <div class="card">
             <div class="card-title">🎯 鼠标坐标校准</div>
-            <div class="login-hint">Tauri 轻量版暂未迁移截图与键鼠注入，远控能力将在后续阶段单独验证。</div>
+            <div class="login-hint">远控和浏览器原生输入均使用 Windows 物理坐标；浏览器桥接会按当前显示器自动换算 DPI。</div>
             <div class="stat-grid">
               <div class="fg"><label>X 缩放</label><input type="text" id="cfg-mouse-scale-x" value="1" /></div>
               <div class="fg"><label>Y 缩放</label><input type="text" id="cfg-mouse-scale-y" value="1" /></div>
             </div>
             <button class="btn btn-secondary" id="calibrate-mouse-btn">自动校准缩放</button>
             <div class="save-feedback" id="calibrate-feedback"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">🌐 浏览器原生输入桥</div>
+            <div class="check-row">
+              <input type="checkbox" id="cfg-browser-bridge-enabled" />
+              <label for="cfg-browser-bridge-enabled">允许 browser_MCP_win 通过本机回环地址调用真实键鼠</label>
+            </div>
+            <div class="fg"><label>桥接地址</label><input id="browser-bridge-url" type="text" value="http://127.0.0.1:38473" readonly /></div>
+            <div class="save-feedback" id="browser-bridge-feedback"></div>
+            <div class="login-hint">browser_MCP_win 无需令牌即可直接连接。服务仅监听 127.0.0.1，并拒绝普通网页来源；停用后会立即拒绝新操作。</div>
           </div>
 
           <div class="card">
@@ -90,7 +101,7 @@
             <div class="card-title">🚀 开机自启</div>
             <div class="check-row">
               <input type="checkbox" id="cfg-autostart" />
-              <label for="cfg-autostart">开机时自动启动 HeySure Agent（推荐，默认开启）</label>
+              <label for="cfg-autostart">开机时自动启动 HeySure Agent（默认关闭）</label>
             </div>
             <div class="login-hint">更改立即生效。应用将常驻托盘，可通过托盘菜单打开面板。</div>
           </div>

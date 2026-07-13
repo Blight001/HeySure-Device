@@ -34,6 +34,10 @@ export const cfgOfflineMode = $('cfg-offline-mode') as HTMLInputElement
 export const offlineModelConfig = $('offline-model-config')
 export const cfgAiProvider = $('cfg-ai-provider') as HTMLSelectElement
 export const cfgMouseFx    = $('cfg-mouse-fx') as HTMLInputElement
+export const nativeBridgeCard = $('native-bridge-card')
+export const cfgNativeBridgeUrl = $('cfg-native-bridge-url') as HTMLInputElement
+export const testNativeBridge = $('test-native-bridge') as HTMLButtonElement
+export const nativeBridgeFeedback = $('native-bridge-feedback')
 export const saveBtn       = $('save-btn') as HTMLButtonElement
 export const saveFeedback  = $('save-feedback')
 

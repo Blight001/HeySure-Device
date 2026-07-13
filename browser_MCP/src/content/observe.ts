@@ -847,26 +847,14 @@ export function doObserve(msg: any) {
       .sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x)
     : []
 
-  const overlayMarks: Array<{ el: Element; status: MarkStatus; frame?: FrameContext }> = []
-  const markTargets: Array<{ el: HTMLElement; selector: string; text: string; center: { x: number; y: number }; frameSelector?: string; framePath?: string[] }> = []
-  let nextId = 1
-  const elements: any[] = []
-  const interactiveItems = slicedRecords.map(rec => {
-    const id = nextId
-    nextId += 1
-    markTargets.push({
+  const markTargets = slicedRecords.map(rec => ({
       el: rec.el,
       selector: rec.selector,
       text: rec.text,
       center: rec.center,
       frameSelector: rec.frame?.frameSelector,
       framePath: rec.frame ? buildFramePath(rec.frame) : undefined,
-    })
-    const item = interactiveItemFromRecord(rec, id)
-    elements.push(item)
-    overlayMarks.push({ el: rec.el, status: 'clickable', frame: rec.frame })
-    return item
-  })
+  }))
 
   const rawTexts = (includeText && wantText) ? collectVisibleTexts(textLimit, scopes)
     .filter((t: any) => (!tagFilter || tagFilter.has(String(t.tag || '').toLowerCase())) && (!keyword || String(t.text || '').toLowerCase().includes(keyword)))
@@ -912,7 +900,6 @@ export function doObserve(msg: any) {
   const tooMany = interactiveRecords.length > limit || candidateItems.length > maxItems
 
   if (tooMany && msg.allow_truncate !== true) {
-    setMarks([])
     const ctx = viewportContext()
     return {
       success: true,
@@ -954,12 +941,23 @@ export function doObserve(msg: any) {
     }
   }
 
+  // Register only observations whose items are actually returned. setMarks
+  // reuses refs for live/semantically identical elements and retains previous
+  // mappings, so a filtered or automatic observe cannot renumber old refs.
+  const markRefs = setMarks(markTargets)
+  const overlayMarks: Array<{ el: Element; status: MarkStatus; frame?: FrameContext }> = []
+  const elements: any[] = []
+  const interactiveItems = slicedRecords.map((rec, index) => {
+    const item = interactiveItemFromRecord(rec, markRefs[index])
+    elements.push(item)
+    overlayMarks.push({ el: rec.el, status: 'clickable', frame: rec.frame })
+    return item
+  })
+
   const items = [...textItems, ...frameItems, ...mediaItems, ...interactiveItems]
     .sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x || kindSortRank(a.kind) - kindSortRank(b.kind))
 
   const texts = textItems
-
-  setMarks(markTargets)
 
   const blockedChosen = blockedForMarks
     .filter(el => interactiveCategoryAllowed(elementCategory(el), categoryFilter))

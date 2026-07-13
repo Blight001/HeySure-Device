@@ -19,9 +19,12 @@ enigo = "0.2"
 xcap = "0.4"
 # 远程控制：把系统光标绘制进捕获帧（GetCursorInfo/GetIconInfo/DrawIconEx），
 # xcap 的 GDI BitBlt 捕获本身不含硬件光标层。
-windows = { version = "0.56", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.56", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 # 帧编码：把捕获到的 RgbaImage 压成 JPEG（仅需 jpeg 编码器）。
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
+# Loopback-only HTTP listener used by browser_MCP_win. It carries small JSON
+# input commands from the read-only Chrome extension to this native process.
+tiny_http = "0.12"
 # 命令行远程（PTY）：跨平台伪终端，Windows 下走 ConPTY。承载「统一远程连接」
 # 的 rt:* 交互式终端（src/remote-terminal.ts），见 device/read.md。
 portable-pty = "0.8"

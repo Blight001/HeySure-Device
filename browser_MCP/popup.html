@@ -456,6 +456,15 @@
         <div class="login-hint" style="margin-top:6px;">登录后会固定自动连接服务器，设备将出现在网页端「作坊」栏目中等待分配 AI。</div>
       </div>
 
+      <div class="card hidden" id="native-bridge-card">
+        <div class="card-title">🪟 Windows 原生输入桥</div>
+        <div class="login-hint" style="margin-bottom:8px;">插件只读取 DOM 和坐标；点击、输入、滚动、拖拽与标签页快捷键由 Windows 端执行。</div>
+        <div class="fg"><label>桥接地址</label><input type="url" id="cfg-native-bridge-url" value="http://127.0.0.1:38473" readonly/></div>
+        <div class="login-hint" style="margin-bottom:8px;">无需令牌，启动 Windows 设备端后直接连接。</div>
+        <button class="btn btn-secondary" id="test-native-bridge">测试 Windows 桥接</button>
+        <div class="save-feedback" id="native-bridge-feedback"></div>
+      </div>
+
       <!-- 4. 工具调用统计 -->
       <div class="card">
         <div class="card-title">📊 工具调用统计</div>

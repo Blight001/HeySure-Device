@@ -185,16 +185,16 @@ export async function executeDynamicMcp(
   return { handled: true, result: await runProgram(def, args || {}, callTool, callBuiltin, merged) }
 }
 
-const BROWSER_SOURCE_FILES = ['src/lib/tools/definitions.ts', 'src/lib/tools/browser.ts', 'src/lib/tools/router.ts', 'dist/background.js']
+const BROWSER_SOURCE_FILES = ['src/lib/tools/definitions.ts', 'src/lib/tools/browser.ts', 'src/lib/tools/router.ts', 'background.js']
 
 function sourceFilesForTool(name: string): string[] {
-  return isManagerName(name) ? ['src/lib/tools/dynamic.ts', 'dist/background.js'] : BROWSER_SOURCE_FILES
+  return isManagerName(name) ? ['src/lib/tools/dynamic.ts', 'background.js'] : BROWSER_SOURCE_FILES
 }
 
 async function readExtensionSource(requested: string): Promise<Record<string, any>> {
   const relative = String(requested || '').trim().replace(/\\/g, '/')
-  if (!relative || relative.startsWith('/') || relative.split('/').includes('..') || !/^(src|dist)\//.test(relative)) {
-    throw new Error('source_path must be a relative src/ or dist/ path inside the extension')
+  if (!relative || relative.startsWith('/') || relative.split('/').includes('..') || (!relative.startsWith('src/') && relative !== 'background.js')) {
+    throw new Error('source_path must be a relative src/ path or background.js inside the extension')
   }
   const response = await fetch(chrome.runtime.getURL(relative))
   if (!response.ok) throw new Error(`Source file not found: ${relative}`)
@@ -315,7 +315,7 @@ export const DYNAMIC_MCP_MANAGER_DEF: AIToolDef = {
   },
   implementation: {
     kind: 'builtin_manager',
-    source_files: ['src/lib/tools/dynamic.ts', 'dist/background.js'],
+    source_files: ['src/lib/tools/dynamic.ts', 'background.js'],
     editable_via: DYNAMIC_MCP_MANAGER_NAME,
   },
 }
@@ -340,9 +340,12 @@ export async function dynamicMcpToolDefs(): Promise<AIToolDef[]> {
   const { merged, serverNames } = await getMergedDynamicMcpDefinitions()
   return [BROWSER_DYNAMIC_MCP_MANAGER_DEF, ...merged.map(def => {
     const fromServer = serverNames.has(def.name)
+    const nativeHint = __HEYSURE_WINDOWS_NATIVE_INPUT__ && ['browser_action', 'browser_drag', 'browser_tab'].includes(def.name)
+      ? '\n当前端点为 Windows 原生输入模式：插件只读取 DOM/ARIA 与坐标，所有会改变页面状态的点击、输入、滚动、拖拽和标签页快捷键均由 Windows 系统级键鼠执行。'
+      : ''
     return {
       name: def.name,
-      description: def.description,
+      description: `${def.description}${nativeHint}`,
       input_schema: def.input_schema,
       implementation: {
         kind: 'dynamic',

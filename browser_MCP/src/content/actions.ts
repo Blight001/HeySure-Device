@@ -20,6 +20,156 @@ function topViewportPoint(x: number, y: number, frame?: FrameContext): { x: numb
   return frame ? toTopViewportPoint(x, y, frame) : { x, y }
 }
 
+export function nativeViewportMetrics() {
+  const s = screen as any
+  return {
+    screenX: Number(window.screenX || 0),
+    screenY: Number(window.screenY || 0),
+    outerWidth: Number(window.outerWidth || 0),
+    outerHeight: Number(window.outerHeight || 0),
+    innerWidth: Number(window.innerWidth || 0),
+    innerHeight: Number(window.innerHeight || 0),
+    devicePixelRatio: Number(window.devicePixelRatio || 1),
+    visualScale: Number(window.visualViewport?.scale || 1),
+    pageZoom: 1,
+    screen: {
+      left: Number(s.left ?? s.availLeft ?? 0),
+      top: Number(s.top ?? s.availTop ?? 0),
+      width: Number(s.width || 0),
+      height: Number(s.height || 0),
+      availLeft: Number(s.availLeft ?? s.left ?? 0),
+      availTop: Number(s.availTop ?? s.top ?? 0),
+      availWidth: Number(s.availWidth || s.width || 0),
+      availHeight: Number(s.availHeight || s.height || 0),
+    },
+  }
+}
+
+// Resolve a DOM target without firing, focusing, scrolling, or otherwise
+// mutating the page. browser_MCP_win calls this immediately before asking the
+// Windows process to inject real OS input, so the point is fresh and stale refs
+// cannot silently click an unrelated location.
+export async function resolveNativeTarget(msg: any) {
+  const viaCoords = msg.x !== undefined && msg.y !== undefined &&
+    (msg.ref === undefined || msg.ref === null || msg.ref === '') &&
+    !msg.selector && !msg.text
+  const hasLocator = msg.ref !== undefined || !!msg.selector || !!msg.text ||
+    (msg.x !== undefined && msg.y !== undefined)
+  let resolved = hasLocator ? resolveTarget(msg) : { el: null, x: 0, y: 0, frame: undefined as FrameContext | undefined }
+
+  if (!resolved.el && msg.useActiveElement) {
+    const active = document.activeElement
+    if (active && active !== document.body && active !== document.documentElement) {
+      const c = elCenter(active)
+      resolved = { el: active, x: c.x, y: c.y, frame: undefined }
+    }
+  }
+
+  if (!resolved.el) {
+    if (msg.x !== undefined && msg.y !== undefined) {
+      return {
+        success: true,
+        resolved: true,
+        point: { x: Number(msg.x), y: Number(msg.y) },
+        viewport: nativeViewportMetrics(),
+        target: { coordinateOnly: true },
+      }
+    }
+    if (msg.allowEmpty) {
+      return { success: true, resolved: false, viewport: nativeViewportMetrics(), target: null }
+    }
+    throw new Error(`Element not found: selector=${msg.selector || ''} text=${msg.text || ''} ref=${msg.ref ?? ''}`)
+  }
+
+  const el = resolved.el
+  const fileInput = (() => {
+    const direct = el.tagName === 'INPUT' && String((el as HTMLInputElement).type).toLowerCase() === 'file'
+      ? el as HTMLInputElement
+      : null
+    if (direct) return direct
+    const label = el.closest('label') as HTMLLabelElement | null
+    const control = label?.control
+    return control?.tagName === 'INPUT' && String((control as HTMLInputElement).type).toLowerCase() === 'file'
+      ? control as HTMLInputElement
+      : null
+  })()
+  if (fileInput) {
+    return {
+      success: false,
+      blocked: true,
+      code: 'WINDOWS_NATIVE_FILE_DIALOG_BLOCKED',
+      error: '已阻止会打开系统文件选择窗口的原生点击。需要上传时请明确调用 browser_file_upload。',
+      target: { tag: el.tagName, text: textOf(el, 80), selector: cssPath(el) },
+      fileInput: { selector: cssPath(fileInput), accept: fileInput.accept || '', multiple: fileInput.multiple },
+    }
+  }
+  if (!viaCoords) {
+    const c = elCenter(el)
+    resolved.x = c.x
+    resolved.y = c.y
+  }
+  if (!isVisible(el)) {
+    return {
+      success: false,
+      not_visible: true,
+      error: '目标当前不在可见视口内；请先通过 Windows 原生滚轮滚动后重新 observe。',
+      target: { tag: el.tagName, text: textOf(el, 80), selector: cssPath(el) },
+    }
+  }
+  // Native OS input can never click "through" a painted overlay. Deliberately
+  // ignore force:true here; bypassing the check would click the cover, not the
+  // requested element, and could perform an unrelated irreversible action.
+  if (!viaCoords && !isHittable(el, resolved.frame)) {
+    const cover = occluderOf(el, resolved.frame)
+    return {
+      success: false,
+      occluded: true,
+      error: '目标被另一个可见元素遮挡；Windows 原生点击会落在遮挡物上。',
+      target: { tag: el.tagName, text: textOf(el, 80), selector: cssPath(el) },
+      occludedBy: cover ? { tag: cover.tagName, text: textOf(cover, 80), selector: cssPath(cover) } : null,
+    }
+  }
+
+  const p = topViewportPoint(resolved.x, resolved.y, resolved.frame)
+  const rect = (el as HTMLElement).getBoundingClientRect()
+  return {
+    success: true,
+    resolved: true,
+    point: { x: p.x, y: p.y },
+    viewport: nativeViewportMetrics(),
+    target: {
+      tag: el.tagName,
+      text: textOf(el, 100),
+      selector: cssPath(el),
+      role: el.getAttribute('role') || '',
+      rect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
+    },
+  }
+}
+
+// Return the rectangle of one immediate child frame. The background worker
+// uses this read-only geometry query to translate a point resolved inside a
+// cross-origin frame into the top viewport coordinate space.
+export function nativeFrameGeometry(msg: any) {
+  const wanted = String(msg.childUrl || '').split('#')[0]
+  const wantedIndex = Math.max(0, Number(msg.childIndex || 0))
+  const frames = Array.from(document.querySelectorAll<HTMLIFrameElement>('iframe,frame'))
+  const matching = frames.filter(frame => {
+    if (!wanted) return true
+    const raw = frame.getAttribute('src') || ''
+    let href = raw
+    try { href = new URL(raw || 'about:blank', document.baseURI).href } catch {}
+    return href.split('#')[0] === wanted
+  })
+  const frame = matching[wantedIndex] || null
+  if (!frame) throw new Error(`Unable to map child frame geometry: ${wanted || '(no URL)'} #${wantedIndex}`)
+  const rect = frame.getBoundingClientRect()
+  return {
+    success: true,
+    rect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
+  }
+}
+
 // ── Click ─────────────────────────────────────────────────────────────────
 export async function doClick(msg: any) {
   // viaCoords = an explicit point. document.elementFromPoint already returns the
@@ -314,22 +464,33 @@ export async function doType(msg: any) {
   el.focus()
 
   if (el.isContentEditable) {
-    if (clearFirst) el.textContent = ''
-    el.textContent += text
+    // Commit the final value atomically. Emitting an empty input event first can
+    // make a controlled editor re-render and detach this node before the text is
+    // assigned, which is the synthetic-input version of the clear_first race.
+    const current = el.textContent || ''
+    el.textContent = clearFirst ? text : current + text
     el.dispatchEvent(new Event('input', { bubbles: true }))
   } else {
-    if (clearFirst) {
-      el.value = ''
-      el.dispatchEvent(new Event('input', { bubbles: true }))
-    }
-    el.value += text
+    const current = el.value || ''
+    const value = clearFirst ? text : current + text
+    // Call the native prototype setter so React/Vue controlled fields see an
+    // actual value transition instead of having their instance-level tracker
+    // updated before the input event is delivered.
+    const win = ownerWindow(el) as any
+    const proto = el.tagName === 'TEXTAREA'
+      ? win.HTMLTextAreaElement?.prototype
+      : win.HTMLInputElement?.prototype
+    const setter = proto && Object.getOwnPropertyDescriptor(proto, 'value')?.set
+    if (setter) setter.call(el, value)
+    else el.value = value
     el.dispatchEvent(new Event('input',  { bubbles: true }))
     el.dispatchEvent(new Event('change', { bubbles: true }))
   }
 
   if (msg.submit) el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
 
-  return { success: true, text, length: text.length }
+  const finalValue = el.isContentEditable ? el.textContent || '' : el.value || ''
+  return { success: true, text, length: text.length, value_length: finalValue.length }
 }
 
 // ── Get content ───────────────────────────────────────────────────────────

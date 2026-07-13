@@ -5,6 +5,13 @@
 //      the page via chrome.tabs.sendMessage.
 //   3. The browser-only router (executeBrowserOnly) that dispatches by name.
 
+import {
+  sendNativeInput,
+  windowsNativeInputEnabled,
+  type NativeBrowserContext,
+  type NativePoint,
+} from '../native-bridge'
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 function isBrowserInternalUrl(url?: string): boolean {
   const raw = String(url || '')
@@ -79,6 +86,33 @@ async function isTabForeground(tab: chrome.tabs.Tab): Promise<boolean> {
 // a hard timeout this promise can hang forever, which is what makes calls look "stuck"
 // under network fluctuation instead of failing fast.
 const CONTENT_MSG_TIMEOUT_MS = 15000
+const WINDOWS_DIALOG_PROBE_TIMEOUT_MS = 6000
+const WINDOWS_DIALOG_RECOVERY_ACTIONS = new Set([
+  'native_resolve_target',
+  'native_frame_geometry',
+  'native_viewport_metrics',
+  'find_popups',
+  'close_popup',
+  'page_info',
+  'observe',
+  'clear_marks',
+  'get_content',
+  'extract',
+  'find_text',
+  'dom_snapshot',
+  'iframe_list',
+  'performance',
+  'screenshot_target_info',
+  'storage_get',
+  'storage_list',
+])
+
+function contentMessageTimeout(msg: any): number {
+  if (windowsNativeInputEnabled() && WINDOWS_DIALOG_RECOVERY_ACTIONS.has(String(msg?.action || ''))) {
+    return WINDOWS_DIALOG_PROBE_TIMEOUT_MS
+  }
+  return CONTENT_MSG_TIMEOUT_MS
+}
 
 function sendToContent(tabId: number, msg: any, frameId = 0): Promise<any> {
   const raw = new Promise<any>((resolve, reject) => {
@@ -91,7 +125,95 @@ function sendToContent(tabId: number, msg: any, frameId = 0): Promise<any> {
       resolve(response)
     })
   })
-  return withTimeout(raw, CONTENT_MSG_TIMEOUT_MS, `content action "${msg?.action || 'message'}"`)
+  return withTimeout(raw, contentMessageTimeout(msg), `content action "${msg?.action || 'message'}"`)
+}
+
+function isContentMessageTimeout(err: any): boolean {
+  return /content action .* timed out after \d+ms/i.test(String(err?.message || ''))
+}
+
+function mainWorldSafetyScriptFiles(): string[] {
+  try {
+    const manifest: any = chrome.runtime.getManifest()
+    const entry = (manifest.content_scripts || []).find((item: any) =>
+      String(item?.world || '').toUpperCase() === 'MAIN' &&
+      Array.isArray(item?.js) &&
+      item.js.some((file: string) => /shadow-patch\.js$/i.test(file)))
+    if (entry?.js?.length) return entry.js
+  } catch { /* use build-specific fallback */ }
+  return ['shadow-patch.js']
+}
+
+// Browser chrome (JavaScript dialogs, HTTP auth, permission bubbles) can pause
+// the page before the content script replies. There is no DOM node to click in
+// that state. Escape is injected by Windows into the exact target browser, then
+// the MAIN-world guard is installed into already-open tabs as well as future
+// documents. Per-tab de-duplication prevents several iframe probes from racing.
+const dialogRecoveryByTab = new Map<number, Promise<any>>()
+
+async function installMainWorldDialogSafety(tabId: number): Promise<boolean> {
+  try {
+    await withTimeout(chrome.scripting.executeScript({
+      target: { tabId, allFrames: true },
+      files: mainWorldSafetyScriptFiles(),
+      world: 'MAIN',
+    }), 1500, 'MAIN-world dialog safety injection')
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function recoverWindowsDialog(tabId: number): Promise<any> {
+  const pending = dialogRecoveryByTab.get(tabId)
+  if (pending) return pending
+
+  const recovery = (async () => {
+    const tab = await chrome.tabs.get(tabId)
+    const native = await sendNativeInput({
+      version: 1,
+      action: 'dismiss_dialog',
+      ...(await nativeBrowserContext(tab)),
+    })
+    // Existing tabs might predate the extension reload and therefore never
+    // received the document_start guard. Install it after the modal is gone.
+    await installMainWorldDialogSafety(tabId)
+    await delay(180)
+    return native
+  })()
+  dialogRecoveryByTab.set(tabId, recovery)
+  try {
+    return await recovery
+  } finally {
+    if (dialogRecoveryByTab.get(tabId) === recovery) dialogRecoveryByTab.delete(tabId)
+  }
+}
+
+async function prepareWindowsTabMutation(tabId: number): Promise<void> {
+  // Install before Ctrl+W / Alt+Left / omnibox navigation so beforeunload is
+  // suppressed even in tabs that were already open when the extension loaded.
+  // If page execution is itself blocked by a modal, cancel it first.
+  if (!(await installMainWorldDialogSafety(tabId))) {
+    await recoverWindowsDialog(tabId)
+  }
+}
+
+async function sendToContentWithDialogRecovery(tabId: number, msg: any, frameId = 0): Promise<any> {
+  try {
+    return await sendToContent(tabId, msg, frameId)
+  } catch (err: any) {
+    if (!windowsNativeInputEnabled() || !isContentMessageTimeout(err)) throw err
+    await recoverWindowsDialog(tabId)
+    try {
+      return await sendToContent(tabId, msg, frameId)
+    } catch (retryErr: any) {
+      if (isContentMessageTimeout(retryErr)) {
+        retryErr.code = 'WINDOWS_NATIVE_DIALOG_STILL_BLOCKING'
+        retryErr.suggestion = 'The dialog did not close with Escape. Unlock the desktop or close the browser/system dialog manually, then retry.'
+      }
+      throw retryErr
+    }
+  }
 }
 
 // The content script is normally auto-injected via the manifest, but only on
@@ -151,7 +273,7 @@ function unwrapContentResult(res: any): any {
 
 async function contentMsg(tabId: number, msg: any, frameId = 0): Promise<any> {
   try {
-    return unwrapContentResult(await sendToContent(tabId, msg, frameId))
+    return unwrapContentResult(await sendToContentWithDialogRecovery(tabId, msg, frameId))
   } catch (err: any) {
     if (!isNoReceiverError(err)) throw err
 
@@ -159,7 +281,7 @@ async function contentMsg(tabId: number, msg: any, frameId = 0): Promise<any> {
     const injected = await injectContentScript(tabId, frameId || undefined)
     if (injected) {
       try {
-        return unwrapContentResult(await sendToContent(tabId, msg, frameId))
+        return unwrapContentResult(await sendToContentWithDialogRecovery(tabId, msg, frameId))
       } catch (retryErr: any) {
         if (!isNoReceiverError(retryErr)) throw retryErr
       }
@@ -353,6 +475,21 @@ async function resolveTargetTab(args: any): Promise<chrome.tabs.Tab> {
 // ── chrome.* API tools ────────────────────────────────────────────────────
 async function toolTabNavigate(args: any): Promise<any> {
   const href = normalizePageUrl(args.url)
+  if (windowsNativeInputEnabled()) {
+    const current = await getActiveTab()
+    await nativeKeyForTab(current, { action: 'navigate', text: href, newTab: true })
+    await delay(450)
+    const [created] = await chrome.tabs.query({ active: true, windowId: current.windowId })
+    if (!created?.id) throw new Error('Windows opened a tab, but the extension could not identify it')
+    if (created.id === current.id) {
+      const error: any = new Error('Windows Ctrl+T did not create a new browser tab')
+      error.code = 'WINDOWS_NATIVE_TAB_OPEN_MISMATCH'
+      throw error
+    }
+    await waitForTabLoad(created.id!).catch(() => {})
+    const refreshed = await chrome.tabs.get(created.id!)
+    return { success: true, action: 'navigate', ...tabSummary(refreshed), url: refreshed.url || href, method: 'windows.native_input' }
+  }
   const tab = await chrome.tabs.create({ url: href, active: true })
   await focusTab(tab.id!)
   await waitForTabLoad(tab.id!)
@@ -362,6 +499,25 @@ async function toolTabNavigate(args: any): Promise<any> {
 
 async function toolTabReplace(args: any): Promise<any> {
   const href = normalizePageUrl(args.url)
+  if (windowsNativeInputEnabled()) {
+    const target = await resolveTargetTab(args)
+    await nativeSwitchToTab(target.id!)
+    const active = await chrome.tabs.get(target.id!)
+    const previousUrl = active.url || ''
+    await prepareWindowsTabMutation(active.id!)
+    await nativeKeyForTab(active, { action: 'navigate', text: href, newTab: false })
+    await delay(350)
+    await waitForTabLoad(active.id!).catch(() => {})
+    const refreshed = await chrome.tabs.get(active.id!)
+    if (previousUrl && refreshed.url === previousUrl && href !== previousUrl) {
+      await recoverWindowsDialog(active.id!).catch(() => {})
+      const error: any = new Error('Navigation was cancelled because the current page kept a native leave-site dialog open')
+      error.code = 'WINDOWS_NATIVE_NAVIGATION_DIALOG_CANCELLED'
+      error.suggestion = 'The dialog was cancelled safely. Retry the navigation; the beforeunload guard is now installed in this tab.'
+      throw error
+    }
+    return { success: true, action: 'replace', ...tabSummary(refreshed), url: refreshed.url || href, method: 'windows.native_input' }
+  }
   let tab: chrome.tabs.Tab
   try {
     tab = await resolveTargetTab(args)
@@ -426,6 +582,98 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): P
   } finally {
     if (timer) clearTimeout(timer)
   }
+}
+
+function stripFrameHash(url: string): string {
+  return String(url || '').split('#')[0]
+}
+
+async function nativeBrowserContext(tab: chrome.tabs.Tab): Promise<NativeBrowserContext> {
+  let win: chrome.windows.Window | undefined
+  try { win = await chrome.windows.get(tab.windowId) } catch { /* window may be closing */ }
+  return {
+    tab: tabSummary(tab),
+    window: win ? {
+      id: win.id,
+      left: win.left,
+      top: win.top,
+      width: win.width,
+      height: win.height,
+      focused: win.focused,
+      state: win.state,
+    } : undefined,
+  }
+}
+
+// Translate a coordinate returned by a content script running in a
+// cross-origin frame into top-viewport space. Each parent content script is
+// allowed to read the child iframe element's rectangle even though it cannot
+// inspect the child document itself.
+async function crossFrameOffset(tabId: number, frameId: number): Promise<NativePoint> {
+  if (!frameId) return { x: 0, y: 0 }
+  const frames = await listFrames(tabId)
+  const byId = new Map(frames.map(frame => [frame.frameId, frame]))
+  let current = byId.get(frameId)
+  let x = 0
+  let y = 0
+  const visited = new Set<number>()
+
+  while (current && current.frameId !== 0) {
+    if (visited.has(current.frameId)) throw new Error('Cross-origin frame tree contains a cycle')
+    visited.add(current.frameId)
+    const parent = byId.get(current.parentFrameId)
+    if (!parent) throw new Error(`Parent frame ${current.parentFrameId} not found`)
+    const siblings = frames.filter(frame =>
+      frame.parentFrameId === current!.parentFrameId &&
+      stripFrameHash(frame.url) === stripFrameHash(current!.url)
+    )
+    const childIndex = Math.max(0, siblings.findIndex(frame => frame.frameId === current!.frameId))
+    const geometry = await contentMsg(tabId, {
+      action: 'native_frame_geometry',
+      childUrl: current.url,
+      childIndex,
+    }, parent.frameId)
+    x += Number(geometry?.rect?.x || 0)
+    y += Number(geometry?.rect?.y || 0)
+    current = parent
+  }
+  return { x, y }
+}
+
+async function resolveNativeActionTarget(
+  tab: chrome.tabs.Tab,
+  target: Record<string, any>,
+  frameId = 0,
+): Promise<{ result: any; context: NativeBrowserContext }> {
+  const result = await contentMsg(tab.id!, { action: 'native_resolve_target', ...target }, frameId)
+  const context = await nativeBrowserContext(tab)
+  // A point resolved inside an isolated iframe is translated into top-page
+  // coordinates below, so its size metrics must also come from the top page.
+  // Using the iframe's innerWidth/innerHeight would produce a wrong scale.
+  const viewport = frameId === 0
+    ? result?.viewport
+    : await contentMsg(tab.id!, { action: 'native_viewport_metrics' }, 0)
+  if (viewport) {
+    try { viewport.pageZoom = await chrome.tabs.getZoom(tab.id!) } catch { viewport.pageZoom = 1 }
+    context.viewport = viewport
+  }
+  if (result?.success !== false && result?.point && frameId !== 0) {
+    const offset = await crossFrameOffset(tab.id!, frameId)
+    result.point = {
+      x: Number(result.point.x) + offset.x,
+      y: Number(result.point.y) + offset.y,
+    }
+  }
+  return { result, context }
+}
+
+async function nativeKeyForTab(tab: chrome.tabs.Tab, request: Record<string, any>): Promise<any> {
+  return sendNativeInput({
+    version: 1,
+    action: request.action || 'key',
+    ...(await nativeBrowserContext(tab)),
+    ...request,
+  } as any)
 }
 
 // Attaching chrome.debugger shows Chrome's "is debugging/controlling this
@@ -870,12 +1118,42 @@ async function toolTabList(): Promise<any> {
   }
 }
 
+async function nativeSwitchToTab(tabId: number): Promise<chrome.tabs.Tab> {
+  const target = await chrome.tabs.get(tabId)
+  const tabs = (await chrome.tabs.query({ windowId: target.windowId })).sort((a, b) => a.index - b.index)
+  const active = tabs.find(tab => tab.active)
+  if (!active?.id) throw new Error('No active tab found in the target browser window')
+  if (active.id === target.id) return target
+
+  const count = tabs.length
+  const forward = (target.index - active.index + count) % count
+  const backward = (active.index - target.index + count) % count
+  const useBackward = backward < forward
+  const repeat = useBackward ? backward : forward
+  await nativeKeyForTab(active, {
+    action: 'key',
+    key: 'Tab',
+    ctrl: true,
+    shift: useBackward,
+    repeat,
+  })
+  await delay(Math.max(180, repeat * 90))
+  const [confirmed] = await chrome.tabs.query({ active: true, windowId: target.windowId })
+  if (confirmed?.id !== target.id) {
+    const error: any = new Error(`Windows tab switch did not reach tab ${target.id}; active tab is ${confirmed?.id ?? 'unknown'}`)
+    error.code = 'WINDOWS_NATIVE_TAB_SWITCH_MISMATCH'
+    throw error
+  }
+  return chrome.tabs.get(target.id!)
+}
+
 async function toolTabSwitch(args: any): Promise<any> {
   const tabId = tabIdArg(args)
   if (!Number.isFinite(tabId) || tabId <= 0) {
     throw new Error('tab_id is required for switch action')
   }
-  await focusTab(tabId)
+  if (windowsNativeInputEnabled()) await nativeSwitchToTab(tabId)
+  else await focusTab(tabId)
   if ((await chrome.tabs.get(tabId)).status !== 'complete') {
     await waitForTabLoad(tabId).catch(() => {})
   }
@@ -893,12 +1171,36 @@ async function toolTabClose(args: any): Promise<any> {
   const requested = tabIdArg(args)
   const tabId = Number.isFinite(requested) && requested > 0 ? requested : (await getAnyActiveTab()).id!
   const closing = await chrome.tabs.get(tabId)
+  if (windowsNativeInputEnabled()) {
+    await nativeSwitchToTab(tabId)
+    await prepareWindowsTabMutation(tabId)
+    await nativeKeyForTab(closing, { action: 'key', key: 'w', ctrl: true })
+    await delay(180)
+    const stillThere = await chrome.tabs.get(tabId).then(() => true).catch(() => false)
+    if (stillThere) {
+      await recoverWindowsDialog(tabId).catch(() => {})
+      const error: any = new Error(`Windows Ctrl+W did not close tab ${tabId}; a native leave-site dialog was cancelled`)
+      error.code = 'WINDOWS_NATIVE_TAB_CLOSE_DIALOG_CANCELLED'
+      error.suggestion = 'Retry close; the beforeunload guard is now installed in this tab.'
+      throw error
+    }
+    return { success: true, action: 'close', ...tabSummary(closing), method: 'windows.native_input' }
+  }
   await chrome.tabs.remove(tabId)
   return { success: true, action: 'close', ...tabSummary(closing) }
 }
 
 async function toolHistoryBack(args: any = {}): Promise<any> {
   const tab = await resolveTargetTab(args)
+  if (windowsNativeInputEnabled()) {
+    await nativeSwitchToTab(tab.id!)
+    await prepareWindowsTabMutation(tab.id!)
+    await nativeKeyForTab(tab, { action: 'key', key: 'ArrowLeft', alt: true })
+    await delay(250)
+    await waitForTabLoad(tab.id!).catch(() => {})
+    const refreshed = await chrome.tabs.get(tab.id!)
+    return { success: true, action: 'back', ...tabSummary(refreshed), method: 'windows.native_input' }
+  }
   await focusTab(tab.id!)
   await chrome.scripting.executeScript({ target: { tabId: tab.id! }, func: () => history.back() })
   await delay(250)
@@ -909,6 +1211,15 @@ async function toolHistoryBack(args: any = {}): Promise<any> {
 
 async function toolHistoryForward(args: any = {}): Promise<any> {
   const tab = await resolveTargetTab(args)
+  if (windowsNativeInputEnabled()) {
+    await nativeSwitchToTab(tab.id!)
+    await prepareWindowsTabMutation(tab.id!)
+    await nativeKeyForTab(tab, { action: 'key', key: 'ArrowRight', alt: true })
+    await delay(250)
+    await waitForTabLoad(tab.id!).catch(() => {})
+    const refreshed = await chrome.tabs.get(tab.id!)
+    return { success: true, action: 'forward', ...tabSummary(refreshed), method: 'windows.native_input' }
+  }
   await focusTab(tab.id!)
   await chrome.scripting.executeScript({ target: { tabId: tab.id! }, func: () => history.forward() })
   await delay(250)
@@ -1145,6 +1456,33 @@ async function toolClick(args: any): Promise<any> {
     force: !!args.force,
   }
 
+  if (windowsNativeInputEnabled()) {
+    const { result: resolved, context } = await resolveNativeActionTarget(tab, {
+      ref: t.ref,
+      selector: t.selector,
+      text: t.text,
+      x: t.x,
+      y: t.y,
+      force: !!args.force,
+    }, t.frameId)
+    if (resolved?.success === false) return resolved
+    const native = await sendNativeInput({
+      version: 1,
+      action: 'click',
+      ...context,
+      point: resolved.point,
+      button: 'left',
+      target: resolved.target,
+    })
+    return withAutoObserve(tab, args, {
+      success: true,
+      method: 'windows.native_input',
+      point: resolved.point,
+      target: resolved.target,
+      native,
+    }, t.frameId)
+  }
+
   // Normal clicks intentionally avoid chrome.debugger: attaching it displays a
   // browser infobar and changes the viewport. A single complete DOM pointer/mouse
   // sequence is more stable for routine controls and cannot accidentally repeat
@@ -1308,6 +1646,34 @@ async function toolObserveWithin(args: any, timeoutMs: number): Promise<any> {
 async function toolType(args: any): Promise<any> {
   const tab = await getActiveTab()
   const { frameId, ref } = parseRef(args.ref ?? args.mark ?? args.id)
+  if (windowsNativeInputEnabled()) {
+    const { result: resolved, context } = await resolveNativeActionTarget(tab, {
+      ref,
+      selector: args.selector,
+      useActiveElement: !ref && !args.selector,
+    }, frameId)
+    if (resolved?.success === false) return resolved
+    const native = await sendNativeInput({
+      version: 1,
+      action: 'type',
+      ...context,
+      point: resolved.point,
+      text: String(args.text ?? ''),
+      clearFirst: args.clear_first !== false,
+      submit: !!args.submit,
+      target: resolved.target,
+    })
+    return withAutoObserve(tab, args, {
+      success: true,
+      text: String(args.text ?? ''),
+      length: String(args.text ?? '').length,
+      submitted: !!args.submit,
+      method: 'windows.native_input',
+      point: resolved.point,
+      target: resolved.target,
+      native,
+    }, frameId)
+  }
   const result = await contentMsg(tab.id!, {
     action: 'type',
     ref,
@@ -1328,6 +1694,36 @@ async function toolType(args: any): Promise<any> {
 
 async function toolScroll(args: any): Promise<any> {
   const tab = await getActiveTab()
+  if (windowsNativeInputEnabled()) {
+    const { result: resolved, context } = await resolveNativeActionTarget(tab, args.selector
+      ? { selector: args.selector }
+      : { allowEmpty: true })
+    if (resolved?.success === false) return resolved
+    const scrollPoint = resolved.point || (context.viewport ? {
+      x: context.viewport.innerWidth / 2,
+      y: context.viewport.innerHeight / 2,
+    } : undefined)
+    const native = await sendNativeInput({
+      version: 1,
+      action: 'scroll',
+      ...context,
+      point: scrollPoint,
+      direction: args.direction,
+      amount: Number(args.amount || 400),
+      target: resolved.target,
+    })
+    await delay(160)
+    const position = await contentMsg(tab.id!, { action: 'page_info' }).catch(() => null)
+    return {
+      success: true,
+      direction: args.direction,
+      requestedAmount: Number(args.amount || 400),
+      method: 'windows.native_input',
+      target: resolved.target,
+      native,
+      ...(position || {}),
+    }
+  }
   return contentMsg(tab.id!, { action: 'scroll', direction: args.direction, amount: args.amount || 400, selector: args.selector })
 }
 
@@ -1592,6 +1988,20 @@ async function toolProfileSet(args: any): Promise<any> {
 async function toolRightClick(args: any): Promise<any> {
   const tab = await getActiveTab()
   const t = routeTarget(args)
+  if (windowsNativeInputEnabled()) {
+    const { result: resolved, context } = await resolveNativeActionTarget(tab, {
+      ref: t.ref, selector: t.selector, text: t.text, x: t.x, y: t.y,
+    }, t.frameId)
+    if (resolved?.success === false) return resolved
+    const native = await sendNativeInput({
+      version: 1, action: 'click', ...context, point: resolved.point,
+      button: 'right', target: resolved.target,
+    })
+    return withAutoObserve(tab, args, {
+      success: true, method: 'windows.native_input', point: resolved.point,
+      target: resolved.target, native,
+    }, t.frameId)
+  }
   const result = await contentMsg(tab.id!, { action: 'right_click', ref: t.ref, selector: t.selector, text: t.text, x: t.x, y: t.y }, t.frameId)
   return withAutoObserve(tab, args, result, t.frameId)
 }
@@ -1599,12 +2009,51 @@ async function toolRightClick(args: any): Promise<any> {
 async function toolDoubleClick(args: any): Promise<any> {
   const tab = await getActiveTab()
   const t = routeTarget(args)
+  if (windowsNativeInputEnabled()) {
+    const { result: resolved, context } = await resolveNativeActionTarget(tab, {
+      ref: t.ref, selector: t.selector, text: t.text, x: t.x, y: t.y,
+    }, t.frameId)
+    if (resolved?.success === false) return resolved
+    const native = await sendNativeInput({
+      version: 1, action: 'click', ...context, point: resolved.point,
+      button: 'left', double: true, target: resolved.target,
+    })
+    return withAutoObserve(tab, args, {
+      success: true, method: 'windows.native_input', point: resolved.point,
+      target: resolved.target, native,
+    }, t.frameId)
+  }
   const result = await contentMsg(tab.id!, { action: 'double_click', ref: t.ref, selector: t.selector, text: t.text, x: t.x, y: t.y }, t.frameId)
   return withAutoObserve(tab, args, result, t.frameId)
 }
 
 async function toolDrag(args: any): Promise<any> {
   const tab = await getActiveTab()
+  if (windowsNativeInputEnabled()) {
+    const source = await resolveNativeActionTarget(tab, {
+      selector: args.selector, text: args.text, x: args.x, y: args.y,
+    })
+    if (source.result?.success === false) return source.result
+    const destination = await resolveNativeActionTarget(tab, {
+      selector: args.to_selector, text: args.to_text, x: args.to_x, y: args.to_y,
+    })
+    if (destination.result?.success === false) return destination.result
+    const native = await sendNativeInput({
+      version: 1,
+      action: 'drag',
+      ...source.context,
+      point: source.result.point,
+      toPoint: destination.result.point,
+      target: { from: source.result.target, to: destination.result.target },
+    })
+    return withAutoObserve(tab, args, {
+      success: true,
+      method: 'windows.native_input',
+      from: source.result.point,
+      to: destination.result.point,
+      native,
+    })
+  }
   const result = await contentMsg(tab.id!, {
     action: 'drag',
     selector: args.selector, text: args.text, x: args.x, y: args.y,
@@ -1615,6 +2064,31 @@ async function toolDrag(args: any): Promise<any> {
 
 async function toolPressKey(args: any): Promise<any> {
   const tab = await getActiveTab()
+  if (windowsNativeInputEnabled()) {
+    const { result: resolved, context } = await resolveNativeActionTarget(tab, args.selector
+      ? { selector: args.selector }
+      : { allowEmpty: true })
+    if (resolved?.success === false) return resolved
+    const native = await sendNativeInput({
+      version: 1,
+      action: 'key',
+      ...context,
+      point: resolved.point,
+      key: String(args.key || ''),
+      ctrl: !!args.ctrl,
+      shift: !!args.shift,
+      alt: !!args.alt,
+      meta: !!args.meta,
+      target: resolved.target,
+    })
+    return withAutoObserve(tab, args, {
+      success: true,
+      key: String(args.key || ''),
+      method: 'windows.native_input',
+      target: resolved.target,
+      native,
+    })
+  }
   const result = await contentMsg(tab.id!, {
     action: 'press_key',
     key: args.key, selector: args.selector,
@@ -1623,12 +2097,28 @@ async function toolPressKey(args: any): Promise<any> {
   return withAutoObserve(tab, args, { ...result, method: 'content.KeyboardEvent' })
 }
 
+async function toolDismissDialog(args: any): Promise<any> {
+  if (!windowsNativeInputEnabled()) {
+    return toolPressKey({ ...args, key: 'Escape', observe_after: false })
+  }
+  const tab = await getActiveTab()
+  const native = await recoverWindowsDialog(tab.id!)
+  return {
+    success: true,
+    action: 'dismiss_dialog',
+    method: 'windows.native_input',
+    cancelled: true,
+    native,
+  }
+}
+
 // ── Action-dispatching handlers ───────────────────────────────────────────
 // Several formerly-separate tools are now single tools that switch on an
 // `action` param; each branch delegates to the original impl above, so
 // behaviour is unchanged — only the tool surface is smaller:
 //   · browser_tab    — list / open / close / activate + navigate / back / forward.
-//   · browser_action — click / double_click / right_click / scroll / type / press_key (page interaction).
+//   · browser_action — click / double_click / right_click / scroll / type / press_key /
+//     dismiss_dialog (page and browser-chrome interaction).
 //   · browser_cookie / browser_storage / browser_session / browser_profile — state ops.
 function badAction(tool: string, action: any, allowed: string[]): never {
   const got = action === undefined || action === '' ? '(空)' : String(action)
@@ -1650,7 +2140,7 @@ function toolTab(args: any): Promise<any> {
 }
 
 // browser_action aggregates the page-interaction verbs (click / double_click /
-// right_click / scroll / type / press_key) behind a single action param. Each
+// right_click / scroll / type / press_key / dismiss_dialog) behind a single action param. Each
 // branch delegates to the original impl, so behaviour is unchanged.
 function toolAction(args: any): Promise<any> {
   switch (args?.action) {
@@ -1660,7 +2150,8 @@ function toolAction(args: any): Promise<any> {
     case 'scroll':       return toolScroll(args)
     case 'type':         return toolType(args)
     case 'press_key':    return toolPressKey(args)
-    default:             return badAction('browser_action', args?.action, ['click', 'double_click', 'right_click', 'scroll', 'type', 'press_key'])
+    case 'dismiss_dialog': return toolDismissDialog(args)
+    default:             return badAction('browser_action', args?.action, ['click', 'double_click', 'right_click', 'scroll', 'type', 'press_key', 'dismiss_dialog'])
   }
 }
 

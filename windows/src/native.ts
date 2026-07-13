@@ -46,12 +46,22 @@ export interface TempScript {
   path: string
 }
 
+export interface BrowserBridgeInfo {
+  url: string
+  port: number
+  running: boolean
+  enabled: boolean
+}
+
 export const native = {
   runProcess: (spec: ProcessRunSpec) => invoke<ProcessRunResult>('run_process', { spec }),
   pauseExecution: () => invoke<number>('pause_execution'),
   resumeExecution: () => invoke<void>('resume_execution'),
   killAllProcesses: () => invoke<number>('kill_all_processes'),
   executionState: () => invoke<{ paused: boolean; active: number }>('execution_state'),
+  browserBridgeConfigure: (enabled: boolean) =>
+    invoke<BrowserBridgeInfo>('browser_bridge_configure', { enabled }),
+  browserBridgeInfo: () => invoke<BrowserBridgeInfo>('browser_bridge_info'),
   hostInfo: () => invoke<HostInfo>('host_info'),
   appPaths: () => invoke<AppPaths>('app_paths'),
   whichCommand: (name: string) => invoke<string | null>('which_command', { name }),

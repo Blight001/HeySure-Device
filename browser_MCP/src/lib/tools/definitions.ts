@@ -110,18 +110,19 @@ export const BROWSER_TOOLS: AIToolDef[] = [
   // ───── 页面交互 ───────────────────────────────────────────────────────
   {
     name: 'browser_action',
-    description: '页面交互聚合工具：用 action 指定要做的动作——点击 click（单击）、双击 double_click、右键 right_click、滚动 scroll、输入文本 type、键盘按键 press_key。各动作的参数与原 browser_click/double_click/right_click/scroll/type/press_key 一致，按 action 取用对应字段即可。\n' +
+    description: '页面交互聚合工具：用 action 指定要做的动作——点击 click（单击）、双击 double_click、右键 right_click、滚动 scroll、输入文本 type、键盘按键 press_key、取消浏览器/系统强制弹窗 dismiss_dialog。\n' +
       '· click：无需选择点击模式；默认自动递归穿透开放的 Shadow DOM 定位控件，完成可见性/遮挡校验后只派发一次完整 pointer+mouse 事件，不启用 chrome.debugger，因此不会触发浏览器“正在调试/操控”提示条。定位优先级 ref（browser_observe 编号，最稳）> selector > text > 坐标；被弹窗/遮罩盖住时返回 occluded 诊断。\n' +
       '· double_click / right_click：双击、右键（上下文菜单），用 selector / text / 坐标定位。\n' +
       '· scroll：滚动页面，返回滚动后的位置、移动像素数与进入视野的小节/标题。\n' +
       '· type：向 input/textarea 输入文本（单字段；多字段请多次 type 或配合 observe 逐字段操作）。\n' +
       '· press_key：在焦点元素或指定 selector 上按键，可带 Ctrl/Shift/Alt/Meta 修饰键。\n' +
+      '· dismiss_dialog：取消当前浏览器原生模态窗口、权限气泡、文件选择器或系统信息对话框；确认离开时选择“留在页面”的安全语义。Windows 原生版会激活目标浏览器并注入 Escape。\n' +
       '· 自动 observe：click/double_click/right_click/type/press_key 执行后会自动检测页面是否变化并等待加载完毕；若变化，结果里附带增量 observe（observe.delta=true），只返回相对上一次 observe 新增/变化/消失的元素，完整快照不再重复返回；未变化则 page_changed:false。不需要时传 observe_after:false 关闭。\n' +
       '用途：统一的点击/滚动/输入/键盘入口。场景：先 browser_observe 拿到编号，再 browser_action {action:"click", ref:id} 点击；点击后若页面变了，直接读 observe.items / addedItems / changedItems / removedItems 里的变化元素继续操作；需要全量时再调用 browser_observe。',
     input_schema: {
       type: 'object',
       properties: {
-        action:      { type: 'string', enum: ['click', 'double_click', 'right_click', 'scroll', 'type', 'press_key'], description: '要执行的交互动作。' },
+        action:      { type: 'string', enum: ['click', 'double_click', 'right_click', 'scroll', 'type', 'press_key', 'dismiss_dialog'], description: '要执行的交互动作。' },
         // 通用定位（click/double_click/right_click 用；type/press_key 可用 selector 聚焦）
         ref:         { type: ['number', 'string'],  description: 'browser_observe 返回的元素编号 id（click/double_click/right_click/type 均可用），最稳的定位方式，优先使用。主页面元素是数字；跨域 iframe 内的元素 id 形如 "3:5"（frameId:本地编号），原样回传即可，会自动路由到对应框架。' },
         selector:    { type: 'string',  description: '目标元素的 CSS selector（click 会自动在页面及开放的 Shadow DOM 中递归查找；type 指定输入框；press_key 指定先聚焦的元素；scroll 可指定滚动进视口的元素）。' },

@@ -1187,6 +1187,7 @@ async function doSaveSettings() {
   settings.mouseCoordinateScaleX = Number($<HTMLInputElement>('cfg-mouse-scale-x').value) || 1
   settings.mouseCoordinateScaleY = Number($<HTMLInputElement>('cfg-mouse-scale-y').value) || 1
   settings.autoStart = $<HTMLInputElement>('cfg-autostart').checked
+  settings.browserBridgeEnabled = $<HTMLInputElement>('cfg-browser-bridge-enabled').checked
   if (settings.workspaceRoot) {
     try { await native.ensureDir(settings.workspaceRoot) } catch (err: any) {
       appendLog('error', `工作目录不可用: ${err?.message || err}`)
@@ -1194,6 +1195,7 @@ async function doSaveSettings() {
     }
   }
   await saveSettings(settings)
+  await native.browserBridgeConfigure(settings.browserBridgeEnabled)
   await applyAutoStart(settings.autoStart)
   const fb = $('save-feedback')
   fb.className = 'save-feedback ok'
@@ -1262,8 +1264,17 @@ function setupShellUi() {
   $('calibrate-mouse-btn').addEventListener('click', () => {
     const fb = $('calibrate-feedback')
     fb.className = 'save-feedback error'
-    fb.textContent = 'Tauri 轻量版暂未迁移截图与键鼠注入，无法自动校准'
+    fb.textContent = '浏览器原生输入按显示器自动换算；远控手动缩放仍保留为兼容设置'
     setTimeout(() => { fb.textContent = '' }, 4500)
+  })
+  $('cfg-browser-bridge-enabled').addEventListener('change', async () => {
+    settings.browserBridgeEnabled = $<HTMLInputElement>('cfg-browser-bridge-enabled').checked
+    await saveSettings(settings)
+    const info = await native.browserBridgeConfigure(settings.browserBridgeEnabled)
+    const fb = $('browser-bridge-feedback')
+    fb.className = info.enabled ? 'save-feedback ok' : 'save-feedback'
+    fb.textContent = info.enabled ? '原生输入桥已启用' : '原生输入桥已停用'
+    setTimeout(() => { fb.textContent = '' }, 2000)
   })
   $('btn-chat-send').addEventListener('click', () => {
     if (sendingChat) void stopLocalChat()
@@ -1425,8 +1436,9 @@ async function boot() {
   host = await native.hostInfo()
   settings = await loadSettings()
   await ensureDeviceId(settings)
-  // 应用开机自启设置（默认 true）
-  await applyAutoStart(settings.autoStart ?? true)
+  await native.browserBridgeConfigure(settings.browserBridgeEnabled !== false)
+  // 应用开机自启设置（默认关闭）
+  await applyAutoStart(settings.autoStart ?? false)
   document.body.classList.toggle('light', settings.theme === 'light')
   document.documentElement.classList.toggle('light', settings.theme === 'light')
   // No toolEnabled provider (MCP checkboxes removed; server issues all tools)
@@ -1485,11 +1497,14 @@ async function boot() {
   $<HTMLInputElement>('cfg-mouse-fx').checked = settings.mouseFx
   $<HTMLInputElement>('cfg-mouse-scale-x').value = String(settings.mouseCoordinateScaleX || 1)
   $<HTMLInputElement>('cfg-mouse-scale-y').value = String(settings.mouseCoordinateScaleY || 1)
-  $<HTMLInputElement>('cfg-autostart').checked = settings.autoStart ?? true
+  $<HTMLInputElement>('cfg-autostart').checked = settings.autoStart ?? false
   $('theme-toggle').textContent = settings.theme === 'light' ? '☀' : '🌙'
   $<HTMLInputElement>('cfg-ai-key').value = settings.aiKey || ''
   $<HTMLInputElement>('cfg-ai-base').value = settings.aiBaseUrl || ''
   $<HTMLInputElement>('cfg-ai-model').value = settings.aiModel || ''
+  $<HTMLInputElement>('cfg-browser-bridge-enabled').checked = settings.browserBridgeEnabled !== false
+  const bridgeInfo = await native.browserBridgeInfo()
+  $<HTMLInputElement>('browser-bridge-url').value = bridgeInfo.url
   $<HTMLTextAreaElement>('offline-prompt-input').value = settings.offlinePrompt || defaults.offlinePrompt || ''
 
   // Wire events

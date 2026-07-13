@@ -8,6 +8,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod guard;
+mod browser_bridge;
 mod pty;
 mod rc;
 
@@ -42,6 +43,16 @@ fn kill_all_processes() -> usize {
 #[tauri::command]
 fn execution_state() -> Value {
     json!({ "paused": guard::is_paused(), "active": guard::active_count() })
+}
+
+#[tauri::command]
+fn browser_bridge_configure(enabled: bool) -> Result<browser_bridge::BridgeInfo, String> {
+    browser_bridge::configure(enabled)
+}
+
+#[tauri::command]
+fn browser_bridge_info() -> browser_bridge::BridgeInfo {
+    browser_bridge::info()
 }
 
 #[tauri::command]
@@ -365,6 +376,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .setup(|app| {
+            browser_bridge::start();
             setup_tray(app)?;
 
             // Set main window icon (affects taskbar, Alt+Tab, etc.).
@@ -376,10 +388,6 @@ fn main() {
                 // Start hidden: only the tray icon is shown by default.
                 // Users open the panel via tray menu ("打开面板") or double-click.
                 let _ = main_window.hide();
-
-                // Dev builds: open DevTools (may surface the window in dev).
-                #[cfg(debug_assertions)]
-                main_window.open_devtools();
             }
 
             Ok(())
@@ -397,6 +405,8 @@ fn main() {
             resume_execution,
             kill_all_processes,
             execution_state,
+            browser_bridge_configure,
+            browser_bridge_info,
             host_info,
             app_paths,
             which_command,

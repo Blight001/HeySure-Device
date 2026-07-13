@@ -1,0 +1,1 @@
+declare const __HEYSURE_WINDOWS_NATIVE_INPUT__: boolean

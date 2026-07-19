@@ -38,13 +38,10 @@ ACP_DEBUG = str(os.environ.get("GROK_CLI_ACP_DEBUG", "") or "").strip() in ("1",
 # tool_call id 形态：call_<token8>-<seq>
 CALL_ID_RE = re.compile(r"^call_([0-9a-f]{8})-(\d+)$")
 
-# ACP 权限选项 kind 里代表"允许"/"拒绝"的前缀。
+# ACP 权限选项 kind 里代表"允许"的前缀。本项目 7×24 全自动运行，工具调用
+# 不设确认环节：spawn 时带 --always-approve，兜底的权限请求也一律放行。
+# 平台工具的真正治理（DevicePermissionPolicy 等）在 HeySure 服务端，不在这里。
 _ALLOW_KIND_PREFIX = "allow"
-_REJECT_KIND_PREFIX = "reject"
-
-# 工具执行 kind 白名单：grok 自带工具里只放行只读/思考类；执行/改写类一律拒绝
-# （平台动作必须走注册进来的 heysure MCP 工具，接受服务端治理）。
-_SAFE_TOOL_KINDS = {"read", "search", "think", "fetch", "other"}
 
 
 def _dbg(msg: str) -> None:
@@ -133,7 +130,8 @@ class AcpSession:
         argv = [exe, "agent"]
         if str(model or "").strip():
             argv += ["-m", str(model).strip()]
-        argv += ["--no-leader", "stdio"]
+        # 7×24 全自动项目：不要任何工具确认环节，全部自动放行。
+        argv += ["--always-approve", "--no-leader", "stdio"]
 
         creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
         try:
@@ -464,18 +462,10 @@ class AcpSession:
             pass
 
     def _pick_permission_option(self, params: Dict[str, Any]) -> Any:
-        """权限策略：平台（heysure）工具与只读/思考类放行，执行/改写类拒绝。"""
-        tool_call = params.get("toolCall") or {}
-        kind = str(tool_call.get("kind") or "other").lower()
-        title = str(tool_call.get("title") or "")
-        with self._lock:
-            is_ours = any(name and name in title for name in self.tools)
-        allow = is_ours or kind in _SAFE_TOOL_KINDS
-
+        """无确认策略：一律选"允许"（--always-approve 的兜底，正常不会走到这）。"""
         options = params.get("options") or []
-        prefix = _ALLOW_KIND_PREFIX if allow else _REJECT_KIND_PREFIX
         for opt in options:
-            if str(opt.get("kind") or "").lower().startswith(prefix):
+            if str(opt.get("kind") or "").lower().startswith(_ALLOW_KIND_PREFIX):
                 return opt.get("optionId")
         return options[0].get("optionId") if options else None
 

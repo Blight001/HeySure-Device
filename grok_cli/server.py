@@ -88,6 +88,127 @@ CLI_SYSTEM_WRAPPER = (
 
 _ROLE_LABELS = {"user": "User", "assistant": "Assistant", "tool": "Tool Result"}
 
+GATEWAY_FINGERPRINT = "grok-cli-gateway"
+
+
+# ---------------------------------------------------------------------------
+# grok 私有工具语法归一化
+# ---------------------------------------------------------------------------
+# grok 系模型即使被提示词要求输出 <mcp-call>，也会滑回预训练的私有格式：
+#
+#     <xai:function_call name="tool"><parameter name="x">v</parameter></xai:function_call>
+#
+# HeySure 服务端只认 <mcp-call> / <invoke> / <tool_call> 语法；私有格式会被
+# 前端剥离但不会执行——表现为"说了要做什么然后戛然而止"。网关最清楚自己
+# 包的是 grok，所以在这里把私有格式重写为规范 <mcp-call> 块，服务端保持通用。
+
+_FC_OPEN_RE = re.compile(
+    r"<[^<>]*?\bfunction[_-]?call\b[^<>]*?\bname\s*=\s*[\"']?([^\"'>\s]+)[\"']?[^<>]*?>",
+    re.IGNORECASE,
+)
+_FC_BLOCK_RE = re.compile(
+    r"<[^<>]*?\bfunction[_-]?call\b[^<>]*?\bname\s*=\s*[\"']?([^\"'>\s]+)[\"']?[^<>]*?>"
+    r"([\s\S]*?)"
+    r"</[^<>]*?\bfunction[_-]?call\b[^<>]*?>",
+    re.IGNORECASE,
+)
+_FC_PARAM_RE = re.compile(
+    r"<[^<>]*?\bparameter\b[^<>]*?\bname\s*=\s*[\"']?([^\"'>\s]+)[\"']?[^<>]*?>"
+    r"([\s\S]*?)"
+    r"</[^<>]*?\bparameter\b[^<>]*?>",
+    re.IGNORECASE,
+)
+
+
+def _coerce_param_value(raw: str) -> Any:
+    """XML 参数体的尽力类型化：JSON 字面量按 JSON 解析，其余保留字符串。"""
+    text = str(raw or "").strip()
+    if not text:
+        return ""
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+    low = text.lower()
+    if low == "true":
+        return True
+    if low == "false":
+        return False
+    if low in ("null", "none"):
+        return None
+    if re.fullmatch(r"-?\d+", text):
+        return int(text)
+    if re.fullmatch(r"-?\d*\.\d+", text):
+        return float(text)
+    return text
+
+
+def _fc_block_to_mcp_call(match: "re.Match[str]") -> str:
+    tool = str(match.group(1) or "").strip()
+    if not tool:
+        return match.group(0)
+    inner = str(match.group(2) or "")
+    args: Dict[str, Any] = {}
+    for pm in _FC_PARAM_RE.finditer(inner):
+        key = str(pm.group(1) or "").strip()
+        if key:
+            args[key] = _coerce_param_value(pm.group(2))
+    if not args:
+        # 无 <parameter> 子标签时，块体本身可能就是一个 JSON 参数对象。
+        stripped = inner.strip()
+        if stripped:
+            try:
+                maybe = json.loads(stripped)
+                if isinstance(maybe, dict):
+                    args = maybe
+            except Exception:
+                pass
+    payload = json.dumps({"tool": tool, "arguments": args}, ensure_ascii=False)
+    return f"<mcp-call>{payload}</mcp-call>"
+
+
+def normalize_tool_markup(text: str) -> str:
+    """把完整的 grok 私有工具块重写为规范 <mcp-call> 块，其余文本原样保留。"""
+    return _FC_BLOCK_RE.sub(_fc_block_to_mcp_call, str(text or ""))
+
+
+class StreamingToolMarkupNormalizer:
+    """`normalize_tool_markup` 的流式增量版。
+
+    完整的私有块即时重写；疑似"块开了个头"的尾部（未闭合的 ``<...`` 或未闭合
+    的 function_call 块）先扣住不发，等后续增量补完或推理结束 flush 再定夺。
+    被扣住的正文只会延迟、不会丢失。
+    """
+
+    _HOLDBACK_LIMIT = 600
+
+    def __init__(self) -> None:
+        self._buf = ""
+
+    def feed(self, chunk: str) -> str:
+        self._buf += str(chunk or "")
+        return self._drain(final=False)
+
+    def flush(self) -> str:
+        return self._drain(final=True)
+
+    def _drain(self, final: bool) -> str:
+        buf = normalize_tool_markup(self._buf)
+        if final:
+            self._buf = ""
+            return buf
+        hold = len(buf)
+        open_match = _FC_OPEN_RE.search(buf)
+        if open_match:
+            # 完整块已在 normalize 中被替换，这里剩下的只可能是未闭合的开头。
+            hold = open_match.start()
+        else:
+            tail = re.search(r"<[^<>]*$", buf)
+            if tail and len(buf) - tail.start() <= self._HOLDBACK_LIMIT:
+                hold = tail.start()
+        out, self._buf = buf[:hold], buf[hold:]
+        return out
+
 _DATA_IMAGE_RE = re.compile(
     r"^data:(image/(?:png|jpeg|jpg|webp|gif));base64,(.+)$",
     re.IGNORECASE | re.DOTALL,
@@ -531,7 +652,7 @@ class Handler(BaseHTTPRequestHandler):
         except RuntimeError as exc:
             self._error(500, str(exc), "server_error")
             return
-        content = "".join(text_parts)
+        content = normalize_tool_markup("".join(text_parts))
         message: Dict[str, Any] = {"role": "assistant", "content": content}
         reasoning = "".join(reasoning_parts)
         if reasoning:
@@ -541,6 +662,7 @@ class Handler(BaseHTTPRequestHandler):
             "object": "chat.completion",
             "created": int(time.time()),
             "model": model or (Config.models[0] if Config.models else "grok"),
+            "system_fingerprint": GATEWAY_FINGERPRINT,
             "choices": [{"index": 0, "message": message, "finish_reason": "stop"}],
             "usage": _usage(prompt_preview, content + reasoning),
         })
@@ -557,6 +679,7 @@ class Handler(BaseHTTPRequestHandler):
                 "object": "chat.completion.chunk",
                 "created": created,
                 "model": model_name,
+                "system_fingerprint": GATEWAY_FINGERPRINT,
                 "choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}],
             }
             if usage is not None:
@@ -572,18 +695,32 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(chunk({"role": "assistant", "content": ""}))
         self.wfile.flush()
 
+        normalizer = StreamingToolMarkupNormalizer()
         collected = ""
+        error_text = ""
         try:
             for kind, data in run_cli_turn(model, messages):
-                collected += data
                 if kind == "thought":
+                    collected += data
                     self.wfile.write(chunk({"reasoning_content": data}))
-                else:
-                    self.wfile.write(chunk({"content": data}))
-                self.wfile.flush()
+                    self.wfile.flush()
+                    continue
+                out = normalizer.feed(data)
+                if out:
+                    collected += out
+                    self.wfile.write(chunk({"content": out}))
+                    self.wfile.flush()
         except RuntimeError as exc:
             # SSE 头已发出，无法改状态码；把错误作为正文增量给到调用方。
-            self.wfile.write(chunk({"content": f"\n[grok-cli-gateway 错误] {exc}"}))
+            error_text = f"\n[grok-cli-gateway 错误] {exc}"
+
+        remainder = normalizer.flush()
+        if remainder:
+            collected += remainder
+            self.wfile.write(chunk({"content": remainder}))
+            self.wfile.flush()
+        if error_text:
+            self.wfile.write(chunk({"content": error_text}))
             self.wfile.flush()
 
         self.wfile.write(chunk({}, finish_reason="stop", usage=_usage(prompt_preview, collected)))

@@ -138,6 +138,11 @@ cd /path/to/device/grok_cli
 - `POST /v1/chat/completions` — OpenAI 格式，支持 `stream: true`（SSE）与非流式。
   - `model` 原样透传给 CLI 的 `-m`。
   - 推理增量以 `delta.reasoning_content` 输出，正文以 `delta.content` 输出。
+  - **工具语法归一化**：grok 滑回私有格式
+    `<xai:function_call name="..."><parameter ...>` 时，网关把完整块重写为规范
+    `<mcp-call>{"tool":...,"arguments":{...}}</mcp-call>` 再输出（流式下疑似
+    块开头的尾部会短暂扣住，块补完或推理结束时放行，正文只延迟不丢失）。
+  - 响应携带 `system_fingerprint: "grok-cli-gateway"`，调用方可据此识别网关。
   - 消息里的图片块（`image_url` data URL / http(s) / 本地路径）会落盘到 `runtime/`
     临时文件，并提示模型用 grok 内置 `read_file` 查看像素。
 - `GET /v1/models` — 展示配置的模型列表。

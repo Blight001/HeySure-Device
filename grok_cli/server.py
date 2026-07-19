@@ -46,7 +46,11 @@ import urllib.parse
 import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from queue import Empty
 from typing import Any, Dict, List, Optional
+
+import acp_bridge
+from acp_bridge import REGISTRY as ACP_REGISTRY
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RUNTIME_DIR = os.path.join(BASE_DIR, "runtime")
@@ -89,6 +93,24 @@ CLI_SYSTEM_WRAPPER = (
 )
 
 _ROLE_LABELS = {"user": "User", "assistant": "Assistant", "tool": "Tool Result"}
+
+# ACP（agent stdio）路径的提示包装。与 headless 不同：平台工具此时是**真实注册**
+# 的 MCP 工具（heysure server），必须引导模型直接调用而不是手写文本标记；agent
+# 模式没有 --system-prompt-override，包装直接置于 prompt 文本顶部。
+ACP_SYSTEM_WRAPPER = (
+    "你不是编程助手。接下来的输入由两部分组成：[系统设定] 与 [对话记录]。"
+    "请完全遵循 [系统设定] 中的全部要求与角色设定，以助手身份继续"
+    " [对话记录] 中的对话与尚未完成的工作。若最后一条是 Assistant，表示同一任务"
+    "正在连续生成，请直接从该输出之后继续，不要把它当成另一位用户来回复。"
+    "不要输出角色前缀，不要复述对话记录。"
+    "\n\n"
+    "平台的 MCP 工具已注册为你的真实工具（服务器名 heysure）。需要执行动作"
+    "（发送、查询、点击、读取、创建、运行、检查等）时，直接发起对应的工具调用"
+    "并等待结果，在本会话内持续推进，直到任务完成或确实需要用户补充信息。"
+    "严禁在文本里手写 <mcp-call>、<xai:function_call> 之类的调用标记——"
+    "它们不会被执行；一律使用真实工具调用。"
+    "工具目录可能随对话增补：结果文本中提到的新工具可直接按名称调用。"
+)
 
 GATEWAY_FINGERPRINT = "grok-cli-gateway"
 
@@ -321,6 +343,14 @@ class Config:
         for m in os.environ.get("GROK_CLI_MODELS", "grok-4.5").split(",")
         if m.strip()
     ]
+    # ACP 桥接（方案 B）：请求带 tools[] 时走有状态 agent 会话 + 真实工具调用。
+    # 置 GROK_CLI_ACP=0 强制回退旧 headless 文本协议。
+    acp_enabled = str(os.environ.get("GROK_CLI_ACP", "1")).strip() not in ("0", "false", "no")
+    # 首个工具调用到达后，再等这么久收集同批的其它并行调用（秒）。
+    tool_grace = float(os.environ.get("GROK_CLI_TOOL_GRACE", "0.5") or 0.5)
+    # ACP 会话空闲回收阈值（秒）与并存上限。
+    session_ttl = int(os.environ.get("GROK_CLI_SESSION_TTL", "1800") or 1800)
+    max_sessions = int(os.environ.get("GROK_CLI_MAX_SESSIONS", "6") or 6)
 
 
 # ---------------------------------------------------------------------------
@@ -471,7 +501,17 @@ def _serialize_convo(messages: List[Dict], temporary_paths: List[str]) -> str:
             if text:
                 system_parts.append(text)
             continue
-        if not text and not msg.get("tool_calls"):
+        # 原生工具协议的历史（ACP 全量重放路径）里，assistant 消息可能携带
+        # tool_calls：把调用文本化，让新会话知道之前做过什么。
+        call_lines: List[str] = []
+        for tc in msg.get("tool_calls") or []:
+            fn = (tc or {}).get("function") or {}
+            fn_name = str(fn.get("name") or "").strip()
+            if fn_name:
+                call_lines.append(f"[已调用工具] {fn_name}({fn.get('arguments') or '{}'})")
+        if call_lines:
+            text = (f"{text}\n" if text else "") + "\n".join(call_lines)
+        if not text:
             continue
         label = _ROLE_LABELS.get(role, role or "User")
         lines.append(f"{label}: {text}".rstrip())
@@ -480,6 +520,19 @@ def _serialize_convo(messages: List[Dict], temporary_paths: List[str]) -> str:
         prompt_parts.append("[系统设定]\n" + "\n\n".join(system_parts))
     prompt_parts.append("[对话记录]\n" + ("\n\n".join(lines) if lines else "User: （无内容）"))
     return "\n\n".join(prompt_parts)
+
+
+def _serialize_tail(tail_msgs: List[Dict], temporary_paths: List[str]) -> str:
+    """ACP 恢复路径：工具结果之后追加的消息（用户插入/系统通知/截图）文本化。"""
+    parts: List[str] = []
+    for msg in tail_msgs or []:
+        if not isinstance(msg, dict):
+            continue
+        text = _content_to_text(msg.get("content"), temporary_paths)
+        if text:
+            role = str(msg.get("role") or "").strip().lower()
+            parts.append(f"{_ROLE_LABELS.get(role, 'User')}: {text}")
+    return "\n\n".join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -677,12 +730,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self._path()
+        if path.startswith("/mcp/"):
+            # streamable-http 允许服务端不提供 GET 事件流。
+            self._error(405, "GET not supported on MCP endpoint")
+            return
         if path in ("", "/health"):
             self._json_response(200, {
                 "service": "grok-cli-gateway",
                 "command": Config.command,
                 "models": Config.models,
                 "endpoint": "/v1/chat/completions",
+                "acp": Config.acp_enabled,
+                "acp_sessions": ACP_REGISTRY.count(),
             })
             return
         if path.endswith("/models"):
@@ -701,6 +760,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self._path()
+        mcp_match = re.match(r"^/mcp/([0-9a-f]{8})$", path)
+        if mcp_match:
+            # grok 的 MCP 客户端不带我们的 Bearer；token 即会话凭据，仅监听回环。
+            self._handle_mcp(mcp_match.group(1))
+            return
         if not path.endswith("/chat/completions"):
             self._error(404, f"Unknown path: {path}（仅支持 /v1/chat/completions）")
             return
@@ -726,15 +790,91 @@ class Handler(BaseHTTPRequestHandler):
         model = str(payload.get("model") or "").strip()
         stream = bool(payload.get("stream"))
 
+        tools = payload.get("tools")
+        use_acp = Config.acp_enabled and isinstance(tools, list) and bool(tools)
+
         prompt_preview = json.dumps(messages, ensure_ascii=False)
         try:
-            if stream:
+            if use_acp:
+                self._handle_acp_chat(model, messages, tools, stream, prompt_preview)
+            elif stream:
                 self._handle_stream(model, messages, prompt_preview)
             else:
                 self._handle_blocking(model, messages, prompt_preview)
         except (BrokenPipeError, ConnectionError):
-            # 客户端断开：run_cli_turn 的 finally 已负责杀进程和清理临时文件。
+            # 客户端断开：headless 路径由 run_cli_turn 的 finally 清理；
+            # ACP 路径在各自循环里已 cancel + drop。
             pass
+
+    # -- MCP server（供 grok ACP 会话回连） ---------------------------------
+
+    def _handle_mcp(self, token: str) -> None:
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            body = self.rfile.read(length) if 0 < length <= MAX_BODY_BYTES else b""
+            msg = json.loads(body.decode("utf-8")) if body else {}
+        except Exception:
+            self._json_response(400, {
+                "jsonrpc": "2.0", "id": None,
+                "error": {"code": -32700, "message": "parse error"},
+            })
+            return
+        if not isinstance(msg, dict):
+            msg = {}
+        method = str(msg.get("method") or "")
+        rpc_id = msg.get("id")
+
+        # 通知（无 id）：initialized 等，202 收下即可。
+        if rpc_id is None:
+            self.send_response(202)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+
+        def reply(result: Optional[Dict[str, Any]] = None, error: Optional[Dict[str, Any]] = None):
+            out: Dict[str, Any] = {"jsonrpc": "2.0", "id": rpc_id}
+            if error is not None:
+                out["error"] = error
+            else:
+                out["result"] = result if result is not None else {}
+            self._json_response(200, out)
+
+        if method == "initialize":
+            params = msg.get("params") or {}
+            reply({
+                "protocolVersion": params.get("protocolVersion") or "2025-03-26",
+                "capabilities": {"tools": {}},
+                "serverInfo": {"name": "heysure-gateway", "version": "1.0"},
+            })
+            return
+        if method == "ping":
+            reply({})
+            return
+
+        sess = ACP_REGISTRY.get(token)
+        if sess is None or sess.closed:
+            reply(error={"code": -32000, "message": "unknown or expired session"})
+            return
+        if method == "tools/list":
+            reply({"tools": sess.mcp_tools_list()})
+            return
+        if method == "tools/call":
+            params = msg.get("params") or {}
+            name = str(params.get("name") or "").strip()
+            arguments = params.get("arguments")
+            if not isinstance(arguments, dict):
+                arguments = {}
+            try:
+                pc = sess.mcp_tools_call(name, arguments, timeout=float(Config.session_ttl))
+            except acp_bridge.AcpError as exc:
+                reply(error={"code": -32000, "message": str(exc)})
+                return
+            reply({
+                "content": [{"type": "text", "text": pc.result_text}],
+                "isError": bool(pc.is_error),
+            })
+            return
+        reply(error={"code": -32601, "message": f"method not found: {method}"})
 
     # -- 推理 ---------------------------------------------------------------
 
@@ -844,6 +984,273 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(b"data: [DONE]\n\n")
         self.wfile.flush()
 
+    # -- ACP 桥接（方案 B）---------------------------------------------------
+
+    def _handle_acp_chat(
+        self,
+        model: str,
+        messages: List[Dict],
+        tools: List[Dict],
+        stream: bool,
+        prompt_preview: str,
+    ) -> None:
+        os.makedirs(RUNTIME_DIR, exist_ok=True)
+        tools_registry = acp_bridge.tools_registry_from_payload(tools)
+        temp_paths: List[str] = []
+        token, raw_results, tail_msgs = acp_bridge.extract_resume_info(messages)
+
+        # 恢复路径：tool_call id 里的会话 token 命中且挂起调用齐全 → 作答续跑。
+        sess = None
+        if token:
+            cand = ACP_REGISTRY.get(token)
+            if (
+                cand is not None
+                and not cand.closed
+                and (not model or cand.model == model)
+                and cand.busy.acquire(blocking=False)
+            ):
+                results = {
+                    cid: _content_to_text(value, temp_paths)
+                    for cid, value in raw_results.items()
+                }
+                if cand.matches_results(results):
+                    cand.update_tools(tools_registry)
+                    cand.adopt_temp_paths(temp_paths)
+                    cand.answer_calls(results, _serialize_tail(tail_msgs, temp_paths))
+                    sess = cand
+                else:
+                    cand.busy.release()
+
+        # 新会话路径：首轮，或恢复失败（网关重启/会话过期/上下文被重写）→ 全量重放。
+        if sess is None:
+            temp_paths = []
+            try:
+                argv = _resolve_cli_argv()
+                prompt_text = ACP_SYSTEM_WRAPPER + "\n\n" + _serialize_convo(messages, temp_paths)
+                sess = acp_bridge.AcpSession.create(
+                    exe=argv[0],
+                    model=model,
+                    tools=tools_registry,
+                    mcp_url_base=f"http://{Config.host}:{Config.port}/mcp",
+                    cwd=RUNTIME_DIR,
+                    registry=ACP_REGISTRY,
+                )
+            except (RuntimeError, acp_bridge.AcpError) as exc:
+                _unlink_quietly(temp_paths)
+                print(f"[acp] 会话创建失败，回退 headless 路径：{exc}")
+                if stream:
+                    self._handle_stream(model, messages, prompt_preview)
+                else:
+                    self._handle_blocking(model, messages, prompt_preview)
+                return
+            sess.adopt_temp_paths(temp_paths)
+            sess.start_turn(prompt_text)
+
+        if stream:
+            self._acp_stream(sess, model, prompt_preview)
+        else:
+            self._acp_blocking(sess, model, prompt_preview)
+
+    def _acp_pump(self, sess, on_text, on_thought):
+        """消费会话事件直到本请求可以收尾。
+
+        返回 ``("tools", [PendingToolCall])`` / ``("end", stop_reason)`` /
+        ``("error", message)``。首个工具调用到达后再等 ``tool_grace`` 收集同批
+        的其它调用；期间的 text/thought 照常流出。
+        """
+        deadline = time.time() + Config.timeout
+        while True:
+            try:
+                kind, data = sess.queue.get(timeout=1.0)
+            except Empty:
+                if time.time() > deadline:
+                    return "error", f"ACP 推理超时（超过 {Config.timeout} 秒）"
+                continue
+            if kind == "thought":
+                on_thought(data)
+                continue
+            if kind == "text":
+                on_text(data)
+                continue
+            if kind == "mcp_call":
+                calls = [data]
+                end_at = time.time() + Config.tool_grace
+                while True:
+                    remaining = end_at - time.time()
+                    if remaining <= 0:
+                        break
+                    try:
+                        k2, d2 = sess.queue.get(timeout=remaining)
+                    except Empty:
+                        break
+                    if k2 == "mcp_call":
+                        calls.append(d2)
+                        end_at = time.time() + Config.tool_grace
+                    elif k2 == "thought":
+                        on_thought(d2)
+                    elif k2 == "text":
+                        on_text(d2)
+                    else:
+                        # end/error 塞回队列，先把已收的调用批次上报。
+                        sess.queue.put((k2, d2))
+                        break
+                return "tools", calls
+            if kind == "end":
+                return "end", data
+            if kind == "error":
+                return "error", data
+
+    @staticmethod
+    def _tool_calls_payload(calls) -> List[Dict[str, Any]]:
+        return [
+            {
+                "index": index,
+                "id": pc.call_id,
+                "type": "function",
+                "function": {
+                    "name": pc.name,
+                    "arguments": json.dumps(pc.arguments, ensure_ascii=False),
+                },
+            }
+            for index, pc in enumerate(calls)
+        ]
+
+    def _acp_park(self, sess) -> None:
+        """工具批次已上报：会话原地等待 HeySure 送回结果。"""
+        ACP_REGISTRY.touch(sess)
+        try:
+            sess.busy.release()
+        except RuntimeError:
+            pass
+
+    def _acp_stream(self, sess, model: str, prompt_preview: str) -> None:
+        completion_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
+        created = int(time.time())
+        model_name = model or (Config.models[0] if Config.models else "grok")
+
+        def chunk(delta: Dict[str, Any], finish_reason: Optional[str] = None,
+                  usage: Optional[Dict[str, int]] = None) -> bytes:
+            obj: Dict[str, Any] = {
+                "id": completion_id,
+                "object": "chat.completion.chunk",
+                "created": created,
+                "model": model_name,
+                "system_fingerprint": GATEWAY_FINGERPRINT,
+                "choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}],
+            }
+            if usage is not None:
+                obj["usage"] = usage
+            return b"data: " + json.dumps(obj, ensure_ascii=False).encode("utf-8") + b"\n\n"
+
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.wfile.write(chunk({"role": "assistant", "content": ""}))
+        self.wfile.flush()
+
+        normalizer = StreamingToolMarkupNormalizer()
+        thought_norm = StreamingThoughtNormalizer()
+        seen_calls: set = set()
+        collected = ""
+        reasoning_all = ""
+
+        def emit_content(text: str) -> None:
+            nonlocal collected
+            text = _dedup_mcp_calls(text, seen_calls)
+            if text:
+                collected += text
+                self.wfile.write(chunk({"content": text}))
+                self.wfile.flush()
+
+        def emit_reasoning(text: str) -> None:
+            nonlocal reasoning_all
+            if text:
+                reasoning_all += text
+                self.wfile.write(chunk({"reasoning_content": text}))
+                self.wfile.flush()
+
+        def on_text(data: str) -> None:
+            emit_content(normalizer.feed(data))
+
+        def on_thought(data: str) -> None:
+            reasoning_out, content_out = thought_norm.feed(data)
+            emit_reasoning(reasoning_out)
+            emit_content(content_out)
+
+        try:
+            outcome, data = self._acp_pump(sess, on_text, on_thought)
+            reasoning_out, content_out = thought_norm.flush()
+            emit_reasoning(reasoning_out)
+            emit_content(content_out)
+            emit_content(normalizer.flush())
+            usage = _usage(prompt_preview, collected + reasoning_all)
+
+            if outcome == "tools":
+                self.wfile.write(chunk({"tool_calls": self._tool_calls_payload(data)}))
+                self.wfile.write(chunk({}, finish_reason="tool_calls", usage=usage))
+                self.wfile.write(b"data: [DONE]\n\n")
+                self.wfile.flush()
+                self._acp_park(sess)
+                return
+
+            if outcome == "error":
+                emit_content(f"\n[grok-cli-gateway 错误] {data}")
+                usage = _usage(prompt_preview, collected + reasoning_all)
+            self.wfile.write(chunk({}, finish_reason="stop", usage=usage))
+            self.wfile.write(b"data: [DONE]\n\n")
+            self.wfile.flush()
+            ACP_REGISTRY.drop(sess)
+        except (BrokenPipeError, ConnectionError):
+            sess.cancel_turn()
+            ACP_REGISTRY.drop(sess)
+            raise
+
+    def _acp_blocking(self, sess, model: str, prompt_preview: str) -> None:
+        text_parts: List[str] = []
+        thought_parts: List[str] = []
+        try:
+            outcome, data = self._acp_pump(
+                sess, text_parts.append, thought_parts.append
+            )
+        except (BrokenPipeError, ConnectionError):
+            sess.cancel_turn()
+            ACP_REGISTRY.drop(sess)
+            raise
+
+        seen_calls: set = set()
+        content = _dedup_mcp_calls(normalize_tool_markup("".join(text_parts)), seen_calls)
+        reasoning, promoted = _promote_thought_tool_calls("".join(thought_parts))
+        promoted = _dedup_mcp_calls(promoted, seen_calls)
+        if promoted:
+            content = f"{content}\n{promoted}".strip() if content else promoted
+
+        message: Dict[str, Any] = {"role": "assistant", "content": content or None}
+        if reasoning:
+            message["reasoning_content"] = reasoning
+        finish_reason = "stop"
+
+        if outcome == "tools":
+            message["tool_calls"] = self._tool_calls_payload(data)
+            finish_reason = "tool_calls"
+        elif outcome == "error":
+            message["content"] = f"{content}\n[grok-cli-gateway 错误] {data}".strip()
+
+        self._json_response(200, {
+            "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": model or (Config.models[0] if Config.models else "grok"),
+            "system_fingerprint": GATEWAY_FINGERPRINT,
+            "choices": [{"index": 0, "message": message, "finish_reason": finish_reason}],
+            "usage": _usage(prompt_preview, (message.get("content") or "") + reasoning),
+        })
+        if outcome == "tools":
+            self._acp_park(sess)
+        else:
+            ACP_REGISTRY.drop(sess)
+
 
 def main() -> None:
     # stdout 重定向到日志文件时 Python 默认块缓冲，日志会长期看似为空；强制行缓冲
@@ -881,6 +1288,11 @@ def main() -> None:
         print(f"CLI 命令：{argv[0]}")
     except RuntimeError as exc:
         print(f"警告：{exc}（服务照常启动，请求到达时会再次检查）")
+
+    ACP_REGISTRY.configure(float(Config.session_ttl), Config.max_sessions)
+    print(
+        f"ACP 桥接：{'启用（请求携带 tools[] 时走 agent 会话 + 真实工具调用）' if Config.acp_enabled else '禁用（GROK_CLI_ACP=0）'}"
+    )
 
     server = ThreadingHTTPServer((Config.host, Config.port), Handler)
     server.daemon_threads = True

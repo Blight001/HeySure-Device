@@ -83,6 +83,8 @@ CLI_SYSTEM_WRAPPER = (
     "发送等），必须在**本轮回复里直接输出对应的工具调用块**，把动作真正执行掉。"
     "严禁只用文字描述计划（例如「接下来我要向输入框写入提示词并提交」）然后就结束——"
     "系统会把没有工具调用的一轮当作任务已完成而收尾，你的动作将永远不会被执行。"
+    "特别注意：**只在思考/推理里写出工具调用是无效的**——思考内容不会被当作动作解析，"
+    "真正要执行的工具调用块必须出现在**正文回复**中。"
     "确实无法执行时（缺工具、缺参数、需用户补充信息），直接说明原因，不要假装已执行。"
 )
 
@@ -180,7 +182,9 @@ class StreamingToolMarkupNormalizer:
     被扣住的正文只会延迟、不会丢失。
     """
 
-    _HOLDBACK_LIMIT = 600
+    # 私有块的参数可能很大（例如整段脚本），扣住上限放宽，避免块被从中间切断
+    # 后 normalize 失配、半截私有语法漏给调用方。
+    _HOLDBACK_LIMIT = 4000
 
     def __init__(self) -> None:
         self._buf = ""
@@ -208,6 +212,97 @@ class StreamingToolMarkupNormalizer:
                 hold = tail.start()
         out, self._buf = buf[:hold], buf[hold:]
         return out
+
+
+class StreamingThoughtNormalizer:
+    """把 grok 的思考（``thought``）流拆成"纯推理"与"落在思考里的工具调用"两路。
+
+    grok 系模型常常在**思考流**里就把决定好的动作写成私有
+    ``<xai:function_call>…</xai:function_call>`` 块，然后正文（``text``）不再重复。
+    而服务端只从 ``content`` 解析工具调用，从不解析 ``reasoning_content`` ——
+    于是这一轮在服务端看来"没有工具调用"，被判为最终回答，任务从中间戛然而止。
+
+    本归一器把思考流里**每个完整的私有块**抽出来重写成 ``<mcp-call>`` 交给
+    ``content`` 路（真正会被执行的地方），其余思考文本仍作为 ``reasoning_content``。
+    尾部疑似"块开了个头"的片段先扣住，等补完或 flush 再定夺，只会延迟不会丢失。
+
+    ``feed`` / ``flush`` 均返回 ``(reasoning_out, content_out)`` 两段增量。
+    """
+
+    _HOLDBACK_LIMIT = 4000
+
+    def __init__(self) -> None:
+        self._buf = ""
+
+    def feed(self, chunk: str):
+        self._buf += str(chunk or "")
+        return self._drain(final=False)
+
+    def flush(self):
+        return self._drain(final=True)
+
+    def _drain(self, final: bool):
+        reasoning_parts: List[str] = []
+        content_parts: List[str] = []
+        pos = 0
+        for match in _FC_BLOCK_RE.finditer(self._buf):
+            reasoning_parts.append(self._buf[pos:match.start()])
+            content_parts.append(_fc_block_to_mcp_call(match))
+            pos = match.end()
+        rest = self._buf[pos:]
+        if final:
+            reasoning_parts.append(rest)
+            self._buf = ""
+            return "".join(reasoning_parts), "".join(content_parts)
+
+        hold = len(rest)
+        open_match = _FC_OPEN_RE.search(rest)
+        if open_match:
+            # 已开头但未闭合的私有块：整段扣住（参数可能很长），等闭合再抽取。
+            hold = open_match.start()
+        else:
+            tail = re.search(r"<[^<>]*$", rest)
+            if tail and len(rest) - tail.start() <= self._HOLDBACK_LIMIT:
+                hold = tail.start()
+        reasoning_parts.append(rest[:hold])
+        self._buf = rest[hold:]
+        return "".join(reasoning_parts), "".join(content_parts)
+
+
+_MCP_CALL_DEDUP_RE = re.compile(r"<mcp-call>([\s\S]*?)</mcp-call>", re.IGNORECASE)
+
+
+def _dedup_mcp_calls(text: str, seen: set) -> str:
+    """丢弃 ``text`` 中 payload 已在 ``seen`` 出现过的 ``<mcp-call>`` 块。
+
+    思考流与正文流可能各自给出同一个工具调用（grok 先在思考里决定、正文又复述）。
+    两路都经此过滤，保证同一调用只交给服务端一次，避免被执行两遍。
+    """
+    def _filter(match: "re.Match[str]") -> str:
+        payload = str(match.group(1) or "").strip()
+        if payload in seen:
+            return ""
+        seen.add(payload)
+        return match.group(0)
+
+    return _MCP_CALL_DEDUP_RE.sub(_filter, str(text or ""))
+
+
+def _promote_thought_tool_calls(reasoning: str):
+    """把思考文本里的完整私有工具块抽出（改写为 ``<mcp-call>``），从推理中剥离。
+
+    返回 ``(cleaned_reasoning, promoted_content)``。用于非流式路径：grok 常在思考里
+    决定动作而不在正文复述，而服务端只从 content 解析工具调用。
+    """
+    blocks: List[str] = []
+
+    def _take(match: "re.Match[str]") -> str:
+        blocks.append(_fc_block_to_mcp_call(match))
+        return ""
+
+    cleaned = _FC_BLOCK_RE.sub(_take, str(reasoning or ""))
+    return cleaned, "\n".join(blocks)
+
 
 _DATA_IMAGE_RE = re.compile(
     r"^data:(image/(?:png|jpeg|jpg|webp|gif));base64,(.+)$",
@@ -652,9 +747,15 @@ class Handler(BaseHTTPRequestHandler):
         except RuntimeError as exc:
             self._error(500, str(exc), "server_error")
             return
-        content = normalize_tool_markup("".join(text_parts))
+        seen_calls: set = set()
+        content = _dedup_mcp_calls(normalize_tool_markup("".join(text_parts)), seen_calls)
+        # grok 可能把决定好的工具调用只写在思考里；服务端只解析 content，故把思考
+        # 里的完整私有块抽出、改写为 <mcp-call> 并入 content（与正文去重）。
+        reasoning, promoted = _promote_thought_tool_calls("".join(reasoning_parts))
+        promoted = _dedup_mcp_calls(promoted, seen_calls)
+        if promoted:
+            content = f"{content}\n{promoted}".strip() if content else promoted
         message: Dict[str, Any] = {"role": "assistant", "content": content}
-        reasoning = "".join(reasoning_parts)
         if reasoning:
             message["reasoning_content"] = reasoning
         self._json_response(200, {
@@ -696,34 +797,50 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.flush()
 
         normalizer = StreamingToolMarkupNormalizer()
+        thought_normalizer = StreamingThoughtNormalizer()
+        seen_calls: set = set()
         collected = ""
+        reasoning_all = ""
         error_text = ""
+
+        def emit_content(text: str) -> None:
+            nonlocal collected
+            text = _dedup_mcp_calls(text, seen_calls)
+            if text:
+                collected += text
+                self.wfile.write(chunk({"content": text}))
+                self.wfile.flush()
+
+        def emit_reasoning(text: str) -> None:
+            nonlocal reasoning_all
+            if text:
+                reasoning_all += text
+                self.wfile.write(chunk({"reasoning_content": text}))
+                self.wfile.flush()
+
         try:
             for kind, data in run_cli_turn(model, messages):
                 if kind == "thought":
-                    collected += data
-                    self.wfile.write(chunk({"reasoning_content": data}))
-                    self.wfile.flush()
+                    # 思考流里落着的私有工具块会被抽出，改走 content（否则服务端
+                    # 看不到工具调用，整轮被判为最终回答而中断）。
+                    reasoning_out, content_out = thought_normalizer.feed(data)
+                    emit_reasoning(reasoning_out)
+                    emit_content(content_out)
                     continue
-                out = normalizer.feed(data)
-                if out:
-                    collected += out
-                    self.wfile.write(chunk({"content": out}))
-                    self.wfile.flush()
+                emit_content(normalizer.feed(data))
         except RuntimeError as exc:
             # SSE 头已发出，无法改状态码；把错误作为正文增量给到调用方。
             error_text = f"\n[grok-cli-gateway 错误] {exc}"
 
-        remainder = normalizer.flush()
-        if remainder:
-            collected += remainder
-            self.wfile.write(chunk({"content": remainder}))
-            self.wfile.flush()
+        thought_reasoning, thought_content = thought_normalizer.flush()
+        emit_reasoning(thought_reasoning)
+        emit_content(thought_content)
+        emit_content(normalizer.flush())
         if error_text:
             self.wfile.write(chunk({"content": error_text}))
             self.wfile.flush()
 
-        self.wfile.write(chunk({}, finish_reason="stop", usage=_usage(prompt_preview, collected)))
+        self.wfile.write(chunk({}, finish_reason="stop", usage=_usage(prompt_preview, collected + reasoning_all)))
         self.wfile.write(b"data: [DONE]\n\n")
         self.wfile.flush()
 

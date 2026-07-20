@@ -46,7 +46,7 @@ export const defaults: AgentSettings = {
   agentSocketUrl: '',
   agentToken: '',
   deviceId: '',
-  agentName: 'Windows 桌面',
+  agentName: 'Windows设备',
   agentGroup: '',
   workspaceRoot: '',
   theme: 'dark',
@@ -73,7 +73,23 @@ export const defaults: AgentSettings = {
 export async function loadSettings(): Promise<AgentSettings> {
   try {
     const raw = await native.loadJsonFile(SETTINGS_FILE)
-    if (raw && typeof raw === 'object') return { ...defaults, ...raw }
+    if (raw && typeof raw === 'object') {
+      const loaded = { ...defaults, ...raw } as AgentSettings
+      // These were product defaults, not user-chosen names. Existing installs
+      // persist them in settings.json, so changing only ``defaults`` would keep
+      // reporting the obsolete Tauri prototype label forever.
+      if (['Windows Agent (Tauri)', 'Windows 桌面'].includes(String(loaded.agentName || '').trim())) {
+        loaded.agentName = defaults.agentName
+        try {
+          await native.saveJsonFile(SETTINGS_FILE, loaded)
+        } catch (err) {
+          // Keep the successfully loaded login/settings in memory even if this
+          // one-time cosmetic migration cannot be persisted yet.
+          console.error('persist agent-name migration failed:', err)
+        }
+      }
+      return loaded
+    }
   } catch (err) {
     console.error('loadSettings failed:', err)
   }

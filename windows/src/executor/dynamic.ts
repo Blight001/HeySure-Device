@@ -198,21 +198,34 @@ export function clearServerDynamicMcp(): { cleared: boolean; tools: number; serv
 // applied:false when the set is unchanged — this guard stops the
 // register→push→apply loop, since applying re-registers and the server
 // re-pushes the same set.
-export function applyServerDynamicMcp(payload: any): { applied: boolean; revision: string; tools: number } {
+export function applyServerDynamicMcp(payload: any): {
+  applied: boolean
+  revision: string
+  tools: number
+  rejected: Array<{ name: string; error: string }>
+} {
   const list = Array.isArray(payload) ? payload : payload?.tools
-  const tools = Array.isArray(list) ? list.map(validate) : []
+  const tools: DynamicMcpDefinition[] = []
+  const rejected: Array<{ name: string; error: string }> = []
   const names = new Set<string>()
-  for (const item of tools) {
-    if (names.has(item.name)) throw new Error(`Duplicate dynamic MCP: ${item.name}`)
-    names.add(item.name)
+  for (const raw of Array.isArray(list) ? list : []) {
+    const rawName = String(raw?.name || '').trim() || '(unnamed)'
+    try {
+      const item = validate(raw)
+      if (names.has(item.name)) throw new Error(`Duplicate dynamic MCP: ${item.name}`)
+      names.add(item.name)
+      tools.push(item)
+    } catch (err: any) {
+      rejected.push({ name: rawName, error: err?.message || String(err) })
+    }
   }
   const rev = revision(tools)
-  if (rev === appliedServerRevision) return { applied: false, revision: rev, tools: tools.length }
+  if (rev === appliedServerRevision) return { applied: false, revision: rev, tools: tools.length, rejected }
   definitions = tools
   appliedServerRevision = rev
   replaceDynamicTools(tools.map(asTool))
   changeListener?.()
-  return { applied: true, revision: rev, tools: tools.length }
+  return { applied: true, revision: rev, tools: tools.length, rejected }
 }
 
 export function initializeDynamicMcp(listener?: () => void): void {

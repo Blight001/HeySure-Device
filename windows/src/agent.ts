@@ -265,6 +265,10 @@ export class HeySureAgent {
         if (payload && payload.permissionPolicy) setPermissionPolicy(payload.permissionPolicy)
         const status = applyServerDynamicMcp(payload)
         if (status.applied) this.log('info', `已应用服务器下发的 MCP 工具：${status.tools} 个`)
+        if (status.rejected.length) {
+          const detail = status.rejected.map(item => `${item.name}: ${item.error}`).join('; ')
+          this.log('warn', `已忽略 ${status.rejected.length} 个不兼容的服务器 MCP 工具：${detail}`)
+        }
       } catch (err: any) {
         this.log('error', `应用服务器 MCP 工具失败: ${err?.message || err}`)
       }

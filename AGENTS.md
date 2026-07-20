@@ -1,9 +1,9 @@
-# CLAUDE.md — device/ 端侧执行器（壳） (HeySure-Device)
+# AGENTS.md — device/ 端侧执行器（壳） (HeySure-Device)
 
 端侧客户端（**只是运行在不同端的壳，本身不具备 agent 能力**），连接后端、注册为 endpoint，接收并执行服务端下发的 MCP 任务。
 
 **本目录是独立仓库** `HeySure-Device`。各端代码与资产完全独立，不再共享 `shared/`。
-同内容的 Agent 版见 [`AGENTS.md`](AGENTS.md)。
+同内容的 Claude 版见 [`CLAUDE.md`](CLAUDE.md)。
 
 **桌面/服务端壳已退化为受控运行器**：能力主要来自服务器下发的动态 MCP（`device:tool-config`，含 runtime 工具；Windows 以 powershell/shell 为主），由服务端编排/推理。接入协议与远程连接标准见 [`read.md`](read.md)。
 

@@ -4,7 +4,7 @@
 export type ToolPlatform = 'all' | 'windows' | 'linux' | 'mac'
 
 const PLATFORM: ToolPlatform = 'windows'
-export const AGENT_NAME = 'Windows 桌面'
+export const AGENT_NAME = 'Windows设备'
 
 export interface ToolHandlerArgs {
   workspaceRoot: string

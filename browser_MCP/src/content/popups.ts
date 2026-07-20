@@ -5,7 +5,8 @@
 // the viewport center, has a close button candidate).
 
 import { isVisible, textOf, cssPath, zIndexOf, elementArea, clickableAncestor, elCenter } from './dom'
-import { fxToElement, fxClickAt, fxSleep, isFxEnabled } from './fx'
+import { fxClickAt, fxSleep, isFxEnabled } from './fx'
+import { approachPointer } from './approach'
 
 const POPUP_SELECTOR = [
   'dialog[open]',
@@ -172,9 +173,10 @@ export async function doClosePopup(msg: any) {
     const btn = candidates[0]
     if (!btn) return false
     try { (btn as HTMLElement).focus?.() } catch {}
-    if (isFxEnabled()) { await fxToElement(btn); const c = elCenter(btn); await fxClickAt(c.x, c.y); await fxSleep(80) }
-    // clickLikeUser with hover
     const c = elCenter(btn)
+    await approachPointer(btn, c.x, c.y)
+    if (isFxEnabled()) { await fxClickAt(c.x, c.y); await fxSleep(60) }
+    // clickLikeUser with hover
     const base = { bubbles: true, cancelable: true, view: window, clientX: c.x, clientY: c.y }
     const pointer = { ...base, pointerId: 1, pointerType: 'mouse', isPrimary: true }
     btn.dispatchEvent(new PointerEvent('pointerover', pointer))

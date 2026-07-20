@@ -235,12 +235,95 @@ export function elCenter(el: Element): { x: number; y: number } {
   }
 }
 
+function isFxChrome(el: Element | null): boolean {
+  if (!el) return false
+  if (el.id?.startsWith(FX)) return true
+  try {
+    return !!(el as HTMLElement).closest?.(`[id^="${FX}"], [class*="${FX}"]`)
+  } catch {
+    return false
+  }
+}
+
+/** Top-most real page element at a viewport point (skips our virtual-cursor FX layer). */
+export function hitElementAt(x: number, y: number, win: Window = window): Element | null {
+  const doc = win.document
+  const first = doc.elementFromPoint(x, y)
+  if (!isFxChrome(first)) return first
+  // FX nodes are pointer-events:none, but still guard in case a host page overrides it.
+  const chrome = first as HTMLElement
+  const prev = chrome.style.pointerEvents
+  try {
+    chrome.style.pointerEvents = 'none'
+    const next = doc.elementFromPoint(x, y)
+    return isFxChrome(next) ? null : next
+  } finally {
+    chrome.style.pointerEvents = prev
+  }
+}
+
+/**
+ * Fire a single pointermove/mousemove (and enter/leave when the hit target changes).
+ * Returns the element under the point so callers can chain a realistic path.
+ */
+export function dispatchPointerMove(
+  x: number,
+  y: number,
+  prevEl: Element | null = null,
+  win: Window = window,
+): Element | null {
+  const el = hitElementAt(x, y, win)
+  const base = { bubbles: true, cancelable: true, view: win, clientX: x, clientY: y, button: 0, buttons: 0 }
+  const pointer = { ...base, pointerId: 1, pointerType: 'mouse' as const, isPrimary: true }
+
+  if (prevEl && prevEl !== el && prevEl.isConnected) {
+    try {
+      prevEl.dispatchEvent(new PointerEvent('pointerout', pointer))
+      prevEl.dispatchEvent(new PointerEvent('pointerleave', { ...pointer, bubbles: false }))
+      prevEl.dispatchEvent(new MouseEvent('mouseout', base))
+      prevEl.dispatchEvent(new MouseEvent('mouseleave', { ...base, bubbles: false }))
+    } catch { /* detached / cross-window */ }
+  }
+
+  if (el) {
+    if (prevEl !== el) {
+      el.dispatchEvent(new PointerEvent('pointerover', pointer))
+      el.dispatchEvent(new PointerEvent('pointerenter', { ...pointer, bubbles: false }))
+      el.dispatchEvent(new MouseEvent('mouseover', base))
+      el.dispatchEvent(new MouseEvent('mouseenter', { ...base, bubbles: false }))
+    }
+    el.dispatchEvent(new PointerEvent('pointermove', pointer))
+    el.dispatchEvent(new MouseEvent('mousemove', base))
+  }
+  return el
+}
+
+/**
+ * Full hover enter sequence on a known element — what a real mouse-over produces
+ * after the cursor has arrived (menus, tooltips, CSS :hover gates, etc.).
+ */
+export function hoverLikeUser(el: Element, at?: { x: number; y: number }) {
+  const win = ownerWindow(el)
+  const c = at || elCenter(el)
+  const base = { bubbles: true, cancelable: true, view: win, clientX: c.x, clientY: c.y, button: 0, buttons: 0 }
+  const pointer = { ...base, pointerId: 1, pointerType: 'mouse' as const, isPrimary: true }
+  el.dispatchEvent(new PointerEvent('pointerover', pointer))
+  el.dispatchEvent(new PointerEvent('pointerenter', { ...pointer, bubbles: false }))
+  el.dispatchEvent(new MouseEvent('mouseover', base))
+  el.dispatchEvent(new MouseEvent('mouseenter', { ...base, bubbles: false }))
+  el.dispatchEvent(new PointerEvent('pointermove', pointer))
+  el.dispatchEvent(new MouseEvent('mousemove', base))
+}
+
 // Dispatch the full pointer + mouse sequence a real user gesture produces, then
 // the native .click(). A bare el.click() only fires a synthetic "click" and is
 // ignored by anything listening to pointerdown/mousedown (custom dropdowns,
 // drag-aware widgets, canvas/map controls, many React/Vue handlers) — that was
 // the root cause of "clicked but nothing happened". An optional point lets
 // coordinate clicks land exactly where requested instead of at the box center.
+// Hover is assumed to have already been prepared by approachPointer; we still
+// re-fire enter events so handlers that only listen immediately before press
+// still see a complete gesture.
 export function clickLikeUser(el: Element, at?: { x: number; y: number }) {
   const win = ownerWindow(el)
   const c = at || elCenter(el)

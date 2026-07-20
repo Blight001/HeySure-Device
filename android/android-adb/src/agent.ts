@@ -21,6 +21,9 @@ export interface AgentConfig {
 export class AdbAgent {
   private socket: Socket | null = null
   private readonly finished = new Set<string>()
+  private wantConnected = false
+  private healthWatchTimer: ReturnType<typeof setInterval> | null = null
+  private static readonly HEALTH_WATCH_MS = 5000
 
   constructor(
     private readonly cfg: AgentConfig,
@@ -29,29 +32,96 @@ export class AdbAgent {
 
   private get target(): adb.AdbTarget { return { serial: this.cfg.serial } }
 
+  private startHealthWatch(): void {
+    if (this.healthWatchTimer) return
+    this.healthWatchTimer = setInterval(() => this.nudgeConnection(), AdbAgent.HEALTH_WATCH_MS)
+  }
+
+  private stopHealthWatch(): void {
+    if (!this.healthWatchTimer) return
+    clearInterval(this.healthWatchTimer)
+    this.healthWatchTimer = null
+  }
+
+  private nudgeConnection(): void {
+    if (!this.wantConnected) return
+    if (!this.socket) {
+      this.openSocket()
+      return
+    }
+    try { this.socket.io.reconnection(true) } catch { /* noop */ }
+    if (!this.socket.connected && !this.socket.active) {
+      try {
+        this.socket.connect()
+      } catch (err: any) {
+        this.log(`重连触发失败，将重建连接: ${err?.message || err}`)
+        this.teardownSocketOnly()
+        this.openSocket()
+      }
+    }
+  }
+
+  private teardownSocketOnly(): void {
+    try {
+      this.socket?.removeAllListeners()
+      this.socket?.io.removeAllListeners()
+      this.socket?.disconnect()
+    } catch { /* noop */ }
+    this.socket = null
+  }
+
   connect(): void {
-    if (this.socket) return
+    this.wantConnected = true
+    this.startHealthWatch()
+    if (this.socket) {
+      this.nudgeConnection()
+      return
+    }
+    this.openSocket()
+  }
+
+  private openSocket(): void {
+    if (this.socket || !this.wantConnected) return
     this.log(`连接 ${this.cfg.agentSocketUrl} …`)
     const socket = io(this.cfg.agentSocketUrl, {
       transports: ['websocket', 'polling'],
+      reconnection: true,
       reconnectionDelay: 2000,
+      reconnectionDelayMax: 15000,
       reconnectionAttempts: Infinity,
     })
     this.socket = socket
 
+    socket.io.on('reconnect_attempt', (attempt: number) => {
+      this.log(`正在重连服务器（第 ${attempt} 次）…`)
+    })
+    socket.io.on('reconnect_failed', () => {
+      this.log('Socket.IO 重连耗尽，重建连接…')
+      this.teardownSocketOnly()
+      if (this.wantConnected) this.openSocket()
+    })
+
     socket.on('connect', () => { this.log('已连接，注册中…'); this.register() })
-    socket.on('disconnect', (reason) => this.log(`连接断开: ${reason}`))
+    socket.on('disconnect', (reason) => {
+      this.log(`连接断开: ${reason}`)
+      if (this.wantConnected && reason !== 'io client disconnect') {
+        if (reason === 'io server disconnect') {
+          setTimeout(() => this.nudgeConnection(), 1500)
+        }
+      }
+    })
     socket.on('connect_error', (err) => this.log(`连接错误: ${err.message}`))
     socket.on('device:registered', (data: any) =>
       this.log(`注册成功${data?.aiConfigId == null ? '（未分配 AI）' : ''}`))
     socket.on('device:register_rejected', (data: any) =>
-      this.log(`注册被拒绝: ${data?.reason || '未知原因'}`))
+      this.log(`注册被拒绝: ${data?.reason || '未知原因'}（保持重连轮询）`))
     socket.on('task:dispatch', (task: any) => { void this.handleTask(task) })
   }
 
   disconnect(): void {
-    this.socket?.disconnect()
-    this.socket = null
+    this.wantConnected = false
+    this.stopHealthWatch()
+    this.teardownSocketOnly()
   }
 
   private register(): void {

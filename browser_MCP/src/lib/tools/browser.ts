@@ -445,6 +445,22 @@ async function focusTab(tabId: number): Promise<chrome.tabs.Tab> {
   return chrome.tabs.get(tabId)
 }
 
+/**
+ * Interactive browser control (click / type / scroll / …) should run with the
+ * target tab in the foreground so the virtual cursor hover + auto-move is
+ * visible and requestAnimationFrame-driven FX does not stall on a hidden tab.
+ */
+async function ensureInteractiveTab(tab: chrome.tabs.Tab): Promise<chrome.tabs.Tab> {
+  if (!tab.id) return tab
+  try {
+    const foreground = await isTabForeground(tab)
+    if (foreground) return tab
+    return await focusTab(tab.id)
+  } catch {
+    return tab
+  }
+}
+
 function tabIdArg(args: any): number {
   return Number(args?.tab_id ?? args?.tabId ?? args?.id)
 }
@@ -1460,7 +1476,8 @@ async function withAutoObserve(tab: chrome.tabs.Tab, args: any, result: any, fra
 }
 
 async function toolClick(args: any): Promise<any> {
-  const tab = await getActiveTab()
+  let tab = await getActiveTab()
+  tab = await ensureInteractiveTab(tab)
   const t = routeTarget(args)
   const clickMsg = {
     action: 'click',
@@ -1657,7 +1674,8 @@ async function toolObserveWithin(args: any, timeoutMs: number): Promise<any> {
 }
 
 async function toolType(args: any): Promise<any> {
-  const tab = await getActiveTab()
+  let tab = await getActiveTab()
+  tab = await ensureInteractiveTab(tab)
   const { frameId, ref } = parseRef(args.ref ?? args.mark ?? args.id)
   if (windowsNativeInputEnabled()) {
     const { result: resolved, context } = await resolveNativeActionTarget(tab, {
@@ -1719,7 +1737,8 @@ async function toolType(args: any): Promise<any> {
 }
 
 async function toolScroll(args: any): Promise<any> {
-  const tab = await getActiveTab()
+  let tab = await getActiveTab()
+  tab = await ensureInteractiveTab(tab)
   if (windowsNativeInputEnabled()) {
     const { result: resolved, context } = await resolveNativeActionTarget(tab, args.selector
       ? { selector: args.selector }
@@ -2012,7 +2031,8 @@ async function toolProfileSet(args: any): Promise<any> {
 }
 
 async function toolRightClick(args: any): Promise<any> {
-  const tab = await getActiveTab()
+  let tab = await getActiveTab()
+  tab = await ensureInteractiveTab(tab)
   const t = routeTarget(args)
   if (windowsNativeInputEnabled()) {
     const { result: resolved, context } = await resolveNativeActionTarget(tab, {
@@ -2033,7 +2053,8 @@ async function toolRightClick(args: any): Promise<any> {
 }
 
 async function toolDoubleClick(args: any): Promise<any> {
-  const tab = await getActiveTab()
+  let tab = await getActiveTab()
+  tab = await ensureInteractiveTab(tab)
   const t = routeTarget(args)
   if (windowsNativeInputEnabled()) {
     const { result: resolved, context } = await resolveNativeActionTarget(tab, {
@@ -2054,7 +2075,8 @@ async function toolDoubleClick(args: any): Promise<any> {
 }
 
 async function toolDrag(args: any): Promise<any> {
-  const tab = await getActiveTab()
+  let tab = await getActiveTab()
+  tab = await ensureInteractiveTab(tab)
   if (windowsNativeInputEnabled()) {
     const source = await resolveNativeActionTarget(tab, {
       selector: args.selector, text: args.text, x: args.x, y: args.y,
@@ -2089,7 +2111,8 @@ async function toolDrag(args: any): Promise<any> {
 }
 
 async function toolPressKey(args: any): Promise<any> {
-  const tab = await getActiveTab()
+  let tab = await getActiveTab()
+  tab = await ensureInteractiveTab(tab)
   if (windowsNativeInputEnabled()) {
     const { result: resolved, context } = await resolveNativeActionTarget(tab, args.selector
       ? { selector: args.selector }

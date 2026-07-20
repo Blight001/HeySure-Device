@@ -37,6 +37,12 @@ type CachedOutcome =
 export class HeySureAgent {
   private socket: Socket | null = null
   private registrationRetryTimer: ReturnType<typeof setInterval> | null = null
+  // Never-stopping health poll while the user wants to stay online. Socket.IO
+  // does not auto-retry "io server disconnect" (server restart/deploy), and
+  // WebView timer throttling can stall the manager's own backoff — this
+  // watchdog keeps kicking the socket forever until intentional disconnect().
+  private healthWatchTimer: ReturnType<typeof setInterval> | null = null
+  private wantConnected = false
   private taskOutcomes = new Map<string, CachedOutcome>()
   private settings: AgentSettings
   private host: HostInfo
@@ -45,6 +51,8 @@ export class HeySureAgent {
   private _boundAiConfigId: number | null = null
   private reauthRequested = false
   workspaceRoot: string
+
+  private static readonly HEALTH_WATCH_MS = 5000
 
   constructor(settings: AgentSettings, host: HostInfo, events: AgentEvents = {}) {
     this.settings = settings
@@ -66,14 +74,74 @@ export class HeySureAgent {
     this.events.onLog?.(level, msg, data)
   }
 
+  private startHealthWatch(): void {
+    if (this.healthWatchTimer) return
+    this.healthWatchTimer = setInterval(() => this.nudgeConnection(), HeySureAgent.HEALTH_WATCH_MS)
+  }
+
+  private stopHealthWatch(): void {
+    if (!this.healthWatchTimer) return
+    clearInterval(this.healthWatchTimer)
+    this.healthWatchTimer = null
+  }
+
+  /** Kick a dead/inactive socket; recreate if the object is gone. Never stops while wantConnected. */
+  private nudgeConnection(): void {
+    if (!this.wantConnected) return
+    if (!this.settings.authToken) return
+    if (!this.socket) {
+      this.openSocket()
+      return
+    }
+    try { this.socket.io.reconnection(true) } catch { /* noop */ }
+    if (!this.socket.connected && !this.socket.active) {
+      this.events.onReconnecting?.(true, '连接中断，正在重连…')
+      try {
+        this.socket.connect()
+      } catch (err: any) {
+        this.log('warn', `重连触发失败，将重建连接: ${err?.message || err}`)
+        this.teardownSocketOnly()
+        this.openSocket()
+      }
+    }
+  }
+
+  /** Drop the socket object without clearing wantConnected (used before recreate). */
+  private teardownSocketOnly(): void {
+    this.stopRegistrationHandshake()
+    handleRemoteControlDisconnect()
+    handleRemoteTerminalDisconnect()
+    try {
+      this.socket?.removeAllListeners()
+      this.socket?.io.removeAllListeners()
+      this.socket?.disconnect()
+    } catch { /* noop */ }
+    this.socket = null
+    this.clearServerSyncedTools()
+  }
+
   connect(): void {
-    // A non-null socket means we're already connected or mid-(re)connect.
-    if (this.socket) return
     if (!this.settings.authToken) {
+      this.wantConnected = false
+      this.stopHealthWatch()
       this.setStatus('disconnected')
       this.log('warn', '未登录，已阻止连接服务器（请先登录账号）')
       return
     }
+    this.wantConnected = true
+    this.startHealthWatch()
+    // Already have a socket (connected or mid-reconnect) — just ensure health.
+    if (this.socket) {
+      this.nudgeConnection()
+      return
+    }
+    this.openSocket()
+  }
+
+  private openSocket(): void {
+    if (this.socket) return
+    if (!this.settings.authToken || !this.wantConnected) return
+
     this.setStatus('connecting')
     this.reauthRequested = false
     let serverUrl: string
@@ -93,12 +161,24 @@ export class HeySureAgent {
 
     this.socket = io(serverUrl, {
       transports: ['websocket', 'polling'],
+      reconnection: true,
       reconnectionDelay: 2000,
+      reconnectionDelayMax: 15000,
       reconnectionAttempts: Infinity,
     })
 
     this.socket.io.on('reconnect_attempt', (attempt: number) => {
       this.events.onReconnecting?.(true, `正在重连服务器（第 ${attempt} 次）…`)
+    })
+    this.socket.io.on('reconnect_error', (err: Error) => {
+      this.events.onReconnecting?.(true, '重连失败，继续重试…')
+      this.log('warn', `重连错误: ${err?.message || err}`)
+    })
+    this.socket.io.on('reconnect_failed', () => {
+      // With Infinity attempts this should not fire; if it does, rebuild.
+      this.log('warn', 'Socket.IO 重连耗尽，重建连接…')
+      this.teardownSocketOnly()
+      if (this.wantConnected) this.openSocket()
     })
 
     this.socket.on('connect', () => {
@@ -114,11 +194,22 @@ export class HeySureAgent {
       handleRemoteTerminalDisconnect()
       this.setStatus('disconnected', reason)
       this.log('warn', `连接断开: ${reason}`)
+      // Transport drops auto-reconnect; "io server disconnect" (deploy/restart)
+      // does not — force a connect, and the health watch keeps polling forever.
+      if (this.wantConnected && reason !== 'io client disconnect') {
+        this.events.onReconnecting?.(true, '连接断开，正在重连…')
+        if (reason === 'io server disconnect') {
+          setTimeout(() => this.nudgeConnection(), 1500)
+        }
+      }
     })
 
     this.socket.on('connect_error', (err: Error) => {
       this.setStatus('error', err.message)
       this.log('error', `连接错误: ${err.message}`)
+      if (this.wantConnected) {
+        this.events.onReconnecting?.(true, '连接失败，继续重试…')
+      }
     })
 
     this.socket.on('device:registered', (data: any) => {
@@ -137,6 +228,8 @@ export class HeySureAgent {
       const reason = data?.reason || '注册被拒绝'
       this.setStatus('error', reason)
       this.log('error', `注册失败: ${reason}`)
+      // Auth failures: try silent re-login once. Connection health watch stays
+      // running so a recovered token (or later manual login) can re-register.
       const isAuthFailure = /token|logged in|登录|未登录|授权|unauthor/i.test(reason)
       if (isAuthFailure && !this.reauthRequested) {
         this.reauthRequested = true
@@ -179,12 +272,9 @@ export class HeySureAgent {
   }
 
   disconnect(): void {
-    this.stopRegistrationHandshake()
-    handleRemoteControlDisconnect()
-    handleRemoteTerminalDisconnect()
-    this.socket?.disconnect()
-    this.socket = null
-    this.clearServerSyncedTools()
+    this.wantConnected = false
+    this.stopHealthWatch()
+    this.teardownSocketOnly()
     this.events.onReconnecting?.(false)
     this.setStatus('disconnected')
   }

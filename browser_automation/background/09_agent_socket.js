@@ -19,7 +19,12 @@ let agentStatus = 'disconnected'; // disconnected | connecting | connected | enr
 let agentBoundAiConfigId = null;
 let agentCurrentId = null;
 let agentMachineId = null;
+// Auth failure cooldown (not a permanent kill). Health poll resumes after this.
 let agentAuthRejected = false;
+let agentAuthRejectUntil = 0;
+// Stay online while logged-in; only intentional disconnect/logout clears this.
+let agentWantConnected = false;
+const AGENT_AUTH_REJECT_COOLDOWN_MS = 60000;
 let agentConnectPromise = null;
 let agentLastErrorReason = ''; // 最近一次 error 状态的原因，便于 UI 显示详细提示
 const agentTaskOutcomes = new Map();
@@ -616,14 +621,26 @@ async function agentDoConnect() {
         return;
     }
     if (settings.offlineMode) {
+        agentWantConnected = false;
         return;
     }
 
     const auth = await getAgentAuth();
     if (!auth.token) {
+        agentWantConnected = false;
         setAgentStatus('disconnected', '未登录');
         return;
     }
+
+    agentWantConnected = true;
+
+    // Auth-reject cooldown: avoid thrashing with a bad token, but health poll
+    // will call us again after AGENT_AUTH_REJECT_COOLDOWN_MS.
+    if (agentAuthRejected && Date.now() < agentAuthRejectUntil) {
+        return;
+    }
+    agentAuthRejected = false;
+    agentAuthRejectUntil = 0;
 
     let agentSocketUrl = String(settings.agentSocketUrl || '').trim();
     if (!agentSocketUrl) {
@@ -632,6 +649,7 @@ async function agentDoConnect() {
             await saveAgentSettings({ agentSocketUrl });
         } catch (error) {
             setAgentStatus('error', '无法获取 Agent 连接地址');
+            // Keep agentWantConnected; keepalive will retry when gateway is up.
             return;
         }
     }
@@ -644,17 +662,23 @@ async function agentDoConnect() {
     }
 
     if (agentSocket) {
-        agentSocket.removeAllListeners();
-        agentSocket.disconnect();
+        try {
+            agentSocket.removeAllListeners();
+            if (agentSocket.io && typeof agentSocket.io.removeAllListeners === 'function') {
+                agentSocket.io.removeAllListeners();
+            }
+            agentSocket.disconnect();
+        } catch (_error) {}
         agentSocket = null;
     }
 
-    agentAuthRejected = false;
     setAgentStatus('connecting');
 
     agentSocket = io(agentSocketUrl, {
         transports: ['websocket', 'polling'],
+        reconnection: true,
         reconnectionDelay: 2000,
+        reconnectionDelayMax: 15000,
         reconnectionAttempts: Infinity
     });
     attachAgentListeners(agentSocket);
@@ -667,16 +691,48 @@ function attachAgentListeners(socket) {
         flushUnsentAgentOutcomes();
     });
 
+    if (socket.io) {
+        socket.io.on('reconnect_attempt', (attempt) => {
+            setAgentStatus('connecting', `正在重连服务器（第 ${attempt} 次）…`);
+        });
+        socket.io.on('reconnect_failed', () => {
+            // Infinity attempts should not end here; rebuild on next health poll.
+            try {
+                socket.removeAllListeners();
+                if (socket.io && typeof socket.io.removeAllListeners === 'function') {
+                    socket.io.removeAllListeners();
+                }
+                socket.disconnect();
+            } catch (_error) {}
+            if (agentSocket === socket) {
+                agentSocket = null;
+            }
+        });
+    }
+
     socket.on('disconnect', (reason) => {
         setAgentStatus('disconnected', reason);
-        // 传输层断开 Socket.IO 会自动重连；但服务器显式关闭（io server disconnect，
-        // 例如服务端重启）不会自动重连，这里主动补一次。
-        if (reason === 'io server disconnect' && !agentAuthRejected) {
+        // Transport drops auto-reconnect; "io server disconnect" (deploy/restart)
+        // does not — force a connect; health poll keeps retrying forever.
+        if (reason === 'io client disconnect' || !agentWantConnected) {
+            return;
+        }
+        try {
+            if (socket.io && typeof socket.io.reconnection === 'function') {
+                socket.io.reconnection(true);
+            }
+        } catch (_error) {}
+        if (reason === 'io server disconnect') {
             setTimeout(() => {
-                if (agentSocket && !agentSocket.connected && !agentSocket.active) {
-                    agentSocket.connect();
+                if (!agentWantConnected || agentAuthRejected) {
+                    return;
                 }
-            }, 2000);
+                if (agentSocket && !agentSocket.connected && !agentSocket.active) {
+                    try { agentSocket.connect(); } catch (_error) {}
+                } else if (!agentSocket) {
+                    void agentConnect();
+                }
+            }, 1500);
         }
     });
 
@@ -706,20 +762,47 @@ function attachAgentListeners(socket) {
 
     socket.on(DEVICE_ENROLL_REJECTED, (data) => {
         const reason = (data && data.reason) || '设备登记被服务器拒绝';
-        // 非瞬时错误（token 失效或 AI 归属不符）：用同一 token 重连会无限循环，
-        // 因此锁定 authRejected、关闭自动重连并断开，等用户重新登录后再连。
-        agentAuthRejected = true;
-        try { socket.io.reconnection(false); } catch (_error) {}
-        agentDisconnect();
+        const isAuthFailure = /token|logged in|登录|未登录|授权|unauthor|expired|invalid/i.test(reason);
         setAgentStatus('error', reason);
+        if (isAuthFailure) {
+            // Pause thrashing with a bad token; health poll resumes after cooldown.
+            agentAuthRejected = true;
+            agentAuthRejectUntil = Date.now() + AGENT_AUTH_REJECT_COOLDOWN_MS;
+            try {
+                if (socket.io && typeof socket.io.reconnection === 'function') {
+                    socket.io.reconnection(false);
+                }
+            } catch (_error) {}
+            try {
+                socket.removeAllListeners();
+                if (socket.io && typeof socket.io.removeAllListeners === 'function') {
+                    socket.io.removeAllListeners();
+                }
+                socket.disconnect();
+            } catch (_error) {}
+            if (agentSocket === socket) {
+                agentSocket = null;
+            }
+            // Keep agentWantConnected so keepalive resumes later.
+        }
+        // Non-auth rejections: keep reconnection alive for server redeploy recovery.
     });
 
     socket.on('task:dispatch', (task) => { void handleAgentTask(task); });
 }
 
 function agentDisconnect() {
+    agentWantConnected = false;
+    agentAuthRejected = false;
+    agentAuthRejectUntil = 0;
     if (agentSocket) {
-        agentSocket.disconnect();
+        try {
+            agentSocket.removeAllListeners();
+            if (agentSocket.io && typeof agentSocket.io.removeAllListeners === 'function') {
+                agentSocket.io.removeAllListeners();
+            }
+            agentSocket.disconnect();
+        } catch (_error) {}
         agentSocket = null;
     }
     setAgentStatus('disconnected');
@@ -1115,22 +1198,61 @@ async function handleAgentTask(task) {
 async function restoreAndConnectAgent() {
     const settings = await getAgentSettings();
     const auth = await getAgentAuth();
-    if (!settings.offlineMode && auth.token && !agentAuthRejected) {
+    if (!settings.offlineMode && auth.token) {
         await agentConnect();
     }
 }
 
+// While logged-in + online, this poll NEVER stops — even across server restarts,
+// auth-reject cooldowns, and service-worker sleeps.
 function nudgeAgentSocket() {
-    if (agentAuthRejected) {
-        return;
-    }
-    if (!agentSocket) {
-        void restoreAndConnectAgent();
-        return;
-    }
-    if (!agentSocket.connected && !agentSocket.active) {
-        agentSocket.connect();
-    }
+    void (async () => {
+        try {
+            const settings = await getAgentSettings();
+            const auth = await getAgentAuth();
+            if (settings.offlineMode || !auth.token) {
+                agentWantConnected = false;
+                return;
+            }
+            // Auto-intent: credentials imply we want to stay online (covers SW restart).
+            agentWantConnected = true;
+
+            if (agentAuthRejected) {
+                if (Date.now() < agentAuthRejectUntil) {
+                    return;
+                }
+                agentAuthRejected = false;
+                agentAuthRejectUntil = 0;
+            }
+
+            if (!agentSocket) {
+                await agentConnect();
+                return;
+            }
+            try {
+                if (agentSocket.io && typeof agentSocket.io.reconnection === 'function') {
+                    agentSocket.io.reconnection(true);
+                }
+            } catch (_error) {}
+            if (!agentSocket.connected && !agentSocket.active) {
+                try {
+                    agentSocket.connect();
+                } catch (_error) {
+                    try {
+                        agentSocket.removeAllListeners();
+                        if (agentSocket.io && typeof agentSocket.io.removeAllListeners === 'function') {
+                            agentSocket.io.removeAllListeners();
+                        }
+                        agentSocket.disconnect();
+                    } catch (_e2) {}
+                    agentSocket = null;
+                    await agentConnect();
+                }
+            }
+        } catch (_error) {
+            // Never let a health-poll exception kill the loop.
+        }
+    })();
 }
 
 // Offscreen document: MV3 service workers are reclaimed when idle, while an
@@ -1204,9 +1326,19 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
         return;
     }
     agentAuthRejected = false;
+    agentAuthRejectUntil = 0;
     if (newToken) {
+        // Tear down old session only; reconnect with the new token.
+        agentWantConnected = false;
         if (agentSocket) {
-            agentDisconnect();
+            try {
+                agentSocket.removeAllListeners();
+                if (agentSocket.io && typeof agentSocket.io.removeAllListeners === 'function') {
+                    agentSocket.io.removeAllListeners();
+                }
+                agentSocket.disconnect();
+            } catch (_error) {}
+            agentSocket = null;
         }
         void agentConnect();
     } else {
@@ -1276,6 +1408,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                     }
                     const result = await agentLogin(settings.serverUrl, account, password);
                     agentAuthRejected = false;
+                    agentAuthRejectUntil = 0;
                     await saveAgentAuth({
                         token: result.token,
                         account,
@@ -1298,7 +1431,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                     break;
                 }
                 case 'agent:logout': {
-                    agentAuthRejected = false;
                     agentDisconnect();
                     await clearAgentAuth();
                     await saveAgentSettings({ agentSocketUrl: '' });
@@ -1307,7 +1439,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                     break;
                 }
                 case 'agent:connect': {
+                    // Explicit user action clears any auth-reject cooldown.
                     agentAuthRejected = false;
+                    agentAuthRejectUntil = 0;
                     if (agentSocket && agentSocket.connected) {
                         await emitAgentEnrollOn(agentSocket);
                     } else {

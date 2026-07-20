@@ -3,11 +3,15 @@
 // message from the background worker, and returns the JSON that browser.ts
 // forwards back to the AI / popup.
 
-import { findEl, resolveTarget, elCenter, isVisible, isHittable, occluderOf, textMatches, textOf, cssPath, clickLikeUser } from './dom'
 import {
-  fxToElement, fxClickAt, fxSleep, fxDragPath, fxScrollDrag, isFxEnabled, getFxPos,
-  fxHoverOn, fxScreenshotBefore, fxScreenshotAfter, fxScreenshotClear,
+  findEl, resolveTarget, elCenter, isVisible, isHittable, occluderOf, textMatches, textOf, cssPath,
+  clickLikeUser, dispatchPointerMove,
+} from './dom'
+import {
+  fxClickAt, fxSleep, fxDragPath, fxScrollDrag, isFxEnabled, getFxPos,
+  fxScreenshotBefore, fxScreenshotAfter, fxScreenshotClear,
 } from './fx'
+import { approachPointer } from './approach'
 import { FrameContext, ownerWindow, toTopViewportPoint } from './iframe'
 import { viewportContext, waitScrollSettle } from './viewport'
 
@@ -249,14 +253,15 @@ export async function doClick(msg: any) {
     }
   }
 
+  // Always approach with hover + auto-move first (visual when mouseFx is on).
+  if (!viaCoords) await fxSleep(isFxEnabled() ? 160 : 40)
+  const p = topViewportPoint(x, y, frame)
+  await approachPointer(el, x, y, frame)
   if (isFxEnabled()) {
-    if (!viaCoords) await fxSleep(220)   // let the smooth scroll settle before aiming
-    const p = topViewportPoint(x, y, frame)
-    await fxToElement(el, frame ? p : undefined)  // glide the virtual cursor to the element
     await fxClickAt(p.x, p.y)
-    await fxSleep(80)
+    await fxSleep(60)
   }
-  // clickLikeUser now always ensures focus + full hover events
+  // clickLikeUser re-fires hover + full press sequence on the target
   clickLikeUser(el, { x, y })
   const ctx = viewportContext()
   return {
@@ -272,9 +277,11 @@ export async function doDoubleClick(msg: any) {
   const { el, frame } = resolveTarget(msg)
   if (!el) throw new Error(`Element not found: selector=${msg.selector || ''} text=${msg.text || ''} coords=${msg.x},${msg.y}`)
   el.scrollIntoView({ block: 'center', behavior: 'auto' })
-  // Always do hover visual (if enabled) + focus before double click
   try { (el as HTMLElement).focus?.() } catch {}
-  if (isFxEnabled()) { await fxSleep(220); const c0 = elCenter(el); const p = topViewportPoint(c0.x, c0.y, frame); await fxToElement(el, frame ? p : undefined); await fxClickAt(p.x, p.y, 'double'); await fxSleep(80) }
+  const c0 = elCenter(el)
+  const p = topViewportPoint(c0.x, c0.y, frame)
+  await approachPointer(el, c0.x, c0.y, frame)
+  if (isFxEnabled()) { await fxClickAt(p.x, p.y, 'double'); await fxSleep(60) }
   const win = ownerWindow(el)
   const c = elCenter(el)
   const base = { bubbles: true, cancelable: true, view: win, clientX: c.x, clientY: c.y }
@@ -299,9 +306,11 @@ export async function doRightClick(msg: any) {
   const { el, frame } = resolveTarget(msg)
   if (!el) throw new Error(`Element not found: selector=${msg.selector || ''} text=${msg.text || ''} coords=${msg.x},${msg.y}`)
   el.scrollIntoView({ block: 'center', behavior: 'auto' })
-  // Always do hover visual (if enabled) + focus before right click
   try { (el as HTMLElement).focus?.() } catch {}
-  if (isFxEnabled()) { await fxSleep(220); const c0 = elCenter(el); const p = topViewportPoint(c0.x, c0.y, frame); await fxToElement(el, frame ? p : undefined); await fxClickAt(p.x, p.y, 'right'); await fxSleep(80) }
+  const c0 = elCenter(el)
+  const p = topViewportPoint(c0.x, c0.y, frame)
+  await approachPointer(el, c0.x, c0.y, frame)
+  if (isFxEnabled()) { await fxClickAt(p.x, p.y, 'right'); await fxSleep(60) }
   const win = ownerWindow(el)
   const c = elCenter(el)
   const base = { bubbles: true, cancelable: true, view: win, clientX: c.x, clientY: c.y, button: 2, buttons: 2 }
@@ -357,11 +366,25 @@ export async function doDrag(msg: any) {
     throw new Error(`Drag target not found. diagnostics=${JSON.stringify(diag)}`)
   }
   if (src.el) src.el.scrollIntoView({ block: 'center', behavior: 'auto' })
-  if (isFxEnabled()) await fxSleep(200)
+  if (isFxEnabled()) await fxSleep(160)
   const s = src.el ? elCenter(src.el) : { x: src.x, y: src.y }
   const d = dst.el ? elCenter(dst.el) : { x: dst.x, y: dst.y }
   const before = src.el ? (src.el as HTMLElement).getBoundingClientRect() : null
+  // Hover-glide onto the drag source first, then visual drag path.
+  await approachPointer(src.el, s.x, s.y, src.frame)
   if (isFxEnabled()) await fxDragPath(s.x, s.y, d.x, d.y)
+  else {
+    // FX off: still walk the pointer to the drop target before drop events.
+    const steps = 12
+    let last: Element | null = src.el
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps
+      const lx = s.x + (d.x - s.x) * t
+      const ly = s.y + (d.y - s.y) * t
+      last = dispatchPointerMove(lx, ly, last)
+      await fxSleep(12)
+    }
+  }
 
   const dt = (() => { try { return new DataTransfer() } catch { return null } })()
   const mk = (type: string, x: number, y: number, target: Element | null) => {
@@ -463,7 +486,12 @@ export async function doType(msg: any) {
 
   if (!el) throw new Error('No input element found — try providing a selector')
 
-  if (isFxEnabled()) { await fxToElement(el); const p = getFxPos(); await fxClickAt(p.x, p.y) }
+  const center = elCenter(el)
+  await approachPointer(el, center.x, center.y)
+  if (isFxEnabled()) {
+    const p = getFxPos()
+    await fxClickAt(p.x, p.y)
+  }
   el.focus()
 
   if (el.isContentEditable) {
@@ -572,6 +600,10 @@ export async function doScroll(msg: any) {
   const beforeY = Math.round(window.scrollY)
   let target: HTMLElement | null = null
   let beforeElementY = 0
+
+  // Bring the virtual cursor onto the page before scrolling so the gesture
+  // looks continuous with click/type approaches.
+  await approachPointer(null, window.innerWidth / 2, window.innerHeight / 2)
 
   if (msg.selector) {
     const el = findEl(msg.selector)
@@ -1161,7 +1193,10 @@ export async function doSelect(msg: any) {
   }
 
   el.scrollIntoView({ block: 'center', behavior: 'auto' })
-  if (isFxEnabled()) { await fxSleep(160); await fxToElement(el) }
+  {
+    const c = elCenter(el)
+    await approachPointer(el, c.x, c.y)
+  }
   clickLikeUser(el)
   await fxSleep(250)
 
@@ -1171,7 +1206,10 @@ export async function doSelect(msg: any) {
   if (!option) {
     throw new Error(`Custom dropdown option "${value}" not found after opening ${msg.selector}`)
   }
-  if (isFxEnabled()) await fxToElement(option)
+  {
+    const oc = elCenter(option)
+    await approachPointer(option, oc.x, oc.y)
+  }
   clickLikeUser(option)
   return {
     success: true,
@@ -1228,18 +1266,9 @@ export async function doHover(msg: any) {
     const sel = msg.selector || msg.text || msg.ref || 'unknown'
     throw new Error(`Element not found for hover: ${sel}`)
   }
-  if (isFxEnabled()) {
-    const c = elCenter(el)
-    const p = topViewportPoint(c.x, c.y, resolved.frame)
-    await fxToElement(el, p)
-    fxHoverOn(el)
-  }
-  const win = ownerWindow(el)
+  try { el.scrollIntoView({ block: 'center', behavior: 'auto' }) } catch {}
   const c = elCenter(el)
-  const base = { bubbles: true, cancelable: true, view: win, clientX: c.x, clientY: c.y }
-  el.dispatchEvent(new MouseEvent('mouseover', base))
-  el.dispatchEvent(new MouseEvent('mouseenter', base))
-  el.dispatchEvent(new PointerEvent('pointerover', { ...base, pointerId: 1, pointerType: 'mouse', isPrimary: true }))
+  await approachPointer(el, c.x, c.y, resolved.frame)
   return { success: true, selector: cssPath(el), tag: el.tagName }
 }
 

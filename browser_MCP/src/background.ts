@@ -26,12 +26,17 @@ let currentAgentId: string | null = null
 // watcher and the popup's device:connect message; sharing one promise stops
 // each from opening its own socket and tearing the other down mid-handshake.
 let connectPromise: Promise<void> | null = null
-// Set when the server rejected registration for a non-transient reason
-// (expired/invalid token or AI-ownership mismatch). Retrying with the same
-// token just loops forever, so we stop auto-reconnect and the keepalive
-// alarm until the user re-authenticates or explicitly reconnects. Cleared
-// at the start of connect() and on logout.
+// Set when the server rejected registration for a clear auth failure
+// (expired/invalid token). We pause thrashing re-register for a cooldown
+// window, but the keepalive/health poll NEVER stops while the user still
+// wants to be online — after the cooldown we resume so a server redeploy
+// or a fixed token can recover without a manual reconnect.
 let authRejected = false
+let authRejectUntil = 0
+// User intent: stay linked while logged-in + online. Only intentional
+// disconnect/logout clears this. Survives "io server disconnect" and SW sleep.
+let wantConnected = false
+const AUTH_REJECT_COOLDOWN_MS = 60_000
 
 // browser_MCP_win drives the browser with real OS input. A stray click can
 // otherwise open browser-owned permission/file dialogs that content scripts
@@ -277,6 +282,7 @@ async function doConnect(): Promise<void> {
   const settings = await getSettings()
   if (socket?.connected) return
   if (settings.offlineMode) {
+    wantConnected = false
     log('system', 'info', '离线模式已开启，跳过服务器连接')
     return
   }
@@ -286,10 +292,19 @@ async function doConnect(): Promise<void> {
   // flashing "已连接" before the server rejects.
   const auth = await getAuth()
   if (!auth.token) {
+    wantConnected = false
     setStatus('disconnected')
     log('system', 'warn', '未登录，已阻止连接服务器（请先登录账号）')
     return
   }
+
+  wantConnected = true
+
+  // Auth-reject cooldown: avoid thrashing re-register with a bad token,
+  // but the health poll will call us again after AUTH_REJECT_COOLDOWN_MS.
+  if (authRejected && Date.now() < authRejectUntil) return
+  authRejected = false
+  authRejectUntil = 0
 
   let agentSocketUrl = String(settings.agentSocketUrl || '').trim()
   if (!agentSocketUrl) {
@@ -299,6 +314,7 @@ async function doConnect(): Promise<void> {
     } catch (err: any) {
       setStatus('error', '无法获取 Agent 连接地址')
       log('system', 'error', `无法获取 Agent 连接地址: ${err?.message || err}`)
+      // Keep wantConnected; keepalive will retry later when the gateway is up.
       return
     }
   }
@@ -309,18 +325,22 @@ async function doConnect(): Promise<void> {
   }
 
   if (socket) {
-    socket.removeAllListeners()
-    socket.disconnect()
+    try {
+      socket.removeAllListeners()
+      socket.io.removeAllListeners()
+      socket.disconnect()
+    } catch { /* noop */ }
     socket = null
   }
 
-  authRejected = false
   setStatus('connecting')
 
   log('system', 'info', `正在连接 Agent 服务器: ${agentSocketUrl}`)
   socket = io(agentSocketUrl, {
     transports: ['websocket', 'polling'],
+    reconnection: true,
     reconnectionDelay: 2000,
+    reconnectionDelayMax: 15000,
     reconnectionAttempts: Infinity,
   })
   attachOperationalListeners(socket, settings.agentName || '浏览器插件')
@@ -337,18 +357,39 @@ function attachOperationalListeners(s: Socket, agentName: string) {
     flushUnsentTaskOutcomes()
   })
 
+  s.io.on('reconnect_attempt', (attempt: number) => {
+    log('system', 'info', `正在重连服务器（第 ${attempt} 次）…`)
+  })
+  s.io.on('reconnect_failed', () => {
+    // Infinity attempts should not end here; if it does, rebuild on next health poll.
+    log('system', 'warn', 'Socket.IO 重连耗尽，将由健康轮询重建连接')
+    try {
+      s.removeAllListeners()
+      s.io.removeAllListeners()
+      s.disconnect()
+    } catch { /* noop */ }
+    if (socket === s) socket = null
+  })
+
   s.on('disconnect', (reason: string) => {
     void clearServerSyncedTools()
     setStatus('disconnected', reason)
     log('system', 'warn', `连接断开: ${reason}`)
     // Socket.IO auto-reconnects for transport-level drops, but NOT when the
     // server explicitly closes us (reason 'io server disconnect') — which a
-    // server restart can produce. Nudge a reconnect ourselves unless the
-    // disconnect was intentional ('io client disconnect' from logout/disconnect)
-    // or registration was rejected. The keepalive alarm is the slower backstop
-    // if the worker is asleep when this fires.
-    if (reason === 'io server disconnect' && !authRejected) {
-      setTimeout(() => { if (socket && !socket.connected && !socket.active) socket.connect() }, 2000)
+    // server restart can produce. Always re-enable reconnection + nudge; the
+    // keepalive/health poll keeps retrying forever while wantConnected.
+    if (reason === 'io client disconnect' || !wantConnected) return
+    try { s.io.reconnection(true) } catch { /* noop */ }
+    if (reason === 'io server disconnect') {
+      setTimeout(() => {
+        if (!wantConnected || authRejected) return
+        if (socket && !socket.connected && !socket.active) {
+          try { socket.connect() } catch { /* noop */ }
+        } else if (!socket) {
+          void connect()
+        }
+      }, 1500)
     }
   })
 
@@ -381,16 +422,29 @@ function attachOperationalListeners(s: Socket, agentName: string) {
 
   s.on('device:register_rejected', (data: any) => {
     const reason = data?.reason || '注册被服务器拒绝'
-    // Non-transient: the token is invalid/expired or the AI no longer
-    // belongs to this user. Reconnecting and re-registering with the same
-    // token would loop forever (reconnectionAttempts is Infinity), so we
-    // latch authRejected, disable reconnection and tear the socket down.
-    // The user must re-login (or pick a valid AI) and connect again.
-    authRejected = true
-    try { s.io.reconnection(false) } catch { /* noop */ }
-    disconnect()
+    const isAuthFailure = /token|logged in|登录|未登录|授权|unauthor|expired|invalid/i.test(reason)
     setStatus('error', reason)
-    log('system', 'error', `注册被拒绝，已停止自动重连（请重新登录后再连接）: ${reason}`)
+    if (isAuthFailure) {
+      // Pause thrashing with a bad token, but do NOT permanently kill the
+      // health poll — after AUTH_REJECT_COOLDOWN_MS we resume so redeploy /
+      // re-login can recover without a manual reconnect click.
+      authRejected = true
+      authRejectUntil = Date.now() + AUTH_REJECT_COOLDOWN_MS
+      try { s.io.reconnection(false) } catch { /* noop */ }
+      // Tear the socket only; keep wantConnected so keepalive resumes later.
+      try {
+        s.removeAllListeners()
+        s.io.removeAllListeners()
+        s.disconnect()
+      } catch { /* noop */ }
+      if (socket === s) socket = null
+      void clearServerSyncedTools()
+      log('system', 'error', `注册被拒绝（鉴权），${AUTH_REJECT_COOLDOWN_MS / 1000}s 后自动再试（也可重新登录）: ${reason}`)
+    } else {
+      // Transient / non-auth rejection (server half-up during deploy, etc.):
+      // keep the socket + reconnection alive and re-register on next connect.
+      log('system', 'error', `注册被拒绝（将保持重连轮询）: ${reason}`)
+    }
   })
 
   s.on('task:dispatch', (task: DispatchedTask) => { void handleTask(task) })
@@ -441,8 +495,15 @@ async function register() {
 }
 
 function disconnect() {
+  wantConnected = false
+  authRejected = false
+  authRejectUntil = 0
   stopAllRemoteControl()
-  socket?.disconnect()
+  try {
+    socket?.removeAllListeners()
+    socket?.io.removeAllListeners()
+    socket?.disconnect()
+  } catch { /* noop */ }
   socket = null
   void clearServerSyncedTools()
   setStatus('disconnected')
@@ -759,6 +820,9 @@ chrome.runtime.onConnect.addListener((port) => {
   port.onMessage.addListener(async (msg: PopupMsg) => {
     switch (msg.type) {
       case 'device:connect':    {
+        // Explicit user action clears any auth-reject cooldown.
+        authRejected = false
+        authRejectUntil = 0
         if (socket?.connected) await emitRegisterOn(socket)
         else await connect()
         break
@@ -767,7 +831,6 @@ chrome.runtime.onConnect.addListener((port) => {
       case 'auth:logout': {
         // Drop the socket entirely so the server sees us leaving and we
         // don't keep re-registering with an empty/stale token.
-        authRejected = false
         disconnect()
         await saveSettings({ selectedAiConfigId: null, agentSocketUrl: '' })
         break
@@ -893,15 +956,53 @@ chrome.runtime.onConnect.addListener((port) => {
 
 // ── Keepalive ───────────────────────────────────────────────────────────────
 // The socket's health check, shared by the offscreen heartbeat and the alarm.
+// While the user is logged in and online, this poll NEVER stops — even across
+// server restarts, auth-reject cooldowns, and service-worker sleeps.
 function nudgeSocketHealth() {
-  if (authRejected) return
-  // If the socket object is gone (worker was torn down), re-establish from
-  // stored auth. If it exists but is neither connected nor actively reconnecting
-  // (e.g. after an 'io server disconnect', which Socket.IO does not auto-retry),
-  // kick it. When socket.active is true the manager is already retrying — calling
-  // connect() then would spawn a duplicate, flapping attempt.
-  if (!socket) { void restoreAndConnectOnStartup(); return }
-  if (!socket.connected && !socket.active) socket.connect()
+  void (async () => {
+    try {
+      const settings = await getSettings()
+      const auth = await getAuth()
+      if (settings.offlineMode || !auth.token) {
+        wantConnected = false
+        return
+      }
+      // Auto-intent: if we have credentials, we always want to be online
+      // (covers SW restart where wantConnected was lost with module state).
+      wantConnected = true
+
+      if (authRejected) {
+        if (Date.now() < authRejectUntil) return
+        authRejected = false
+        authRejectUntil = 0
+        log('system', 'info', '鉴权冷却结束，恢复自动重连')
+      }
+
+      // If the socket object is gone, re-establish from stored auth.
+      // If it exists but is neither connected nor actively reconnecting
+      // (e.g. after 'io server disconnect'), kick it. When socket.active is
+      // true the manager is already retrying — don't double-call connect().
+      if (!socket) {
+        await connect()
+        return
+      }
+      try { socket.io.reconnection(true) } catch { /* noop */ }
+      if (!socket.connected && !socket.active) {
+        try { socket.connect() } catch {
+          try {
+            socket.removeAllListeners()
+            socket.io.removeAllListeners()
+            socket.disconnect()
+          } catch { /* noop */ }
+          socket = null
+          await connect()
+        }
+      }
+    } catch (err: any) {
+      // Never let a health-poll exception kill the loop — next alarm/heartbeat continues.
+      try { log('system', 'warn', `健康轮询异常: ${err?.message || err}`) } catch { /* noop */ }
+    }
+  })()
 }
 
 // Primary pacemaker: the offscreen document pings every ~20s. Receiving the
@@ -989,8 +1090,17 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   if (oldToken === newToken) return
 
   authRejected = false
+  authRejectUntil = 0
   if (newToken) {
-    if (socket) disconnect()
+    // Intentional tear-down of the old session only; reconnect with the new token.
+    wantConnected = false
+    try {
+      socket?.removeAllListeners()
+      socket?.io.removeAllListeners()
+      socket?.disconnect()
+    } catch { /* noop */ }
+    socket = null
+    void clearServerSyncedTools()
     void connect()
   } else {
     disconnect()

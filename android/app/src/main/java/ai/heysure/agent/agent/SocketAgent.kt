@@ -2,6 +2,8 @@ package ai.heysure.agent.agent
 
 import ai.heysure.agent.executor.TaskExecutor
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import io.socket.client.IO
 import io.socket.client.Socket
 import kotlinx.coroutines.CoroutineScope
@@ -23,6 +25,11 @@ enum class DeviceStatus { DISCONNECTED, CONNECTING, CONNECTED, REGISTERED, ERROR
  *
  * Idempotency on taskId mirrors the desktop client so duplicate dispatches
  * replay the cached outcome instead of re-running a gesture.
+ *
+ * Reconnect policy: while [wantConnected] is true (after [connect], until
+ * intentional [disconnect]/[shutdown]), a health poll keeps kicking the
+ * socket forever. Socket.IO does not auto-retry "io server disconnect"
+ * (server restart/deploy), so we handle that explicitly plus a watchdog.
  */
 class SocketAgent(
     private val settings: Settings,
@@ -36,6 +43,9 @@ class SocketAgent(
 ) {
     private var socket: Socket? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val mainHandler = Handler(Looper.getMainLooper())
+    @Volatile private var wantConnected = false
+    private var healthWatchRunning = false
 
     // Bounded, access-ordered LRU of task ids we've already accepted. A plain
     // growing set leaked memory over a long-lived session; this caps it while
@@ -45,18 +55,89 @@ class SocketAgent(
             size > MAX_SEEN_TASKS
     }
 
+    private val healthWatch = object : Runnable {
+        override fun run() {
+            if (!wantConnected) {
+                healthWatchRunning = false
+                return
+            }
+            try {
+                nudgeConnection()
+            } catch (err: Exception) {
+                onLog("健康轮询异常: ${err.message ?: err}")
+            }
+            mainHandler.postDelayed(this, HEALTH_WATCH_MS)
+        }
+    }
+
     fun connect() {
-        if (socket != null) return
         val token = settings.authToken
         if (token.isBlank()) {
+            wantConnected = false
+            stopHealthWatch()
             onStatus(DeviceStatus.DISCONNECTED, "未登录")
             return
         }
+        wantConnected = true
+        startHealthWatch()
+        if (socket != null) {
+            nudgeConnection()
+            return
+        }
+        openSocket()
+    }
+
+    private fun startHealthWatch() {
+        if (healthWatchRunning) return
+        healthWatchRunning = true
+        mainHandler.removeCallbacks(healthWatch)
+        mainHandler.postDelayed(healthWatch, HEALTH_WATCH_MS)
+    }
+
+    private fun stopHealthWatch() {
+        healthWatchRunning = false
+        mainHandler.removeCallbacks(healthWatch)
+    }
+
+    /** Kick a dead socket; recreate if the object is gone. Never stops while wantConnected. */
+    private fun nudgeConnection() {
+        if (!wantConnected) return
+        if (settings.authToken.isBlank()) return
+        val s = socket
+        if (s == null) {
+            openSocket()
+            return
+        }
+        // Java client: !connected after server restart may leave the manager idle.
+        if (!s.connected()) {
+            try {
+                s.connect()
+            } catch (err: Exception) {
+                onLog("重连触发失败，将重建连接: ${err.message ?: err}")
+                teardownSocketOnly()
+                openSocket()
+            }
+        }
+    }
+
+    private fun teardownSocketOnly() {
+        try {
+            socket?.off()
+            socket?.disconnect()
+        } catch (_: Exception) { /* noop */ }
+        socket = null
+    }
+
+    private fun openSocket() {
+        if (socket != null) return
+        if (!wantConnected || settings.authToken.isBlank()) return
+
         onStatus(DeviceStatus.CONNECTING, null)
         val opts = IO.Options().apply {
             transports = arrayOf("websocket", "polling")
             reconnection = true
             reconnectionDelay = 2000
+            reconnectionDelayMax = 15000
             reconnectionAttempts = Int.MAX_VALUE
         }
         val s = try {
@@ -73,14 +154,24 @@ class SocketAgent(
             register()
         }
         s.on(Socket.EVENT_DISCONNECT) { args ->
-            onStatus(DeviceStatus.DISCONNECTED, args.firstOrNull()?.toString())
-            onLog("连接断开")
+            val reason = args.firstOrNull()?.toString() ?: ""
+            onStatus(DeviceStatus.DISCONNECTED, reason)
+            onLog("连接断开: $reason")
+            // "io server disconnect" (deploy/restart) does not auto-retry.
+            if (wantConnected && reason != "io client disconnect") {
+                if (reason == "io server disconnect" || reason.isBlank()) {
+                    mainHandler.postDelayed({
+                        if (wantConnected) nudgeConnection()
+                    }, 1500)
+                }
+            }
         }
         s.on(Socket.EVENT_CONNECT_ERROR) { args ->
             onStatus(DeviceStatus.ERROR, args.firstOrNull()?.toString())
             onLog("连接错误: ${args.firstOrNull()}")
+            // Health watch keeps polling; no permanent stop.
         }
-        s.on("device:registered") { args ->
+        s.on("device:registered") { _ ->
             onStatus(DeviceStatus.REGISTERED, null)
             onLog("注册成功")
         }
@@ -99,7 +190,8 @@ class SocketAgent(
         s.on("device:register_rejected") { args ->
             val reason = (args.firstOrNull() as? JSONObject)?.optString("reason") ?: "注册被拒绝"
             onStatus(DeviceStatus.ERROR, reason)
-            onLog("注册失败: $reason")
+            onLog("注册失败: $reason（保持重连轮询）")
+            // Do not stop the health watch — server may recover after redeploy.
         }
         s.on("task:dispatch") { args ->
             val task = args.firstOrNull() as? JSONObject ?: return@on
@@ -124,9 +216,9 @@ class SocketAgent(
     }
 
     fun disconnect() {
-        socket?.disconnect()
-        socket?.off()
-        socket = null
+        wantConnected = false
+        stopHealthWatch()
+        teardownSocketOnly()
         onStatus(DeviceStatus.DISCONNECTED, null)
     }
 
@@ -201,6 +293,7 @@ class SocketAgent(
 
     private companion object {
         const val MAX_SEEN_TASKS = 500
+        const val HEALTH_WATCH_MS = 5000L
         val RC_SIGNAL_EVENTS = listOf("rc:start", "rc:answer", "rc:ice", "rc:stop")
     }
 }

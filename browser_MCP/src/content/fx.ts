@@ -158,8 +158,10 @@ function fxEnsure(): HTMLElement | null {
   fxPlace(fxX, fxY, false)
   if (fxTrail) {
     fxTrail.style.transform = `translate(${fxX}px, ${fxY}px)`
-    fxTrail.classList.remove('show')
   }
+  // Stay visible once created; operators expect the AI cursor to remain on-page.
+  cur.classList.add('show')
+  fxTrail?.classList.add('show')
   return cur
 }
 
@@ -171,12 +173,15 @@ function fxPlace(x: number, y: number, animate: boolean) {
   cur.style.transform = `translate(${x}px, ${y}px)`
 }
 
+// Keep the virtual hand visible after every action so the operator can always
+// see where the AI left the pointer. Call sites still invoke fxScheduleHide for
+// API compatibility; it only cancels any pending hide and re-shows the cursor.
 function fxScheduleHide() {
-  if (fxHideTimer) clearTimeout(fxHideTimer)
-  fxHideTimer = setTimeout(() => {
-    fxCursor?.classList.remove('show')
-    fxTrail?.classList.remove('show')
-  }, 1800)
+  if (fxHideTimer) {
+    clearTimeout(fxHideTimer)
+    fxHideTimer = null
+  }
+  fxShowCursor()
 }
 
 function fxShowCursor() {
@@ -236,9 +241,19 @@ function fxClickRipples(x: number, y: number, variant: 'left' | 'right' = 'left'
   }
 }
 
-export async function fxMoveTo(x: number, y: number) {
+export type FxMoveOptions = {
+  /** Called on every interpolated sample (viewport CSS pixels). Used to fire real mousemove. */
+  onStep?: (x: number, y: number) => void
+}
+
+export async function fxMoveTo(x: number, y: number, opts?: FxMoveOptions) {
   const cur = fxEnsure()
-  if (!cur) return
+  if (!cur) {
+    // Still notify the path when visuals are off so callers can emit DOM moves.
+    opts?.onStep?.(x, y)
+    fxX = x; fxY = y
+    return
+  }
   fxShowCursor()
 
   const startX = fxX
@@ -247,6 +262,7 @@ export async function fxMoveTo(x: number, y: number) {
   const dy = y - startY
   const dist = Math.hypot(dx, dy)
   const duration = Math.min(Math.max(dist * 0.55, 180), 520)
+  let lastEmit = -1
 
   if (moveAnim) cancelAnimationFrame(moveAnim)
   await new Promise<void>(resolve => {
@@ -261,6 +277,7 @@ export async function fxMoveTo(x: number, y: number) {
       if (moveAnim) { cancelAnimationFrame(moveAnim); moveAnim = null }
       clearTimeout(backstop)
       fxPlace(x, y, false)
+      opts?.onStep?.(x, y)
       resolve()
     }
     const backstop = setTimeout(finish, duration + 400)
@@ -271,6 +288,11 @@ export async function fxMoveTo(x: number, y: number) {
       const cx = startX + dx * e
       const cy = startY + dy * e
       fxPlace(cx, cy, false)
+      // Throttle DOM event emission to ~every 28ms so long glides stay light.
+      if (opts?.onStep && (lastEmit < 0 || now - lastEmit >= 28 || t >= 1)) {
+        lastEmit = now
+        opts.onStep(cx, cy)
+      }
       if (fxTrail) {
         const lag = 0.28
         const tx = startX + dx * Math.max(0, e - lag)
@@ -283,6 +305,28 @@ export async function fxMoveTo(x: number, y: number) {
     moveAnim = requestAnimationFrame(step)
   })
 }
+
+/** First interactive action of a session: show the hand cursor as if the mouse just entered the page. */
+let browserPrimed = false
+export async function fxPrimeBrowser() {
+  if (!isFxEnabled() || !document.body) return
+  if (browserPrimed) {
+    fxEnsure()
+    fxShowCursor()
+    return
+  }
+  browserPrimed = true
+  const cur = fxEnsure()
+  if (!cur) return
+  // Enter from the lower-right chrome edge, then glide to mid-viewport.
+  const enterX = Math.max(24, window.innerWidth - 36)
+  const enterY = Math.max(24, window.innerHeight - 36)
+  fxPlace(enterX, enterY, false)
+  fxShowCursor()
+  await fxMoveTo(window.innerWidth * 0.52, window.innerHeight * 0.42)
+}
+
+// Page navigations re-inject the content script; keep prime state per document.
 
 export async function fxClickAt(x: number, y: number, variant: 'left' | 'right' | 'double' = 'left') {
   if (!isFxEnabled()) return
@@ -331,14 +375,24 @@ export async function fxDragPath(sx: number, sy: number, ex: number, ey: number)
 // `at` overrides the glide destination with explicit top-viewport coordinates —
 // needed for elements inside iframes, whose getBoundingClientRect is relative to
 // the frame's own viewport, not the top page where the fx overlay lives.
-export async function fxToElement(el: Element, at?: { x: number; y: number }) {
-  if (!isFxEnabled()) return
+export async function fxToElement(el: Element, at?: { x: number; y: number }, opts?: FxMoveOptions) {
+  if (!isFxEnabled()) {
+    // Keep logical cursor position and still emit path samples for DOM hover.
+    const r = (el as HTMLElement).getBoundingClientRect()
+    const cx = at ? at.x : r.left + r.width / 2
+    const cy = at ? at.y : r.top + r.height / 2
+    const x = Math.min(Math.max(cx, 4), window.innerWidth - 4)
+    const y = Math.min(Math.max(cy, 4), window.innerHeight - 4)
+    opts?.onStep?.(x, y)
+    fxX = x; fxY = y
+    return
+  }
   const r = (el as HTMLElement).getBoundingClientRect()
   const cx = at ? at.x : r.left + r.width / 2
   const cy = at ? at.y : r.top + r.height / 2
   const x = Math.min(Math.max(cx, 4), window.innerWidth - 4)
   const y = Math.min(Math.max(cy, 4), window.innerHeight - 4)
-  await fxMoveTo(x, y)
+  await fxMoveTo(x, y, opts)
 }
 
 export function fxHoverOn(el: Element) {

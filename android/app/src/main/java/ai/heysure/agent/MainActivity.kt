@@ -8,6 +8,7 @@ import ai.heysure.agent.agent.DeviceStatus
 import ai.heysure.agent.agent.ServerApi
 import ai.heysure.agent.agent.Settings
 import ai.heysure.agent.accessibility.GestureAccessibilityService
+import ai.heysure.agent.console.ConsoleActivity
 import ai.heysure.agent.databinding.ActivityMainBinding
 import android.content.Context
 import android.content.Intent
@@ -98,6 +99,10 @@ class MainActivity : AppCompatActivity() {
         binding.passwordInput.setText(if (settings.rememberLogin) settings.userPassword else "")
         binding.rememberLoginSwitch.isChecked = settings.rememberLogin
         binding.loginButton.setOnClickListener { doLogin() }
+        binding.openConsoleButton.setOnClickListener {
+            ConsoleActivity.open(this)
+            finish()
+        }
         binding.logoutButton.setOnClickListener { doLogout() }
         binding.userChip.setOnClickListener { showAccountDialog() }
         binding.settingsButton.visibility = View.GONE

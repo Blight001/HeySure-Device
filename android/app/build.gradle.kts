@@ -3,6 +3,50 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val webProjectDir = rootProject.projectDir.resolve("../../web").canonicalFile
+val webDistDir = webProjectDir.resolve("dist")
+val generatedWebAssetsDir = layout.buildDirectory.dir("generated/heysureWebAssets")
+val npmCommand = if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
+    "npm.cmd"
+} else {
+    "npm"
+}
+
+val installWebDependencies by tasks.registering(Exec::class) {
+    group = "heysure"
+    description = "Installs shared web dependencies when node_modules is absent."
+    workingDir = webProjectDir
+    commandLine(npmCommand, if (webProjectDir.resolve("package-lock.json").isFile) "ci" else "install")
+    onlyIf { !webProjectDir.resolve("node_modules").isDirectory }
+}
+
+val buildHeySureWeb by tasks.registering(Exec::class) {
+    group = "heysure"
+    description = "Builds the shared Vue digital-society console for Android."
+    dependsOn(installWebDependencies)
+    workingDir = webProjectDir
+    commandLine(npmCommand, "run", "build")
+    inputs.files(
+        webProjectDir.resolve("index.html"),
+        webProjectDir.resolve("package.json"),
+        webProjectDir.resolve("package-lock.json"),
+        webProjectDir.resolve("tsconfig.json"),
+        webProjectDir.resolve("vite.config.ts"),
+        fileTree(webProjectDir.resolve("src")),
+        fileTree(webProjectDir.resolve("game")),
+        fileTree(webProjectDir.resolve("extension-test")),
+    )
+    outputs.dir(webDistDir)
+}
+
+val syncHeySureWeb by tasks.registering(Sync::class) {
+    group = "heysure"
+    description = "Copies the shared web build into generated Android assets."
+    dependsOn(buildHeySureWeb)
+    from(webDistDir)
+    into(generatedWebAssetsDir.map { it.dir("web") })
+}
+
 android {
     namespace = "ai.heysure.agent"
     compileSdk = providers.gradleProperty("android.compileSdk")
@@ -62,6 +106,12 @@ android {
     buildFeatures {
         viewBinding = true
     }
+
+    sourceSets.getByName("main").assets.srcDir(generatedWebAssetsDir)
+}
+
+tasks.named("preBuild").configure {
+    dependsOn(syncHeySureWeb)
 }
 
 dependencies {

@@ -17,6 +17,7 @@
     <string name="login">登录并连接</string>
     <string name="logout">退出登录</string>
     <string name="stop">停止 Agent</string>
+    <string name="open_console">打开数字社会控制台</string>
     <string name="remember_login">保存账号和密码</string>
     <string name="back">返回</string>
 

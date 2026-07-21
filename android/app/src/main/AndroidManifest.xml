@@ -34,6 +34,15 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask" />
+
+        <!-- Primary UI: a hardware-accelerated native WebView shell around the
+             exact same Vue/Phaser sources used by the web digital society. -->
+        <activity
+            android:name=".console.ConsoleActivity"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|smallestScreenSize|uiMode"
+            android:exported="true"
+            android:hardwareAccelerated="true"
             android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

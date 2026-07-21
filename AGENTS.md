@@ -22,7 +22,8 @@
 | `browser_automation/` | 另一套浏览器自动化扩展（JS 分包） | 历史/并行实现，background 按序号分包；联调前先确认目标目录 |
 | `android/` | 原生 Kotlin App（方案 A） | 手机本机执行：点击/滑动/截屏（无障碍 + MediaProjection） |
 | `android/android-adb/` | 宿主电脑 Node.js（方案 B） | 经 ADB 控制手机；息屏/锁屏下也能注入 |
-| `grok_cli/` | 本地 OpenAI 兼容网关（**不是**端侧 agent 壳） | 包装本机 grok CLI 为 `POST /v1/chat/completions`（默认 `127.0.0.1:8100`），不注册设备 |
+| `cli_to_api/grok_cli_api/` | 本地 OpenAI 兼容网关（**不是**端侧 agent 壳） | 包装本机 grok CLI 为 `POST /v1/chat/completions`（默认 `127.0.0.1:8100`），不注册设备 |
+| `cli_to_api/antigravity_cli_api/` | 本地 OpenAI 兼容网关（**不是**端侧 agent 壳） | 纯 Python 实现 Antigravity OAuth 与 `POST /v1/chat/completions`（默认 `127.0.0.1:8110`），不注册设备 |
 
 > 安卓两形态（A 本机 App / B 宿主 ADB）都以 Android 类 endpoint 注册，服务端统一调度。
 > **当前仓库无 `mac/`、`extension/` 目录**（旧文档里的路径已废弃；浏览器主线为 `browser_MCP*`）。
@@ -102,7 +103,8 @@ device/browser_MCP/
 | Android ADB 控制 | `device/android/android-adb/` |
 | 工具执行底座（Windows） | `device/windows/src/runtime/` + `executor/` |
 | 远程连接（画面 `rc:*` / 命令行 `rt:*`） | 设备端 Windows：`remote-control.ts` + `rc.rs` / `remote-terminal.ts` + `pty.rs`；Linux：`agent/remote_terminal.py`；服务端 `connector_runtime/dispatch/remote_control.py` / `remote_terminal.py`；web `useRemoteControl.ts` / `useRemoteTerminal.ts`；标准见 [`read.md`](read.md) |
-| 本地 grok API 网关 | `device/grok_cli/` |
+| 本地 grok API 网关 | `device/cli_to_api/grok_cli_api/` |
+| 本地 Antigravity API 网关 | `device/cli_to_api/antigravity_cli_api/` |
 | 服务端工具路由 | `server/main/mcp_runtime/mcp/registry.py` + 设备权限策略 |
 
 ## 常见问题排查

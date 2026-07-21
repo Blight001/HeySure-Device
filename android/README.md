@@ -1,8 +1,38 @@
-# HeySure 安卓端 Agent（device/android）
+# HeySure 安卓端（数字社会控制台 + 设备 Agent）
 
-手机上的端侧执行器：和其它设备一样，登录后连接后端、注册为 endpoint，接收服务端
-下发的任务并在本机执行。能力聚焦在**手机操控**：点击、滑动、长按、返回/主屏/最近任务、
-向输入框输入文本、屏幕截图、屏幕录制。
+Android App 同时承担两个彼此独立、可并行运行的角色：
+
+1. **数字社会控制台**：全屏、硬件加速的原生 WebView 壳，直接打包并运行工作区
+   `web/` 的 Vue + Phaser 生产构建，不在 Android 工程中复制控制台 UI 组件。
+2. **设备 Agent**：登录后连接后端并注册为 endpoint，接收任务后执行点击、滑动、
+   长按、系统导航、文本输入、截屏和录屏；切换到控制台或退到后台时仍由前台服务保活。
+
+启动 App 默认进入数字社会控制台。首次使用或登录态失效时自动进入原生 Agent 登录/授权页；
+控制台右下角的「设备」悬浮入口可随时返回 Agent 设置。
+
+## 控制台源码复用与性能方案
+
+```text
+web/src + web/game（唯一 UI 源码）
+       │ npm run build（Gradle 自动触发、支持增量）
+       ▼
+app/build/generated/heysureWebAssets/web
+       │ APK assets，本机读取 JS/CSS/图片/音频
+       ▼
+ConsoleActivity / Android System WebView（硬件加速）
+       │ 页面 Origin 保持为用户配置的 serverUrl
+       ├── /api、/socket.io、WebRTC ──► HeySure Server
+       └── /assets、/game/       ──► APK 本地资源拦截
+```
+
+- 控制台、聊天和「社会显示」继续使用 Web 已有的响应式布局；移动端仍是「控制台 / 社会显示」
+  双 Tab，不维护 Android 专属 Vue 组件。
+- 页面 Origin 仍是服务器地址，现有相对 REST 路径、Socket.IO、WebRTC、头像和临时图片契约
+  无需分叉，也没有 `file://` 跨域问题。
+- JS/CSS/Phaser 和静态媒体从 APK 本机读取，避免浏览器首次访问时的资源下载与重复网络握手；
+  WebView 开启硬件合成、DOM Storage、本地缓存、预渲染和触摸设备的 Web 性能降级规则。
+- 「社会显示」仍按 Web 端既有逻辑在首次切换 Tab 时才加载 Phaser，隐藏后暂停渲染循环。
+- 网页更新后重新构建 APK 即会同步最新源码；`web/dist` 和生成的 Android assets 都不是手工维护源。
 
 > 方案选型：**手机上的原生 Kotlin App**（自包含 endpoint），不依赖电脑/ADB/root。
 > 这与桌面壳"壳运行在它所控制的设备上"的心智模型一致。点击/滑动用
@@ -47,6 +77,7 @@
 
 ```
 app/src/main/java/ai/heysure/agent/
+  console/ConsoleActivity.kt    数字社会控制台壳 / 本地资源拦截 / 文件选择 / JS bridge
   MainActivity.kt              登录 / 引导开启无障碍 / 授权截屏 / 状态显示
   agent/Settings.kt            SharedPreferences（serverUrl / token / deviceId）
   agent/ServerApi.kt           REST：POST /api/auth/login
@@ -62,15 +93,24 @@ app/src/main/java/ai/heysure/agent/
 ## 构建与运行
 
 ```bash
-# 推荐：用 Android Studio 打开 device/android，它会自动补齐 Gradle Wrapper 并构建/运行到真机。
+# 需要 JDK 17、Android SDK、Node.js/npm。Gradle 会从同一工作区的 ../../web 自动构建控制台。
+# 推荐：用 Android Studio 打开 device/android 并构建/运行到真机。
 # 命令行方式（首次需生成 wrapper 脚本/jar，仓库只 pin 了版本 gradle-wrapper.properties）：
 cd device/android
 gradle wrapper                   # 生成 gradlew / gradle-wrapper.jar（需本机已装 Gradle 8.7）
 ./gradlew assembleDebug          # 产物 app/build/outputs/apk/debug/
+
+# Windows 也可直接：
+build-apk.bat debug
 ```
 
-界面与桌面壳同一套深色靛紫风格（卡片式 + 顶部状态点：绿=已注册 / 黄=连接中 / 红=未连接），
-分为 4 张卡片：登录账号、权限授权、后台与常亮、运行日志。首次使用：
+Gradle 任务关系为 `preBuild → syncHeySureWeb → buildHeySureWeb → npm run build`。当 `web/`
+源码和配置没有变化时会命中 Gradle up-to-date，不会重复构建；缺少 `web/node_modules` 时会先
+执行 `npm ci`。因此日常 UI 修改应直接在 `web/src` 或 `web/game` 完成，不要在 Android 中
+新建一套显示组件。
+
+原生 Agent 设置页沿用深色靛紫风格（卡片式 + 顶部状态点：绿=已注册 / 黄=连接中 / 红=未连接），
+包含登录账号、权限授权、后台与常亮、运行日志。首次使用：
 
 1. **登录账号卡**：填服务器地址 + 账号密码，点「登录并连接」。
 2. **权限授权卡**：「开启无障碍」（点击/滑动依赖）+「授权截屏/录屏」（截屏录屏依赖），各授一次。

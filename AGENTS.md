@@ -23,7 +23,7 @@
 | `android/` | 原生 Kotlin App（方案 A） | 手机本机执行：点击/滑动/截屏（无障碍 + MediaProjection） |
 | `android/android-adb/` | 宿主电脑 Node.js（方案 B） | 经 ADB 控制手机；息屏/锁屏下也能注入 |
 | `cli_to_api/grok_cli_api/` | 本地 OpenAI 兼容网关（**不是**端侧 agent 壳） | 包装本机 grok CLI 为 `POST /v1/chat/completions`（默认 `127.0.0.1:8100`），不注册设备 |
-| `cli_to_api/antigravity_cli_api/` | 本地 OpenAI 兼容网关（**不是**端侧 agent 壳） | 纯 Python 实现 Antigravity OAuth 与 `POST /v1/chat/completions`（默认 `127.0.0.1:8110`），不注册设备 |
+| `cli_to_api/antigravity_cli_api/` | 本地 OpenAI 兼容网关（**不是**端侧 agent 壳） | Python 调用官方 `agy`，复用其本地用户登录数据并提供 `POST /v1/chat/completions`（默认 `127.0.0.1:8110`），不注册设备 |
 
 > 安卓两形态（A 本机 App / B 宿主 ADB）都以 Android 类 endpoint 注册，服务端统一调度。
 > **当前仓库无 `mac/`、`extension/` 目录**（旧文档里的路径已废弃；浏览器主线为 `browser_MCP*`）。

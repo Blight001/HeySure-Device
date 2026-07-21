@@ -1,1 +1,5 @@
+# Shell/Python must stay LF: Windows CRLF breaks Linux shebang as "bash\r".
 *.sh text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.bat text eol=crlf

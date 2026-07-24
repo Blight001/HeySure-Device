@@ -351,9 +351,7 @@ class ConsoleActivity : AppCompatActivity() {
         return when {
             clean.isEmpty() || clean == "index.html" -> "web/index.html"
             clean == "game" || clean == "game/" || clean == "game/index.html" -> "web/game/index.html"
-            clean == "extension-test" || clean == "extension-test/" -> "web/extension-test/index.html"
-            clean.startsWith("assets/") || clean.startsWith("game/") || clean.startsWith("extension-test/") ->
-                "web/$clean"
+            clean.startsWith("assets/") || clean.startsWith("game/") -> "web/$clean"
             else -> null
         }
     }

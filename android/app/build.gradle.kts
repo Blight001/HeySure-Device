@@ -34,7 +34,6 @@ val buildHeySureWeb by tasks.registering(Exec::class) {
         webProjectDir.resolve("vite.config.ts"),
         fileTree(webProjectDir.resolve("src")),
         fileTree(webProjectDir.resolve("game")),
-        fileTree(webProjectDir.resolve("extension-test")),
     )
     outputs.dir(webDistDir)
 }

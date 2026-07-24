@@ -144,10 +144,59 @@ class MainActivity : AppCompatActivity() {
         makeAvatarCircular()
         renderMcpInfo()
         updateSessionUi()
-        if (settings.isLoggedIn) {
-            AgentService.start(this)
-            binding.root.postDelayed({ maybeShowPermissionDialog() }, 300)
+        // Restore cached session (token or silent re-login) so closing the app
+        // does not force the user through the login form again.
+        restoreSessionIfNeeded()
+    }
+
+    /**
+     * Prefer the cached JWT when still valid; otherwise silent-login with the
+     * saved account/password (remember-login on by default).
+     */
+    private fun restoreSessionIfNeeded() {
+        if (!settings.isLoggedIn && !settings.canSilentLogin) return
+        val hadSession = settings.isLoggedIn
+        if (hadSession) {
+            // Optimistic UI with cached token; refresh/repair in background.
+            onSessionReady(fromCache = true)
         }
+        lifecycleScope.launch {
+            val restored = withContext(Dispatchers.IO) {
+                runCatching { ServerApi.restoreSession(settings) }.getOrNull()
+            }
+            if (restored == null) {
+                if (!settings.isLoggedIn) {
+                    updateSessionUi()
+                    appendLog("登录缓存不可用，请重新登录")
+                }
+                return@launch
+            }
+            val tokenChanged = restored.accessToken != settings.authToken
+            if (tokenChanged || !settings.isLoggedIn) {
+                settings.applyLogin(
+                    serverUrl = settings.serverUrl.ifBlank { binding.serverUrlInput.text.toString() },
+                    result = restored,
+                    account = settings.userAccount,
+                    password = settings.userPassword,
+                    remember = settings.rememberLogin || settings.canSilentLogin,
+                )
+                if (!hadSession || tokenChanged) {
+                    appendLog("已用缓存凭据恢复登录：${restored.userName}")
+                }
+                onSessionReady(fromCache = false)
+            }
+        }
+    }
+
+    private fun onSessionReady(fromCache: Boolean) {
+        updateSessionUi()
+        if (!settings.isLoggedIn) return
+        AgentService.start(this)
+        binding.root.postDelayed({
+            attachAgentServiceListeners()
+            if (!fromCache) AgentService.instance?.reconnect()
+            maybeShowPermissionDialog()
+        }, 300)
     }
 
     override fun onResume() {
@@ -175,26 +224,15 @@ class MainActivity : AppCompatActivity() {
             }
             binding.loginButton.isEnabled = true
             result.onSuccess { res ->
-                settings.serverUrl = ServerApi.normalizeBaseUrl(serverUrl)
-                settings.agentSocketUrl = res.agentSocketUrl
-                settings.authToken = res.accessToken
-                settings.userId = res.userId
-                settings.userName = res.userName
-                settings.userAvatar = res.userAvatar
-                settings.userAccount = account
-                settings.rememberLogin = remember
-                settings.userPassword = if (remember) password else ""
-                if (settings.agentName.isBlank()) {
-                    settings.agentName = "安卓设备"
-                }
+                settings.applyLogin(
+                    serverUrl = serverUrl,
+                    result = res,
+                    account = account,
+                    password = password,
+                    remember = remember,
+                )
                 appendLog("登录成功：${res.userName}")
-                updateSessionUi()
-                AgentService.start(this@MainActivity)
-                binding.root.postDelayed({
-                    attachAgentServiceListeners()
-                    AgentService.instance?.reconnect()
-                    maybeShowPermissionDialog()
-                }, 300)
+                onSessionReady(fromCache = false)
             }.onFailure { e ->
                 appendLog("登录失败：${e.message}")
                 showLoginError(e.message ?: "登录失败")

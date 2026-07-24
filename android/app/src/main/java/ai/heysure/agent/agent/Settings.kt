@@ -8,6 +8,10 @@ import java.util.UUID
  * Thin SharedPreferences wrapper — the Android analogue of the desktop shell's
  * `store.ts`. Holds the server URL, auth token, and the stable device id the
  * server keys dispatch on.
+ *
+ * Login is cached across process death: token + socket URL keep [isLoggedIn]
+ * true after the app is closed; with [rememberLogin] the account/password are
+ * also kept so token expiry can silent-relogin (same idea as Windows shell).
  */
 class Settings(context: Context) {
     private val prefs = context.applicationContext
@@ -51,8 +55,9 @@ class Settings(context: Context) {
         get() = prefs.getString(KEY_USER_PASSWORD, "") ?: ""
         set(value) = prefs.edit().putString(KEY_USER_PASSWORD, value).apply()
 
+    /** Default true so cold starts keep account/password for silent re-login. */
     var rememberLogin: Boolean
-        get() = prefs.getBoolean(KEY_REMEMBER_LOGIN, false)
+        get() = prefs.getBoolean(KEY_REMEMBER_LOGIN, true)
         set(value) = prefs.edit().putBoolean(KEY_REMEMBER_LOGIN, value).apply()
 
     /** "保持常亮"模式：用 WakeLock 让 CPU/屏幕保持唤醒，放着不动也尽量可控。 */
@@ -100,14 +105,60 @@ class Settings(context: Context) {
 
     val isLoggedIn: Boolean get() = authToken.isNotBlank() && agentSocketUrl.isNotBlank()
 
+    /** Enough saved fields to POST /api/auth/login without the user re-typing. */
+    val canSilentLogin: Boolean
+        get() = rememberLogin &&
+            serverUrl.isNotBlank() &&
+            userAccount.isNotBlank() &&
+            userPassword.isNotBlank()
+
+    /**
+     * Persist a full login result atomically (commit) so a process kill right after
+     * login still restores the session on next cold start.
+     */
+    fun applyLogin(
+        serverUrl: String,
+        result: ServerApi.LoginResult,
+        account: String,
+        password: String,
+        remember: Boolean,
+    ) {
+        val editor = prefs.edit()
+            .putString(KEY_SERVER_URL, ServerApi.normalizeBaseUrl(serverUrl))
+            .putString(KEY_AGENT_SOCKET_URL, result.agentSocketUrl)
+            .putString(KEY_AUTH_TOKEN, result.accessToken)
+            .putInt(KEY_USER_ID, result.userId)
+            .putString(KEY_USER_NAME, result.userName)
+            .putString(KEY_USER_AVATAR, result.userAvatar)
+            .putString(KEY_USER_ACCOUNT, account)
+            .putBoolean(KEY_REMEMBER_LOGIN, remember)
+        if (remember) {
+            editor.putString(KEY_USER_PASSWORD, password)
+        } else {
+            editor.remove(KEY_USER_PASSWORD)
+        }
+        if ((prefs.getString(KEY_AGENT_NAME, "") ?: "").isBlank()) {
+            editor.putString(KEY_AGENT_NAME, "安卓设备")
+        }
+        editor.commit()
+    }
+
+    /**
+     * Drop the live session only. Account/password stay when [rememberLogin] is on
+     * so the next launch can silent-relogin without re-typing.
+     */
     fun clearSession() {
-        prefs.edit()
+        val editor = prefs.edit()
             .remove(KEY_AUTH_TOKEN)
             .remove(KEY_AGENT_SOCKET_URL)
             .remove(KEY_USER_ID)
             .remove(KEY_USER_NAME)
             .remove(KEY_USER_AVATAR)
-            .apply()
+        if (!rememberLogin) {
+            editor.remove(KEY_USER_ACCOUNT)
+            editor.remove(KEY_USER_PASSWORD)
+        }
+        editor.commit()
     }
 
     private companion object {

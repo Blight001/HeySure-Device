@@ -40,12 +40,15 @@ class SocketAgent(
     private val onStatus: (DeviceStatus, String?) -> Unit,
     private val onLog: (String) -> Unit,
     private val onRcSignal: (event: String, data: JSONObject) -> Unit = { _, _ -> },
+    /** Fired once per auth rejection so the host can silent-relogin (Windows parity). */
+    private val onAuthFailure: (reason: String) -> Unit = {},
 ) {
     private var socket: Socket? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val mainHandler = Handler(Looper.getMainLooper())
     @Volatile private var wantConnected = false
     private var healthWatchRunning = false
+    @Volatile private var reauthRequested = false
 
     // Bounded, access-ordered LRU of task ids we've already accepted. A plain
     // growing set leaked memory over a long-lived session; this caps it while
@@ -172,6 +175,7 @@ class SocketAgent(
             // Health watch keeps polling; no permanent stop.
         }
         s.on("device:registered") { _ ->
+            reauthRequested = false
             onStatus(DeviceStatus.REGISTERED, null)
             onLog("注册成功")
         }
@@ -191,7 +195,13 @@ class SocketAgent(
             val reason = (args.firstOrNull() as? JSONObject)?.optString("reason") ?: "注册被拒绝"
             onStatus(DeviceStatus.ERROR, reason)
             onLog("注册失败: $reason（保持重连轮询）")
-            // Do not stop the health watch — server may recover after redeploy.
+            // Auth failures: ask host to silent-relogin once. Health watch stays up
+            // so a recovered token can re-register without user interaction.
+            val isAuthFailure = AUTH_FAILURE_RE.containsMatchIn(reason)
+            if (isAuthFailure && !reauthRequested) {
+                reauthRequested = true
+                onAuthFailure(reason)
+            }
         }
         s.on("task:dispatch") { args ->
             val task = args.firstOrNull() as? JSONObject ?: return@on
@@ -295,5 +305,6 @@ class SocketAgent(
         const val MAX_SEEN_TASKS = 500
         const val HEALTH_WATCH_MS = 5000L
         val RC_SIGNAL_EVENTS = listOf("rc:start", "rc:answer", "rc:ice", "rc:stop")
+        val AUTH_FAILURE_RE = Regex("token|logged in|登录|未登录|授权|unauthor", RegexOption.IGNORE_CASE)
     }
 }

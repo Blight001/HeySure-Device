@@ -31,6 +31,10 @@ import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
 
@@ -62,28 +66,94 @@ class ConsoleActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         settings = Settings(this)
-        if (!settings.isLoggedIn) {
-            openAgentSettings(closeConsole = true)
-            return
-        }
-
         window.statusBarColor = Color.rgb(9, 9, 11)
         window.navigationBarColor = Color.rgb(9, 9, 11)
-        createShell()
-        AgentService.start(this)
-        loadConsole(force = true)
+
+        // Cold start: restore cached session (or silent re-login) before deciding
+        // whether the console or the native login form should be shown.
+        if (settings.isLoggedIn) {
+            createShell()
+            AgentService.start(this)
+            loadConsole(force = true)
+            refreshSessionInBackground()
+            return
+        }
+        if (settings.canSilentLogin) {
+            // Show a minimal loading shell while credentials are re-exchanged.
+            createShell()
+            showLoading(true, "正在恢复登录…")
+            lifecycleScope.launch {
+                val ok = restoreSessionBlocking()
+                if (!ok || !settings.isLoggedIn) {
+                    openAgentSettings(closeConsole = true)
+                    return@launch
+                }
+                AgentService.start(this@ConsoleActivity)
+                loadConsole(force = true)
+            }
+            return
+        }
+        openAgentSettings(closeConsole = true)
     }
 
     override fun onResume() {
         super.onResume()
-        if (!::webView.isInitialized) return
+        if (!::webView.isInitialized) {
+            // Still waiting on silent login, or we already handed off to MainActivity.
+            return
+        }
         if (!settings.isLoggedIn) {
+            if (settings.canSilentLogin) {
+                lifecycleScope.launch {
+                    val ok = restoreSessionBlocking()
+                    if (!ok || !settings.isLoggedIn) {
+                        openAgentSettings(closeConsole = true)
+                        return@launch
+                    }
+                    AgentService.start(this@ConsoleActivity)
+                    loadConsole(force = true)
+                    webView.onResume()
+                }
+                return
+            }
             openAgentSettings(closeConsole = true)
             return
         }
         AgentService.start(this)
         loadConsole(force = false)
         webView.onResume()
+    }
+
+    /** Best-effort token refresh so the embedded web console keeps a live JWT. */
+    private fun refreshSessionInBackground() {
+        lifecycleScope.launch {
+            val previousToken = settings.authToken
+            val ok = restoreSessionBlocking()
+            if (!ok || !settings.isLoggedIn) {
+                if (!settings.isLoggedIn) openAgentSettings(closeConsole = true)
+                return@launch
+            }
+            if (::webView.isInitialized && settings.authToken != previousToken) {
+                // Token was refreshed — reload so injectNativeSession picks it up.
+                loadConsole(force = true)
+            }
+        }
+    }
+
+    private suspend fun restoreSessionBlocking(): Boolean {
+        val restored = withContext(Dispatchers.IO) {
+            runCatching { ServerApi.restoreSession(settings) }.getOrNull()
+        } ?: return false
+        if (restored.accessToken != settings.authToken || !settings.isLoggedIn) {
+            settings.applyLogin(
+                serverUrl = settings.serverUrl,
+                result = restored,
+                account = settings.userAccount,
+                password = settings.userPassword,
+                remember = settings.rememberLogin || settings.canSilentLogin,
+            )
+        }
+        return settings.isLoggedIn
     }
 
     override fun onPause() {

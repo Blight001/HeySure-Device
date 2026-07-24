@@ -18,7 +18,7 @@
     <string name="logout">退出登录</string>
     <string name="stop">停止 Agent</string>
     <string name="open_console">打开数字社会控制台</string>
-    <string name="remember_login">保存账号和密码</string>
+    <string name="remember_login">记住登录（关闭应用后无需重新登录）</string>
     <string name="back">返回</string>
 
     <string name="enable_accessibility">开启无障碍（点击/滑动）</string>

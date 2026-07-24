@@ -19,6 +19,12 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.provider.Settings as AndroidSettings
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Foreground service that keeps the Socket.IO connection + MediaProjection grant
@@ -32,6 +38,8 @@ class AgentService : Service() {
     private var agent: SocketAgent? = null
     private var remoteControl: RemoteControlManager? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    @Volatile private var recoveringAuth = false
 
     var lastStatus: DeviceStatus = DeviceStatus.DISCONNECTED
         private set
@@ -204,7 +212,43 @@ class AgentService : Service() {
             },
             onLog = { msg -> logListener?.invoke(msg) },
             onRcSignal = { event, data -> rc.onSignal(event, data) },
+            onAuthFailure = { reason -> recoverAuth(reason) },
         ).also { it.connect() }
+    }
+
+    /**
+     * Silent re-login with saved credentials when the server rejects our token.
+     * Mirrors Windows `recoverAuth`: one attempt, then rebuild the socket agent.
+     */
+    private fun recoverAuth(reason: String) {
+        if (recoveringAuth) return
+        if (!settings.canSilentLogin) {
+            logListener?.invoke("登录态失效（$reason），请手动重新登录")
+            return
+        }
+        recoveringAuth = true
+        logListener?.invoke("登录态失效，正在用保存的凭据重新登录…")
+        serviceScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    ServerApi.login(settings.serverUrl, settings.userAccount, settings.userPassword)
+                }
+            }
+            recoveringAuth = false
+            result.onSuccess { res ->
+                settings.applyLogin(
+                    serverUrl = settings.serverUrl,
+                    result = res,
+                    account = settings.userAccount,
+                    password = settings.userPassword,
+                    remember = true,
+                )
+                logListener?.invoke("已自动恢复登录")
+                reconnect()
+            }.onFailure { e ->
+                logListener?.invoke("自动重新登录失败: ${e.message ?: e}")
+            }
+        }
     }
 
     fun reconnect() {
@@ -224,6 +268,7 @@ class AgentService : Service() {
     }
 
     override fun onDestroy() {
+        serviceScope.cancel()
         stopAgent()
         // Hand the screen back to the system; the persisted flag re-dims on next start.
         restoreBrightness()

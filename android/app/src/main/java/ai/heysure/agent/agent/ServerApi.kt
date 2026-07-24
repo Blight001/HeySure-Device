@@ -48,6 +48,75 @@ object ServerApi {
         )
     }
 
+    /** Result of probing GET /api/auth/me. */
+    enum class TokenProbe { VALID, UNAUTHORIZED, UNREACHABLE }
+
+    /**
+     * Probe whether [token] is still accepted.
+     * - [TokenProbe.VALID] — server accepted it
+     * - [TokenProbe.UNAUTHORIZED] — 401/403, token is dead
+     * - [TokenProbe.UNREACHABLE] — network/server error; keep the cached session
+     */
+    fun probeToken(serverUrl: String, token: String): TokenProbe {
+        if (serverUrl.isBlank() || token.isBlank()) return TokenProbe.UNAUTHORIZED
+        return try {
+            val base = normalizeBaseUrl(serverUrl)
+            val conn = (URL("$base/api/auth/me").openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 10_000
+                readTimeout = 15_000
+                setRequestProperty("Authorization", "Bearer $token")
+            }
+            try {
+                when (conn.responseCode) {
+                    in 200..299 -> TokenProbe.VALID
+                    401, 403 -> TokenProbe.UNAUTHORIZED
+                    else -> TokenProbe.UNREACHABLE
+                }
+            } finally {
+                conn.disconnect()
+            }
+        } catch (_: Exception) {
+            TokenProbe.UNREACHABLE
+        }
+    }
+
+    /**
+     * Restore a session from cache when possible.
+     * Prefer a still-valid JWT; on 401 silent-relogin with saved credentials;
+     * on network errors keep the existing token so offline reopen still works.
+     *
+     * Returns null only when there is no usable session and no way to re-login.
+     */
+    @Throws(Exception::class)
+    fun restoreSession(settings: Settings): LoginResult? {
+        if (settings.isLoggedIn) {
+            when (probeToken(settings.serverUrl, settings.authToken)) {
+                TokenProbe.VALID, TokenProbe.UNREACHABLE -> {
+                    // Valid, or offline — keep cached token so the app stays "logged in".
+                    return LoginResult(
+                        accessToken = settings.authToken,
+                        agentSocketUrl = settings.agentSocketUrl,
+                        userId = settings.userId,
+                        userName = settings.userName,
+                        userAvatar = settings.userAvatar,
+                    )
+                }
+                TokenProbe.UNAUTHORIZED -> {
+                    // fall through to silent re-login
+                }
+            }
+        }
+        if (!settings.canSilentLogin) {
+            if (settings.isLoggedIn) {
+                // Dead token and no password on disk — only then drop the session.
+                settings.clearSession()
+            }
+            return null
+        }
+        return login(settings.serverUrl, settings.userAccount, settings.userPassword)
+    }
+
     /** One ICE server descriptor (STUN or TURN) as delivered by the server. */
     data class IceServerConfig(
         val urls: String,

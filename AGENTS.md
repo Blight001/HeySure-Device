@@ -24,6 +24,7 @@
 | `android/android-adb/` | 宿主电脑 Node.js（方案 B） | 经 ADB 控制手机；息屏/锁屏下也能注入 |
 | `cli_to_api/grok_cli_api/` | 本地 OpenAI 兼容网关（**不是**端侧 agent 壳） | 包装本机 grok CLI 为 `POST /v1/chat/completions`（默认 `127.0.0.1:8100`），不注册设备 |
 | `cli_to_api/antigravity_cli_api/` | 本地 OpenAI 兼容网关（**不是**端侧 agent 壳） | Python 调用官方 `agy`，复用其本地用户登录数据并提供 `POST /v1/chat/completions`（默认 `127.0.0.1:8110`），不注册设备 |
+| `cli_to_api/codex_cli_api/` | 本地 OpenAI 兼容网关（**不是**端侧 agent 壳） | 包装本机 Codex CLI，使用 `codex exec/resume --json` 提供 `POST /v1/chat/completions`（默认 `127.0.0.1:8120`），不注册设备 |
 
 > 安卓两形态（A 本机 App / B 宿主 ADB）都以 Android 类 endpoint 注册，服务端统一调度。
 > **当前仓库无 `mac/`、`extension/` 目录**（旧文档里的路径已废弃；浏览器主线为 `browser_MCP*`）。
@@ -105,6 +106,7 @@ device/browser_MCP/
 | 远程连接（画面 `rc:*` / 命令行 `rt:*`） | 设备端 Windows：`remote-control.ts` + `rc.rs` / `remote-terminal.ts` + `pty.rs`；Linux：`agent/remote_terminal.py`；服务端 `connector_runtime/dispatch/remote_control.py` / `remote_terminal.py`；web `useRemoteControl.ts` / `useRemoteTerminal.ts`；标准见 [`read.md`](read.md) |
 | 本地 grok API 网关 | `device/cli_to_api/grok_cli_api/` |
 | 本地 Antigravity API 网关 | `device/cli_to_api/antigravity_cli_api/` |
+| 本地 Codex API 网关 | `device/cli_to_api/codex_cli_api/` |
 | 服务端工具路由 | `server/main/mcp_runtime/mcp/registry.py` + 设备权限策略 |
 
 ## 常见问题排查

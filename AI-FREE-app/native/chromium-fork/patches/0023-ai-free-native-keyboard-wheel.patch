@@ -1,0 +1,264 @@
+diff --git a/chrome/browser/ui/views/frame/ai_free_page_automation.cc b/chrome/browser/ui/views/frame/ai_free_page_automation.cc
+index b0f202fe..92dd8507 100644
+--- a/chrome/browser/ui/views/frame/ai_free_page_automation.cc
++++ b/chrome/browser/ui/views/frame/ai_free_page_automation.cc
+@@ -14,12 +14,15 @@
+ #include "base/strings/strcat.h"
+ #include "base/strings/string_number_conversions.h"
+ #include "base/strings/utf_string_conversions.h"
++#include "base/task/sequenced_task_runner.h"
+ #include "base/time/time.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/ui/browser.h"
+ #include "chrome/browser/ui/views/frame/ai_free_automation_pointer.h"
+ #include "chrome/common/chrome_isolated_world_ids.h"
++#include "components/input/native_web_keyboard_event.h"
+ #include "components/viz/common/frame_sinks/copy_output_result.h"
++#include "content/browser/renderer_host/render_widget_host_impl.h"
+ #include "content/public/browser/render_frame_host.h"
+ #include "content/public/browser/render_widget_host.h"
+ #include "content/public/browser/render_widget_host_view.h"
+@@ -29,9 +32,13 @@
+ #include "net/cookies/cookie_options.h"
+ #include "net/cookies/cookie_partition_key_collection.h"
+ #include "services/network/public/mojom/cookie_manager.mojom.h"
++#include "third_party/blink/public/common/input/web_mouse_wheel_event.h"
++#include "ui/events/event_utils.h"
++#include "ui/events/keycodes/dom/keycode_converter.h"
+ #include "ui/gfx/codec/png_codec.h"
+ #include "ui/gfx/geometry/point_f.h"
+ #include "ui/gfx/geometry/rect.h"
++#include "ui/gfx/range/range.h"
+ #include "url/origin.h"
+ 
+ namespace {
+@@ -76,17 +83,16 @@ std::string ObserveScript(const base::DictValue& command) {
+ }
+ 
+ std::string ActionScript(const base::DictValue& command) {
+-  return base::StrCat({R"JS((async () => { try {
++  return base::StrCat({R"JS((() => { try {
+     const a=)JS",
+                        CommandJson(command),
+                        R"JS(; const action=String(a.action||'');
+     const roots=()=>{const out=[document];for(let i=0;i<out.length;i++){for(const e of out[i].querySelectorAll('*')){if(e.shadowRoot)out.push(e.shadowRoot);if(e.tagName==='IFRAME'){try{if(e.contentDocument)out.push(e.contentDocument);}catch(_){}}}}return out;};
+     const find=()=>{for(const root of roots()){if(a.selector){try{const e=root.querySelector(a.selector);if(e)return e;}catch(_){}}const needle=String(a.text||'').trim();if(needle&&action!=='type'){for(const e of root.querySelectorAll('button,a,input,textarea,select,[role="button"],[contenteditable="true"]')){if(String(e.innerText||e.value||e.getAttribute('aria-label')||'').trim().includes(needle))return e;}}}return action==='press_key'?document.activeElement:null;};
+-    if(action==='wait'){const end=Date.now()+Math.max(100,Math.min(120000,Number(a.timeoutMs)||10000));while(Date.now()<end){if(find())return {success:true,action,found:true};await new Promise(r=>setTimeout(r,100));}return {success:false,action,error:'等待元素超时',errorCode:'WAIT_TIMEOUT'};}
+-    if(action==='scroll'){const amount=Number(a.amount)||600;const sign=String(a.direction||'down')==='up'?-1:1;scrollBy({top:amount*sign,behavior:'instant'});return {success:true,action,scrollX,scrollY};}
++    if(action==='wait')return find()?{success:true,action,found:true}:{success:false,action,error:'等待元素中',errorCode:'WAIT_PENDING'};
+     const el=find();if(!el)return {success:false,action,error:'未找到目标元素',errorCode:'ELEMENT_NOT_FOUND'};el.scrollIntoView({block:'center',inline:'center'});el.focus();
+-    if(action==='type'){const value=String(a.text||'');const proto=el instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;const setter=Object.getOwnPropertyDescriptor(proto,'value')?.set;if(setter)setter.call(el,value);else if(el.isContentEditable)el.textContent=value;else el.value=value;el.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:value}));el.dispatchEvent(new Event('change',{bubbles:true}));return {success:true,action,selector:a.selector||'',textLength:value.length};}
+-    if(action==='press_key'){const key=String(a.key||a.text||'Enter');el.dispatchEvent(new KeyboardEvent('keydown',{key,bubbles:true}));el.dispatchEvent(new KeyboardEvent('keyup',{key,bubbles:true}));return {success:true,action,key};}
++    if(action==='type'){if(typeof el.select==='function')el.select();return {success:true,action,selector:a.selector||'',nativeKeyboard:true};}
++    if(action==='press_key')return {success:true,action,key:String(a.key||a.text||'Enter'),nativeKeyboard:true};
+     const r=el.getBoundingClientRect();if(r.width<1||r.height<1)return {success:false,action,error:'目标元素不可见',errorCode:'ELEMENT_NOT_VISIBLE'};return {success:true,action,nativeInput:{x:r.left+r.width/2,y:r.top+r.height/2,viewportWidth:innerWidth,viewportHeight:innerHeight},selector:a.selector||''};
+   } catch(e) { return {success:false,error:String(e&&e.message||e),errorCode:'ACTION_FAILED'}; } })())JS"});
+ }
+@@ -119,6 +125,74 @@ void DispatchResolvedMouse(content::WebContents* contents,
+                               std::move(callback));
+ }
+ 
++input::NativeWebKeyboardEvent KeyboardEvent(blink::WebInputEvent::Type type,
++                                             int windows_key_code) {
++  input::NativeWebKeyboardEvent event(type, blink::WebInputEvent::kNoModifiers,
++                                      ui::EventTimeForNow());
++  event.windows_key_code = windows_key_code;
++  return event;
++}
++
++void DispatchText(content::RenderWidgetHost* widget, std::string_view text) {
++  content::RenderWidgetHostImpl::From(widget)->ImeCommitText(
++      base::UTF8ToUTF16(text), {}, gfx::Range::InvalidRange(), 0);
++}
++
++int KeyCode(std::string_view key) {
++  if (key == "Tab") return 0x09;
++  if (key == "Escape") return 0x1B;
++  if (key == "Backspace") return 0x08;
++  if (key == "ArrowLeft") return 0x25;
++  if (key == "ArrowUp") return 0x26;
++  if (key == "ArrowRight") return 0x27;
++  if (key == "ArrowDown") return 0x28;
++  return 0x0D;
++}
++
++bool DispatchKeyboard(content::WebContents* contents,
++                      std::string_view action,
++                      std::string_view value) {
++  content::RenderWidgetHost* widget =
++      contents->GetPrimaryMainFrame()->GetRenderWidgetHost();
++  if (!widget) return false;
++  widget->Focus();
++  if (action == "type") {
++    DispatchText(widget, value);
++    return true;
++  }
++  const int key_code = KeyCode(value);
++  input::NativeWebKeyboardEvent key_down =
++      KeyboardEvent(blink::WebInputEvent::Type::kRawKeyDown, key_code);
++  key_down.dom_key =
++      static_cast<int>(ui::KeycodeConverter::KeyStringToDomKey(value));
++  key_down.dom_code =
++      static_cast<int>(ui::KeycodeConverter::CodeStringToDomCode(value));
++  input::NativeWebKeyboardEvent key_up = key_down;
++  key_up.SetType(blink::WebInputEvent::Type::kKeyUp);
++  widget->ForwardKeyboardEvent(key_down);
++  widget->ForwardKeyboardEvent(key_up);
++  return true;
++}
++
++bool DispatchScroll(content::WebContents* contents,
++                    const base::DictValue& command) {
++  content::RenderWidgetHost* widget =
++      contents->GetPrimaryMainFrame()->GetRenderWidgetHost();
++  if (!widget || !widget->GetView()) return false;
++  const double amount = command.FindDouble("amount").value_or(600.0);
++  const bool up = command.FindString("direction") &&
++                  *command.FindString("direction") == "up";
++  blink::WebMouseWheelEvent event(blink::WebInputEvent::Type::kMouseWheel,
++                                  blink::WebInputEvent::kNoModifiers,
++                                  ui::EventTimeForNow());
++  event.delta_y = static_cast<float>(up ? amount : -amount);
++  event.wheel_ticks_y = up ? 1.0f : -1.0f;
++  event.delta_units = ui::ScrollGranularity::kScrollByPixel;
++  event.event_action = blink::WebMouseWheelEvent::EventAction::kScrollVertical;
++  widget->ForwardWheelEvent(event);
++  return true;
++}
++
+ void OnScriptResult(AiFreeAutomationSuccess success,
+                     AiFreeAutomationFailure failure,
+                     std::string error_code,
+@@ -146,6 +220,7 @@ void OnMouseDispatched(AiFreeAutomationSuccess success,
+ 
+ void OnActionResult(content::GlobalRenderFrameHostId frame_id,
+                     std::string action,
++                    std::string keyboard_value,
+                     AiFreeAutomationSuccess success,
+                     AiFreeAutomationFailure failure,
+                     base::Value value) {
+@@ -154,8 +229,10 @@ void OnActionResult(content::GlobalRenderFrameHostId frame_id,
+     return Fail(std::move(failure), "ACTION_RESULT_INVALID",
+                 "页面动作未返回对象");
+   }
++  const bool native_keyboard =
++      result->FindBool("nativeKeyboard").value_or(false);
+   if (!result->FindBool("success").value_or(false) ||
+-      !result->FindDict("nativeInput")) {
++      (!result->FindDict("nativeInput") && !native_keyboard)) {
+     return std::move(success).Run(result->Clone());
+   }
+   content::RenderFrameHost* frame = content::RenderFrameHost::FromID(frame_id);
+@@ -166,6 +243,16 @@ void OnActionResult(content::GlobalRenderFrameHostId frame_id,
+                 "Chromium 原生输入目标不可用");
+   }
+   base::DictValue response = result->Clone();
++  if (native_keyboard) {
++    response.Remove("nativeKeyboard");
++    if (!DispatchKeyboard(contents, action, keyboard_value)) {
++      return Fail(std::move(failure), "INPUT_TARGET_UNAVAILABLE",
++                  "Chromium 原生键盘输入目标不可用");
++    }
++    response.Set("dispatched", true);
++    response.Set("inputMode", "chromium-native-keyboard");
++    return std::move(success).Run(std::move(response));
++  }
+   response.Remove("nativeInput");
+   DispatchResolvedMouse(
+       contents, *result, action == "upload_file" ? "click" : action,
+@@ -173,6 +260,62 @@ void OnActionResult(content::GlobalRenderFrameHostId frame_id,
+                      std::move(response)));
+ }
+ 
++void RunWaitAttempt(content::GlobalRenderFrameHostId frame_id,
++                    std::string script,
++                    base::TimeTicks deadline,
++                    AiFreeAutomationSuccess success,
++                    AiFreeAutomationFailure failure);
++
++void OnWaitResult(content::GlobalRenderFrameHostId frame_id,
++                  std::string script,
++                  base::TimeTicks deadline,
++                  AiFreeAutomationSuccess success,
++                  AiFreeAutomationFailure failure,
++                  base::Value value) {
++  const base::DictValue* result = value.GetIfDict();
++  if (!result) {
++    return Fail(std::move(failure), "ACTION_RESULT_INVALID",
++                "等待动作未返回对象");
++  }
++  if (result->FindBool("success").value_or(false)) {
++    return std::move(success).Run(result->Clone());
++  }
++  const std::string* error_code = result->FindString("errorCode");
++  if (!error_code || *error_code != "WAIT_PENDING") {
++    return std::move(success).Run(result->Clone());
++  }
++  if (base::TimeTicks::Now() >= deadline) {
++    base::DictValue response = result->Clone();
++    response.Set("error", "等待元素超时");
++    response.Set("errorCode", "WAIT_TIMEOUT");
++    return std::move(success).Run(std::move(response));
++  }
++  base::SequencedTaskRunner::GetCurrentDefault()->PostDelayedTask(
++      FROM_HERE,
++      base::BindOnce(&RunWaitAttempt, frame_id, std::move(script), deadline,
++                     std::move(success), std::move(failure)),
++      base::Milliseconds(100));
++}
++
++void RunWaitAttempt(content::GlobalRenderFrameHostId frame_id,
++                    std::string script,
++                    base::TimeTicks deadline,
++                    AiFreeAutomationSuccess success,
++                    AiFreeAutomationFailure failure) {
++  content::RenderFrameHost* frame = content::RenderFrameHost::FromID(frame_id);
++  content::WebContents* contents =
++      frame ? content::WebContents::FromRenderFrameHost(frame) : nullptr;
++  if (!contents) {
++    return Fail(std::move(failure), "INPUT_TARGET_UNAVAILABLE",
++                "等待页面目标不可用");
++  }
++  std::string execution_script = script;
++  auto callback =
++      base::BindOnce(&OnWaitResult, frame_id, std::move(script), deadline,
++                     std::move(success), std::move(failure));
++  ExecuteIsolated(contents, std::move(execution_script), std::move(callback));
++}
++
+ base::DictValue CookieValue(const net::CanonicalCookie& cookie) {
+   base::DictValue value;
+   value.Set("name", cookie.Name());
+@@ -309,10 +452,32 @@ bool HandleAiFreePageAutomationCommand(Browser* browser,
+            "不支持的 Chromium 页面动作");
+       return true;
+     }
++    if (action == "scroll") {
++      base::DictValue result;
++      result.Set("success", DispatchScroll(web_contents, command));
++      result.Set("action", action);
++      result.Set("inputMode", "chromium-native-wheel");
++      std::move(success).Run(std::move(result));
++      return true;
++    }
+     const content::GlobalRenderFrameHostId frame_id =
+         web_contents->GetPrimaryMainFrame()->GetGlobalId();
++    if (action == "wait") {
++      const int timeout_ms =
++          std::clamp(command.FindInt("timeoutMs").value_or(10000), 100,
++                     120000);
++      RunWaitAttempt(frame_id, ActionScript(command),
++                     base::TimeTicks::Now() + base::Milliseconds(timeout_ms),
++                     std::move(success), std::move(failure));
++      return true;
++    }
++    const std::string* keyboard_input =
++        command.FindString(action == "type" ? "text" : "key");
++    const std::string keyboard_value =
++        keyboard_input ? *keyboard_input : (action == "type" ? "" : "Enter");
+     ExecuteIsolated(web_contents, ActionScript(command),
+                     base::BindOnce(&OnActionResult, frame_id, action,
++                                   keyboard_value,
+                                    std::move(success), std::move(failure)));
+     return true;
+   }

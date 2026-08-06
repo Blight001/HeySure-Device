@@ -1,0 +1,73 @@
+From 7d521586105317359771172dcbe551c33c07d580 Mon Sep 17 00:00:00 2001
+From: AI-FREE Build <build@ai-free.local>
+Date: Tue, 14 Jul 2026 16:00:00 +0800
+Subject: [PATCH] Apply the per-profile timezone in Blink renderers
+
+---
+ chrome/browser/chrome_content_browser_client.cc      |  1 +
+ .../blink/renderer/core/timezone/timezone_controller.cc | 23 +++++++++++++++++++++++
+ 2 files changed, 24 insertions(+)
+
+diff --git a/chrome/browser/chrome_content_browser_client.cc b/chrome/browser/chrome_content_browser_client.cc
+index edab63d18ffd0..51d8ed8b4d327 100644
+--- a/chrome/browser/chrome_content_browser_client.cc
++++ b/chrome/browser/chrome_content_browser_client.cc
+@@ -2870,6 +2870,7 @@ void ChromeContentBrowserClient::AppendExtraCommandLineSwitches(
+   static const char* const kCommonSwitchNames[] = {
+       embedder_support::kUserAgent,
+       switches::kUserDataDir,  // Make logs go to the right file.
++      "hs-timezone-id",
+   };
+   command_line->CopySwitchesFrom(browser_command_line, kCommonSwitchNames);
+ 
+
+diff --git a/third_party/blink/renderer/core/timezone/timezone_controller.cc b/third_party/blink/renderer/core/timezone/timezone_controller.cc
+index 48eb8d2fbdcf5..184ab5c4ea111 100644
+--- a/third_party/blink/renderer/core/timezone/timezone_controller.cc
++++ b/third_party/blink/renderer/core/timezone/timezone_controller.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "third_party/blink/renderer/core/timezone/timezone_controller.h"
+ 
++#include "base/command_line.h"
++#include "base/containers/span.h"
+ #include "base/feature_list.h"
+ #include "mojo/public/cpp/bindings/pending_remote.h"
+ #include "mojo/public/cpp/bindings/remote.h"
+@@ -36,6 +38,11 @@ namespace {
+ // no later than January 2025.
+ BASE_FEATURE(kLazyBlinkTimezoneInit, base::FEATURE_DISABLED_BY_DEFAULT);
+ 
++// The command-line override belongs to the renderer process and intentionally
++// lives until process exit. Releasing this handle would restore the host time
++// zone and make newly created pages disagree with the selected proxy region.
++TimeZoneController::TimeZoneOverride* g_command_line_timezone_override = nullptr;
++
+ // Notify V8 that the date/time configuration of the system might have changed.
+ void NotifyTimezoneChangeToV8(v8::Isolate* isolate) {
+   DCHECK(isolate);
+@@ -109,6 +116,22 @@ void TimeZoneController::Init() {
+   Platform::Current()->GetBrowserInterfaceBroker()->GetInterface(
+       monitor.BindNewPipeAndPassReceiver());
+   monitor->AddClient(instance().receiver_.BindNewPipeAndPassRemote());
++
++  const std::string timezone_id =
++      base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
++          "hs-timezone-id");
++  if (!timezone_id.empty() && !g_command_line_timezone_override) {
++    auto result = SetTimeZoneOverride(
++        String::FromUtf8(base::as_byte_span(timezone_id)));
++    if (result.status == TimeZoneOverrideStatus::kSuccess && result.handle) {
++      // Keep ownership for the renderer lifetime. The OS time-zone monitor is
++      // still connected, but TimeZoneController ignores host updates while an
++      // override is active.
++      g_command_line_timezone_override = result.handle.release();
++    } else if (result.status == TimeZoneOverrideStatus::kInvalidTimezone) {
++      LOG(WARNING) << "Ignoring invalid AI-FREE timezone: " << timezone_id;
++    }
++  }
+ }
+ 
+ // static
+-- 
+2.54.0.windows.1

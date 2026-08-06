@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "allowJs": false,
+    "checkJs": false,
+    "target": "es2022",
+    "module": "esnext",
+    "rootDir": "src",
+    "outDir": ".generated/app/src",
+    "skipLibCheck": true,
+    "strict": false,
+    "noEmitOnError": true
+  },
+  "include": [
+    "src/app/renderer/**/*.ts",
+    "src/app/sidebar/**/*.ts"
+  ],
+  "exclude": ["src/assets", "node_modules", "appbuild", ".generated"]
+}

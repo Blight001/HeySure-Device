@@ -1,0 +1,19 @@
+{
+  "name": "heysure-browser-windows-native-extension",
+  "version": "0.1.0",
+  "description": "HeySure browser MCP: DOM perception in Chrome, native input through the Windows device",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "node build.js",
+    "dev": "node build.js --watch"
+  },
+  "dependencies": {
+    "socket.io-client": "^4.7.5"
+  },
+  "devDependencies": {
+    "esbuild": "^0.20.2",
+    "typescript": "^5.4.5"
+  }
+}

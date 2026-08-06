@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "allowJs": false,
+    "checkJs": false,
+    "target": "es2022",
+    "module": "commonjs",
+    "rootDir": "src",
+    "outDir": ".generated/app/src",
+    "skipLibCheck": true,
+    "strict": false,
+    "noEmitOnError": true
+  },
+  "include": [
+    "src/app/main/**/*.ts",
+    "src/app/preload/**/*.ts",
+    "src/app/contracts/**/*.ts",
+    "src/app/shared/**/*.ts"
+  ],
+  "exclude": ["src/assets", "node_modules", "appbuild", ".generated"]
+}

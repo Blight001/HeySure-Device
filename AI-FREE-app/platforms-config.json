@@ -1,0 +1,35 @@
+{
+  "accountService": {
+    "url": "http://heysure.xyz:58111/api/account",
+    "urls": [
+      "http://146.196.80.203:58111/api/account",
+      "http://49.234.181.190:58111/api/account"
+    ],
+    "timeoutSec": 8
+  },
+  "packagedExtensions": [],
+  "platforms": {
+    "default": {
+      "name": "ai-free",
+      "appId": "com.ai-free.app",
+      "productName": "AI-FREE",
+      "icons": {
+        "installer": "src/assets/logo.ico",
+        "uninstaller": "src/assets/logo.ico",
+        "installerHeader": "src/assets/logo.ico",
+        "window": "src/assets/logo.ico"
+      }
+    }
+  },
+  "platformConfigs": {
+    "default": {
+      "targetUrl": "https://www.capcut.com/ai-creator/agent",
+      "tutorialUrl": "",
+      "allowedPlatforms": [
+        "AI-FREE"
+      ],
+      "systemProxyEnabled": true
+    }
+  },
+  "defaultPlatform": "default"
+}

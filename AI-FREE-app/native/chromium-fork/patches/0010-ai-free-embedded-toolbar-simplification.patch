@@ -1,0 +1,40 @@
+diff --git a/chrome/browser/ui/views/frame/browser_view.cc b/chrome/browser/ui/views/frame/browser_view.cc
+index 5a75ba47..19f7f5aa 100644
+--- a/chrome/browser/ui/views/frame/browser_view.cc
++++ b/chrome/browser/ui/views/frame/browser_view.cc
+@@ -2941,2 +2941,10 @@
+ bool BrowserView::IsToolbarVisible() const {
++  const base::CommandLine* command_line =
++      base::CommandLine::ForCurrentProcess();
++  if (command_line->GetSwitchValueASCII(switches::kHsEmbedMode) ==
++          "child-window" &&
++      command_line->HasSwitch(switches::kHsHideToolbar)) {
++    return false;
++  }
++
+ #if BUILDFLAG(IS_MAC)
+diff --git a/chrome/browser/ui/views/frame/horizontal_tab_strip_region_view.cc b/chrome/browser/ui/views/frame/horizontal_tab_strip_region_view.cc
+index 6b49de66..17cc38d0 100644
+--- a/chrome/browser/ui/views/frame/horizontal_tab_strip_region_view.cc
++++ b/chrome/browser/ui/views/frame/horizontal_tab_strip_region_view.cc
+@@ -7,3 +7,4 @@
++#include "base/command_line.h"
+ #include "base/feature_list.h"
+ #include "base/functional/bind.h"
+ #include "base/strings/utf_string_conversions.h"
+@@ -47,3 +48,4 @@
+ #include "chrome/common/buildflags.h"
+ #include "chrome/common/chrome_features.h"
++#include "chrome/common/chrome_switches.h"
+ #include "chrome/grit/generated_resources.h"
+@@ -125,2 +127,10 @@
+ bool ShouldShowNewTabButton(BrowserWindowInterface* browser) {
++  const base::CommandLine* command_line =
++      base::CommandLine::ForCurrentProcess();
++  if (command_line->GetSwitchValueASCII(switches::kHsEmbedMode) ==
++          "child-window" &&
++      command_line->HasSwitch(switches::kHsHideToolbar)) {
++    return false;
++  }
++
+   // `browser` can be null in tests and `app_controller` will be null if

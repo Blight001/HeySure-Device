@@ -1,0 +1,63 @@
+{
+  "manifest_version": 3,
+  "name": "HeySure Agent - Windows 原生浏览器",
+  "version": "0.1.0",
+  "description": "插件只读取 DOM 与元素坐标，所有浏览器交互通过 HeySure Windows 端注入真实鼠标键盘输入",
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "storage",
+    "scripting",
+    "notifications",
+    "contextMenus",
+    "alarms",
+    "clipboardWrite",
+    "debugger",
+    "cookies",
+    "downloads",
+    "webNavigation",
+    "offscreen",
+    "contentSettings"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["shadow-patch.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_about_blank": true,
+      "world": "MAIN"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": true,
+      "match_about_blank": true
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "HeySure Windows 原生浏览器",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["cursors/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

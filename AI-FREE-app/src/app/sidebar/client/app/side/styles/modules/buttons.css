@@ -1,0 +1,108 @@
+.btn-gray {
+  background-color: #ccc;
+  color: #333;
+}
+
+.btn-blue {
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--brand-grad);
+  color: #fff;
+}
+
+.btn-blue:hover:not(:disabled) {
+  background: var(--brand-grad-hover);
+}
+
+/* 表单行内的 .btn-blue（如「退出登录」）：.form-group button 会盖掉底色，
+   需提高优先级，否则白字落在浅底上不可见 */
+.form-group button.btn-blue {
+  border: 1px solid var(--brand-border);
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.form-group button.btn-blue:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--brand) 18%, transparent);
+}
+
+.main-button {
+  width: 100%;
+  padding: 12px;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+  border: none;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  margin-bottom: 10px;
+  color: #fff;
+  transition: filter 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.main-button:not(:disabled):hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+}
+
+.main-button:not(:disabled):active {
+  transform: translateY(0);
+}
+
+.btn-large-blue { background: var(--brand-grad); box-shadow: var(--brand-shadow); }
+.btn-large-purple { background: var(--brand-grad); box-shadow: var(--brand-shadow); }
+.btn-large-teal { background: linear-gradient(135deg, var(--teal), #34c5b6); box-shadow: 0 8px 20px rgba(23, 169, 159, 0.24); }
+.btn-large-yellow { background: #ffec99; color: #8a6d3b; }
+
+.wool-platform-buttons {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wool-platform-buttons .open-wool-platform-btn {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  height: auto;
+  padding-top: 7px;
+  padding-bottom: 7px;
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.wool-platform-remaining {
+  margin-left: 2px;
+  font-size: .5em;
+  font-weight: 400;
+  opacity: .82;
+}
+
+.main-button:disabled {
+  background-color: #ccc !important;
+  color: #999 !important;
+  cursor: not-allowed !important;
+  opacity: 0.6;
+}
+
+#VPN-switch[data-busy='1'] {
+  background: #8b929e !important;
+  color: #f1f3f5 !important;
+  box-shadow: none !important;
+  filter: none !important;
+  cursor: wait !important;
+  opacity: 0.78;
+}
+
+.ai-launch-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ai-launch-buttons .main-button {
+  margin-bottom: 0;
+}

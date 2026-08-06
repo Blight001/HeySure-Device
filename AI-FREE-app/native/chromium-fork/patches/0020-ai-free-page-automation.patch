@@ -1,0 +1,450 @@
+diff --git a/chrome/browser/ui/BUILD.gn b/chrome/browser/ui/BUILD.gn
+index 39e43bc3..44d16233 100644
+--- a/chrome/browser/ui/BUILD.gn
++++ b/chrome/browser/ui/BUILD.gn
+@@ -3306,6 +3306,8 @@ static_library("ui") {
+       "views/critical_notification_bubble_view.h",
+       "views/frame/ai_free_runtime_bridge_win.cc",
+       "views/frame/ai_free_runtime_bridge_win.h",
++      "views/frame/ai_free_page_automation.cc",
++      "views/frame/ai_free_page_automation.h",
+       "views/frame/browser_caption_button_container_win.cc",
+       "views/frame/browser_caption_button_container_win.h",
+       "views/frame/browser_desktop_window_tree_host.h",
+diff --git a/chrome/browser/ui/views/frame/ai_free_runtime_bridge_win.cc b/chrome/browser/ui/views/frame/ai_free_runtime_bridge_win.cc
+index a6d72fac..a7b70752 100644
+--- a/chrome/browser/ui/views/frame/ai_free_runtime_bridge_win.cc
++++ b/chrome/browser/ui/views/frame/ai_free_runtime_bridge_win.cc
+@@ -35,6 +35,7 @@
+ #include "base/values.h"
+ #include "base/win/scoped_handle.h"
+ #include "chrome/browser/ai_free_file_selection.h"
++#include "chrome/browser/ui/views/frame/ai_free_page_automation.h"
+ #include "chrome/browser/lifetime/application_lifetime_desktop.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/ui/browser.h"
+@@ -870,6 +871,29 @@ void HandleCommandOnUi(scoped_refptr<BridgeConnection> connection,
+     return connection->SendSuccessAsync(request, command_name,
+                                         std::move(result));
+   }
++  if (HandleAiFreePageAutomationCommand(
++          browser->profile(), web_contents, command,
++          base::BindOnce(
++              [](scoped_refptr<BridgeConnection> connection,
++                 std::string request_id, std::string command,
++                 base::DictValue result) {
++                connection->SendSuccessAsync(std::move(request_id),
++                                             std::move(command),
++                                             std::move(result));
++              },
++              connection, request, command_name),
++          base::BindOnce(
++              [](scoped_refptr<BridgeConnection> connection,
++                 std::string request_id, std::string command,
++                 AiFreeAutomationError error) {
++                connection->SendErrorAsync(std::move(request_id),
++                                           std::move(command),
++                                           std::move(error.code),
++                                           std::move(error.message));
++              },
++              connection, request, command_name))) {
++    return;
++  }
+   if (command_name == "set-cookies") {
+     return HandleSetCookies(connection, browser, command, request);
+   }
+diff --git a/chrome/browser/ui/views/frame/ai_free_page_automation.h b/chrome/browser/ui/views/frame/ai_free_page_automation.h
+new file mode 100644
+index 00000000..fa4c69e0
+--- /dev/null
++++ b/chrome/browser/ui/views/frame/ai_free_page_automation.h
+@@ -0,0 +1,31 @@
++// Copyright 2026 AI-FREE Authors. All rights reserved.
++
++#ifndef CHROME_BROWSER_UI_VIEWS_FRAME_AI_FREE_PAGE_AUTOMATION_H_
++#define CHROME_BROWSER_UI_VIEWS_FRAME_AI_FREE_PAGE_AUTOMATION_H_
++
++#include <string>
++
++#include "base/functional/callback_forward.h"
++#include "base/values.h"
++
++class Profile;
++
++namespace content {
++class WebContents;
++}
++
++struct AiFreeAutomationError {
++  std::string code;
++  std::string message;
++};
++
++using AiFreeAutomationSuccess = base::OnceCallback<void(base::DictValue)>;
++using AiFreeAutomationFailure = base::OnceCallback<void(AiFreeAutomationError)>;
++
++bool HandleAiFreePageAutomationCommand(Profile* profile,
++                                       content::WebContents* web_contents,
++                                       const base::DictValue& command,
++                                       AiFreeAutomationSuccess success,
++                                       AiFreeAutomationFailure failure);
++
++#endif  // CHROME_BROWSER_UI_VIEWS_FRAME_AI_FREE_PAGE_AUTOMATION_H_
+diff --git a/chrome/browser/ui/views/frame/ai_free_page_automation.cc b/chrome/browser/ui/views/frame/ai_free_page_automation.cc
+new file mode 100644
+index 00000000..87b919d0
+--- /dev/null
++++ b/chrome/browser/ui/views/frame/ai_free_page_automation.cc
+@@ -0,0 +1,350 @@
++// Copyright 2026 AI-FREE Authors. All rights reserved.
++
++#include "chrome/browser/ui/views/frame/ai_free_page_automation.h"
++
++#include <algorithm>
++#include <optional>
++#include <string>
++#include <utility>
++#include <vector>
++
++#include "base/base64.h"
++#include "base/functional/bind.h"
++#include "base/json/json_writer.h"
++#include "base/strings/strcat.h"
++#include "base/strings/string_number_conversions.h"
++#include "base/strings/utf_string_conversions.h"
++#include "base/time/time.h"
++#include "chrome/browser/profiles/profile.h"
++#include "chrome/common/chrome_isolated_world_ids.h"
++#include "components/viz/common/frame_sinks/copy_output_result.h"
++#include "content/public/browser/render_frame_host.h"
++#include "content/public/browser/render_widget_host.h"
++#include "content/public/browser/render_widget_host_view.h"
++#include "content/public/browser/storage_partition.h"
++#include "content/public/browser/web_contents.h"
++#include "net/cookies/canonical_cookie.h"
++#include "net/cookies/cookie_options.h"
++#include "net/cookies/cookie_partition_key_collection.h"
++#include "services/network/public/mojom/cookie_manager.mojom.h"
++#include "third_party/blink/public/common/input/web_input_event.h"
++#include "third_party/blink/public/common/input/web_mouse_event.h"
++#include "ui/events/event_utils.h"
++#include "ui/gfx/codec/png_codec.h"
++#include "ui/gfx/geometry/rect.h"
++#include "url/origin.h"
++
++namespace {
++
++constexpr size_t kMaximumScreenshotBytes = 5 * 512 * 1024;
++
++void Fail(AiFreeAutomationFailure failure,
++          std::string code,
++          std::string message) {
++  std::move(failure).Run({std::move(code), std::move(message)});
++}
++
++std::string CommandJson(const base::DictValue& command) {
++  return base::WriteJson(command).value_or("{}");
++}
++
++void ExecuteIsolated(content::WebContents* web_contents,
++                     std::string script,
++                     base::OnceCallback<void(base::Value)> callback) {
++  web_contents->GetPrimaryMainFrame()->ExecuteJavaScriptInIsolatedWorld(
++      base::UTF8ToUTF16(script), std::move(callback),
++      ISOLATED_WORLD_ID_CHROME_INTERNAL);
++}
++
++std::string ObserveScript(const base::DictValue& command) {
++  return base::StrCat({R"JS((() => { try {
++    const a=)JS",
++                       CommandJson(command), R"JS(;
++    const limit=Math.max(1,Math.min(1000,Number(a.limit)||200));
++    const keyword=String(a.keyword||'').toLowerCase();
++    const tagFilter=String(a.tag||'').toLowerCase();
++    const kindFilter=String(a.filter||'').toLowerCase();
++    const interactive='a[href],button,input,textarea,select,summary,[role="button"],[role="link"],[role="checkbox"],[role="menuitem"],[contenteditable="true"]';
++    const items=[]; let matched=0;
++    const selector=(el)=>{if(el.id)return '#'+CSS.escape(el.id);const n=el.getAttribute('name');if(n)return el.tagName.toLowerCase()+'[name="'+CSS.escape(n)+'"]';let s=el.tagName.toLowerCase();const p=el.parentElement;if(p){const same=[...p.children].filter(x=>x.tagName===el.tagName);if(same.length>1)s+=':nth-of-type('+(same.indexOf(el)+1)+')';}return s;};
++    const visible=(el,r)=>{const c=getComputedStyle(el);if(c.display==='none'||c.visibility==='hidden'||Number(c.opacity)===0)return false;if(r.width<1||r.height<1)return false;return r.bottom>0&&r.right>0&&r.top<innerHeight&&r.left<innerWidth;};
++    const roots=[document]; const seen=new Set();
++    for(let ri=0;ri<roots.length;ri++){const root=roots[ri];if(seen.has(root))continue;seen.add(root);for(const el of root.querySelectorAll('*')){if(el.shadowRoot)roots.push(el.shadowRoot);if(el.tagName==='IFRAME'){try{if(el.contentDocument)roots.push(el.contentDocument);}catch(_){}}const r=el.getBoundingClientRect();if(!visible(el,r))continue;let kind='';const tag=el.tagName.toLowerCase();if(el.matches(interactive)||getComputedStyle(el).cursor==='pointer')kind='interactive';else if(a.includeMedia!==false&&/^(img|video|audio)$/.test(tag))kind='media';else if(a.includeText!==false&&el.children.length===0&&String(el.innerText||el.textContent||'').trim())kind='text';if(!kind)continue;const text=String(el.innerText||el.textContent||el.value||el.getAttribute('aria-label')||'').trim().replace(/\s+/g,' ').slice(0,500);if(keyword&&!text.toLowerCase().includes(keyword))continue;if(tagFilter&&tag!==tagFilter)continue;if(kindFilter&&kind!==kindFilter)continue;matched++;if(items.length>=limit)continue;items.push({id:'e'+matched,kind,tag,selector:selector(el),text,name:el.getAttribute('name')||'',placeholder:el.getAttribute('placeholder')||'',ariaLabel:el.getAttribute('aria-label')||'',value:/password/i.test(el.type||'')?'':String(el.value||'').slice(0,300),disabled:!!el.disabled,x:Math.round(r.x),y:Math.round(r.y),width:Math.round(r.width),height:Math.round(r.height)});}}
++    return {success:true,url:location.href,title:document.title,viewport:{width:innerWidth,height:innerHeight,scrollX,scrollY},items,count:items.length,totalMatched:matched,truncated:matched>items.length};
++  } catch(e) { return {success:false,error:String(e&&e.message||e),errorCode:'OBSERVE_FAILED'}; } })())JS"});
++}
++
++std::string ActionScript(const base::DictValue& command) {
++  return base::StrCat({R"JS((async () => { try {
++    const a=)JS",
++                       CommandJson(command),
++                       R"JS(; const action=String(a.action||'');
++    const roots=()=>{const out=[document];for(let i=0;i<out.length;i++){for(const e of out[i].querySelectorAll('*')){if(e.shadowRoot)out.push(e.shadowRoot);if(e.tagName==='IFRAME'){try{if(e.contentDocument)out.push(e.contentDocument);}catch(_){}}}}return out;};
++    const find=()=>{for(const root of roots()){if(a.selector){try{const e=root.querySelector(a.selector);if(e)return e;}catch(_){}}const needle=String(a.text||'').trim();if(needle&&action!=='type'){for(const e of root.querySelectorAll('button,a,input,textarea,select,[role="button"],[contenteditable="true"]')){if(String(e.innerText||e.value||e.getAttribute('aria-label')||'').trim().includes(needle))return e;}}}return action==='press_key'?document.activeElement:null;};
++    if(action==='wait'){const end=Date.now()+Math.max(100,Math.min(120000,Number(a.timeoutMs)||10000));while(Date.now()<end){if(find())return {success:true,action,found:true};await new Promise(r=>setTimeout(r,100));}return {success:false,action,error:'等待元素超时',errorCode:'WAIT_TIMEOUT'};}
++    if(action==='scroll'){const amount=Number(a.amount)||600;const sign=String(a.direction||'down')==='up'?-1:1;scrollBy({top:amount*sign,behavior:'instant'});return {success:true,action,scrollX,scrollY};}
++    const el=find();if(!el)return {success:false,action,error:'未找到目标元素',errorCode:'ELEMENT_NOT_FOUND'};el.scrollIntoView({block:'center',inline:'center'});el.focus();
++    if(action==='type'){const value=String(a.text||'');const proto=el instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;const setter=Object.getOwnPropertyDescriptor(proto,'value')?.set;if(setter)setter.call(el,value);else if(el.isContentEditable)el.textContent=value;else el.value=value;el.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:value}));el.dispatchEvent(new Event('change',{bubbles:true}));return {success:true,action,selector:a.selector||'',textLength:value.length};}
++    if(action==='press_key'){const key=String(a.key||a.text||'Enter');el.dispatchEvent(new KeyboardEvent('keydown',{key,bubbles:true}));el.dispatchEvent(new KeyboardEvent('keyup',{key,bubbles:true}));return {success:true,action,key};}
++    const r=el.getBoundingClientRect();if(r.width<1||r.height<1)return {success:false,action,error:'目标元素不可见',errorCode:'ELEMENT_NOT_VISIBLE'};return {success:true,action,nativeInput:{x:r.left+r.width/2,y:r.top+r.height/2,viewportWidth:innerWidth,viewportHeight:innerHeight},selector:a.selector||''};
++  } catch(e) { return {success:false,error:String(e&&e.message||e),errorCode:'ACTION_FAILED'}; } })())JS"});
++}
++
++std::string StorageScript() {
++  return R"JS((() => { try { const collect=s=>{const o={};for(let i=0;i<s.length;i++){const k=s.key(i);if(k)o[k]=s.getItem(k);}return o;};return {success:true,url:location.href,origin:location.origin,title:document.title,localStorage:collect(localStorage),sessionStorage:collect(sessionStorage)};}catch(e){return {success:false,error:String(e&&e.message||e),errorCode:'STORAGE_READ_FAILED'};} })())JS";
++}
++
++blink::WebMouseEvent MouseEvent(blink::WebInputEvent::Type type,
++                                blink::WebMouseEvent::Button button,
++                                int modifiers,
++                                int clicks,
++                                float x,
++                                float y,
++                                const gfx::Rect& bounds) {
++  blink::WebMouseEvent event(type, modifiers, ui::EventTimeForNow());
++  event.button = button;
++  event.click_count = clicks;
++  event.pointer_type = blink::WebPointerProperties::PointerType::kMouse;
++  event.SetPositionInWidget(x, y);
++  event.SetPositionInScreen(bounds.x() + x, bounds.y() + y);
++  return event;
++}
++
++bool DispatchResolvedMouse(content::WebContents* contents,
++                           const base::DictValue& result,
++                           std::string_view action) {
++  const base::DictValue* input = result.FindDict("nativeInput");
++  content::RenderFrameHost* frame = contents->GetPrimaryMainFrame();
++  content::RenderWidgetHost* widget =
++      frame ? frame->GetRenderWidgetHost() : nullptr;
++  if (!input || !widget || !widget->GetView()) {
++    return false;
++  }
++  const std::optional<double> x = input->FindDouble("x");
++  const std::optional<double> y = input->FindDouble("y");
++  const std::optional<double> width = input->FindDouble("viewportWidth");
++  const std::optional<double> height = input->FindDouble("viewportHeight");
++  if (!x || !y || !width || !height || *width <= 0 || *height <= 0) {
++    return false;
++  }
++  const gfx::Rect bounds = contents->GetContainerBounds();
++  const float px = static_cast<float>(*x * bounds.width() / *width);
++  const float py = static_cast<float>(*y * bounds.height() / *height);
++  const bool right = action == "right_click";
++  const int clicks = action == "double_click" ? 2 : 1;
++  const auto button = right ? blink::WebMouseEvent::Button::kRight
++                            : blink::WebMouseEvent::Button::kLeft;
++  const int modifier = blink::WebInputEvent::kFromDebugger |
++                       (right ? blink::WebInputEvent::kRightButtonDown
++                              : blink::WebInputEvent::kLeftButtonDown);
++  widget->Focus();
++  widget->ForwardMouseEvent(MouseEvent(blink::WebInputEvent::Type::kMouseMove,
++                                       blink::WebMouseEvent::Button::kNoButton,
++                                       blink::WebInputEvent::kFromDebugger, 0,
++                                       px, py, bounds));
++  for (int i = 1; i <= clicks; ++i) {
++    widget->ForwardMouseEvent(MouseEvent(blink::WebInputEvent::Type::kMouseDown,
++                                         button, modifier, i, px, py, bounds));
++    widget->ForwardMouseEvent(MouseEvent(blink::WebInputEvent::Type::kMouseUp,
++                                         button, modifier, i, px, py, bounds));
++  }
++  return true;
++}
++
++void OnScriptResult(AiFreeAutomationSuccess success,
++                    AiFreeAutomationFailure failure,
++                    std::string error_code,
++                    base::Value value) {
++  const base::DictValue* result = value.GetIfDict();
++  if (!result) {
++    return Fail(std::move(failure), std::move(error_code),
++                "Chromium 页面脚本未返回对象");
++  }
++  std::move(success).Run(result->Clone());
++}
++
++void OnActionResult(content::GlobalRenderFrameHostId frame_id,
++                    std::string action,
++                    AiFreeAutomationSuccess success,
++                    AiFreeAutomationFailure failure,
++                    base::Value value) {
++  const base::DictValue* result = value.GetIfDict();
++  if (!result) {
++    return Fail(std::move(failure), "ACTION_RESULT_INVALID",
++                "页面动作未返回对象");
++  }
++  if (!result->FindBool("success").value_or(false) ||
++      !result->FindDict("nativeInput")) {
++    return std::move(success).Run(result->Clone());
++  }
++  content::RenderFrameHost* frame = content::RenderFrameHost::FromID(frame_id);
++  content::WebContents* contents =
++      frame ? content::WebContents::FromRenderFrameHost(frame) : nullptr;
++  if (!contents ||
++      !DispatchResolvedMouse(contents, *result,
++                             action == "upload_file" ? "click" : action)) {
++    return Fail(std::move(failure), "INPUT_TARGET_UNAVAILABLE",
++                "Chromium 原生输入目标不可用");
++  }
++  base::DictValue response = result->Clone();
++  response.Remove("nativeInput");
++  response.Set("dispatched", true);
++  response.Set("inputMode", "chromium-runtime");
++  std::move(success).Run(std::move(response));
++}
++
++base::DictValue CookieValue(const net::CanonicalCookie& cookie) {
++  base::DictValue value;
++  value.Set("name", cookie.Name());
++  value.Set("value", cookie.Value());
++  value.Set("domain", cookie.Domain());
++  value.Set("path", cookie.Path());
++  value.Set("secure", cookie.SecureAttribute());
++  value.Set("httpOnly", cookie.IsHttpOnly());
++  value.Set("hostOnly", !cookie.IsDomainCookie());
++  if (!cookie.ExpiryDate().is_null()) {
++    value.Set("expirationDate", cookie.ExpiryDate().InSecondsFSinceUnixEpoch());
++  }
++  const char* same_site = "unspecified";
++  if (cookie.SameSite() == net::CookieSameSite::LAX_MODE) {
++    same_site = "lax";
++  }
++  if (cookie.SameSite() == net::CookieSameSite::STRICT_MODE) {
++    same_site = "strict";
++  }
++  if (cookie.SameSite() == net::CookieSameSite::NO_RESTRICTION) {
++    same_site = "no_restriction";
++  }
++  value.Set("sameSite", same_site);
++  return value;
++}
++
++void OnCookies(AiFreeAutomationSuccess success,
++               AiFreeAutomationFailure failure,
++               base::DictValue storage,
++               const net::CookieAccessResultList& included,
++               const net::CookieAccessResultList&) {
++  base::ListValue cookies;
++  for (const auto& item : included) {
++    cookies.Append(CookieValue(item.cookie));
++  }
++  storage.Set("cookies", std::move(cookies));
++  std::move(success).Run(std::move(storage));
++}
++
++void OnStorage(Profile* profile,
++               GURL url,
++               AiFreeAutomationSuccess success,
++               AiFreeAutomationFailure failure,
++               base::Value value) {
++  const base::DictValue* storage = value.GetIfDict();
++  if (!storage || !storage->FindBool("success").value_or(false)) {
++    return Fail(std::move(failure), "STORAGE_READ_FAILED",
++                "无法读取当前页面 Storage");
++  }
++  network::mojom::CookieManager* manager =
++      profile->GetDefaultStoragePartition()
++          ->GetCookieManagerForBrowserProcess();
++  manager->GetCookieList(url, net::CookieOptions::MakeAllInclusive(),
++                         net::CookiePartitionKeyCollection::ContainsAll(),
++                         base::BindOnce(&OnCookies, std::move(success),
++                                        std::move(failure), storage->Clone()));
++}
++
++void OnScreenshot(AiFreeAutomationSuccess success,
++                  AiFreeAutomationFailure failure,
++                  const content::CopyFromSurfaceResult& copy_result) {
++  if (!copy_result.has_value() || copy_result->bitmap.drawsNothing()) {
++    return Fail(std::move(failure), "SCREENSHOT_CAPTURE_FAILED",
++                "Chromium 页面 Surface 截图失败");
++  }
++  std::optional<std::vector<uint8_t>> png =
++      gfx::PNGCodec::EncodeBGRASkBitmap(copy_result->bitmap, false);
++  if (!png || png->empty() || png->size() > kMaximumScreenshotBytes) {
++    return Fail(std::move(failure), "SCREENSHOT_TOO_LARGE",
++                "原生截图为空或超过 Runtime Bridge 大小限制");
++  }
++  base::DictValue result;
++  result.Set("success", true);
++  result.Set("dataUrl", base::StrCat({"data:image/png;base64,",
++                                      base::Base64Encode(*png)}));
++  result.Set("width", copy_result->bitmap.width());
++  result.Set("height", copy_result->bitmap.height());
++  std::move(success).Run(std::move(result));
++}
++
++void CaptureScreenshot(content::WebContents* web_contents,
++                       const base::DictValue& command,
++                       AiFreeAutomationSuccess success,
++                       AiFreeAutomationFailure failure) {
++  if (command.FindBool("fullPage").value_or(false) ||
++      (command.FindString("selector") &&
++       !command.FindString("selector")->empty())) {
++    return Fail(std::move(failure), "SCREENSHOT_MODE_UNSUPPORTED",
++                "原生通道当前只支持视口或视口坐标区域截图");
++  }
++  content::RenderWidgetHostView* view = web_contents->GetRenderWidgetHostView();
++  if (!view || !view->IsSurfaceAvailableForCopy()) {
++    return Fail(std::move(failure), "SCREENSHOT_SURFACE_UNAVAILABLE",
++                "Chromium 页面 Surface 不可用");
++  }
++  gfx::Rect clip;
++  const int width = command.FindInt("width").value_or(0);
++  const int height = command.FindInt("height").value_or(0);
++  if (width > 0 && height > 0) {
++    clip = gfx::Rect(command.FindInt("x").value_or(0),
++                     command.FindInt("y").value_or(0), width, height);
++    clip.Intersect(gfx::Rect(view->GetViewBounds().size()));
++  }
++  view->CopyFromSurface(
++      clip, gfx::Size(), base::Seconds(5),
++      base::BindOnce(&OnScreenshot, std::move(success), std::move(failure)));
++}
++
++}  // namespace
++
++bool HandleAiFreePageAutomationCommand(Profile* profile,
++                                       content::WebContents* web_contents,
++                                       const base::DictValue& command,
++                                       AiFreeAutomationSuccess success,
++                                       AiFreeAutomationFailure failure) {
++  const std::string* type = command.FindString("type");
++  if (!type) {
++    return false;
++  }
++  if (*type == "observe-page") {
++    ExecuteIsolated(web_contents, ObserveScript(command),
++                    base::BindOnce(&OnScriptResult, std::move(success),
++                                   std::move(failure), "OBSERVE_FAILED"));
++    return true;
++  }
++  if (*type == "perform-action") {
++    const std::string action =
++        command.FindString("action") ? *command.FindString("action") : "";
++    if (action != "click" && action != "double_click" &&
++        action != "right_click" && action != "upload_file" &&
++        action != "scroll" && action != "type" &&
++        action != "press_key" && action != "wait") {
++      Fail(std::move(failure), "AUTOMATION_ACTION_INVALID",
++           "不支持的 Chromium 页面动作");
++      return true;
++    }
++    const content::GlobalRenderFrameHostId frame_id =
++        web_contents->GetPrimaryMainFrame()->GetGlobalId();
++    ExecuteIsolated(web_contents, ActionScript(command),
++                    base::BindOnce(&OnActionResult, frame_id, action,
++                                   std::move(success), std::move(failure)));
++    return true;
++  }
++  if (*type == "get-session-data") {
++    const GURL url = web_contents->GetLastCommittedURL();
++    ExecuteIsolated(web_contents, StorageScript(),
++                    base::BindOnce(&OnStorage, profile, url, std::move(success),
++                                   std::move(failure)));
++    return true;
++  }
++  if (*type == "capture-screenshot") {
++    CaptureScreenshot(web_contents, command, std::move(success),
++                      std::move(failure));
++    return true;
++  }
++  return false;
++}

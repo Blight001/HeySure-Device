@@ -1,0 +1,8 @@
+hand.png size=(128, 128) opaque=3677 bytes=1689
+aero_link len=136606 head=b'\x00\x00\x02\x00'
+aero_link CUR images=5
+  img0: 128x128 hotspot=(25,0)
+  img1: 96x96 hotspot=(20,0)
+  img2: 64x64 hotspot=(13,0)
+  img3: 48x48 hotspot=(10,0)
+  img4: 32x32 hotspot=(6,0)

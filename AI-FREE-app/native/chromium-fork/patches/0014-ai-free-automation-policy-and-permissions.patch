@@ -1,0 +1,384 @@
+diff --git a/chrome/browser/permissions/BUILD.gn b/chrome/browser/permissions/BUILD.gn
+index 21a21df6..bd69b902 100644
+--- a/chrome/browser/permissions/BUILD.gn
++++ b/chrome/browser/permissions/BUILD.gn
+@@ -12,6 +12,8 @@ import("//third_party/protobuf/proto_library.gni")
+ 
+ source_set("permissions") {
+   sources = [
++    "ai_free_permission_policy.cc",
++    "ai_free_permission_policy.h",
+     "chrome_permissions_client.cc",
+     "chrome_permissions_client.h",
+     "crowd_deny_preload_data.cc",
+@@ -238,6 +240,7 @@ source_set("unit_tests") {
+   testonly = true
+ 
+   sources = [
++    "ai_free_permission_policy_unittest.cc",
+     "chrome_permissions_client_unittest.cc",
+     "crowd_deny_preload_data_unittest.cc",
+     "crowd_deny_safe_browsing_request_unittest.cc",
+diff --git a/chrome/browser/permissions/ai_free_permission_policy.cc b/chrome/browser/permissions/ai_free_permission_policy.cc
+new file mode 100644
+index 00000000..0caaea68
+--- /dev/null
++++ b/chrome/browser/permissions/ai_free_permission_policy.cc
+@@ -0,0 +1,91 @@
++// Copyright 2026 AI-FREE Authors. All rights reserved.
++
++#include "chrome/browser/permissions/ai_free_permission_policy.h"
++
++#include <string>
++#include <string_view>
++
++#include "base/command_line.h"
++#include "base/containers/flat_set.h"
++#include "base/strings/string_split.h"
++#include "chrome/common/chrome_switches.h"
++#include "net/base/url_util.h"
++#include "url/gurl.h"
++#include "url/origin.h"
++
++namespace ai_free {
++namespace {
++
++constexpr char kEmbeddedModeValue[] = "child-window";
++
++bool IsValidAllowlistUrl(const GURL& url) {
++  if (!url.is_valid() || url.has_username() || url.has_password() ||
++      url.has_query() || url.has_ref() || url.path() != "/") {
++    return false;
++  }
++  return url.SchemeIs(url::kHttpsScheme) ||
++         (url.SchemeIs(url::kHttpScheme) && net::IsLocalhost(url));
++}
++
++base::flat_set<url::Origin> ParseOriginAllowlist() {
++  const base::CommandLine* command_line =
++      base::CommandLine::ForCurrentProcess();
++  base::flat_set<url::Origin> origins;
++  const std::string value = command_line->GetSwitchValueASCII(
++      switches::kAutoGrantPermissionsOrigins);
++  for (std::string_view entry : base::SplitStringPiece(
++           value, ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY)) {
++    const GURL url(entry);
++    if (!IsValidAllowlistUrl(url)) {
++      continue;
++    }
++    url::Origin origin = url::Origin::Create(url);
++    if (!origin.opaque()) {
++      origins.insert(std::move(origin));
++    }
++  }
++  return origins;
++}
++
++}  // namespace
++
++bool IsEmbeddedAutomationMode() {
++  const base::CommandLine* command_line =
++      base::CommandLine::ForCurrentProcess();
++  return command_line->GetSwitchValueASCII(switches::kHsEmbedMode) ==
++         kEmbeddedModeValue;
++}
++
++bool ArePermissionOriginsAllowlisted(const GURL& requesting_origin,
++                                     const url::Origin& top_level_origin) {
++  const base::CommandLine* command_line =
++      base::CommandLine::ForCurrentProcess();
++  if (!IsEmbeddedAutomationMode() ||
++      !command_line->HasSwitch(switches::kAutoGrantPermissions)) {
++    return false;
++  }
++
++  const url::Origin request_origin = url::Origin::Create(requesting_origin);
++  if (request_origin.opaque() || top_level_origin.opaque()) {
++    return false;
++  }
++  const base::flat_set<url::Origin> origins = ParseOriginAllowlist();
++  return !origins.empty() && origins.contains(request_origin) &&
++         origins.contains(top_level_origin);
++}
++
++bool IsAutoGrantPermissionType(permissions::RequestType request_type) {
++  switch (request_type) {
++    case permissions::RequestType::kCameraStream:
++    case permissions::RequestType::kClipboard:
++    case permissions::RequestType::kGeolocation:
++    case permissions::RequestType::kMicStream:
++    case permissions::RequestType::kNotifications:
++    case permissions::RequestType::kSensors:
++      return true;
++    default:
++      return false;
++  }
++}
++
++}  // namespace ai_free
+diff --git a/chrome/browser/permissions/ai_free_permission_policy.h b/chrome/browser/permissions/ai_free_permission_policy.h
+new file mode 100644
+index 00000000..6ca638f5
+--- /dev/null
++++ b/chrome/browser/permissions/ai_free_permission_policy.h
+@@ -0,0 +1,25 @@
++// Copyright 2026 AI-FREE Authors. All rights reserved.
++
++#ifndef CHROME_BROWSER_PERMISSIONS_AI_FREE_PERMISSION_POLICY_H_
++#define CHROME_BROWSER_PERMISSIONS_AI_FREE_PERMISSION_POLICY_H_
++
++#include "components/permissions/request_type.h"
++
++class GURL;
++
++namespace url {
++class Origin;
++}
++
++namespace ai_free {
++
++bool IsEmbeddedAutomationMode();
++
++bool ArePermissionOriginsAllowlisted(const GURL& requesting_origin,
++                                     const url::Origin& top_level_origin);
++
++bool IsAutoGrantPermissionType(permissions::RequestType request_type);
++
++}  // namespace ai_free
++
++#endif  // CHROME_BROWSER_PERMISSIONS_AI_FREE_PERMISSION_POLICY_H_
+diff --git a/chrome/browser/permissions/ai_free_permission_policy_unittest.cc b/chrome/browser/permissions/ai_free_permission_policy_unittest.cc
+new file mode 100644
+index 00000000..c240cbd6
+--- /dev/null
++++ b/chrome/browser/permissions/ai_free_permission_policy_unittest.cc
+@@ -0,0 +1,72 @@
++// Copyright 2026 AI-FREE Authors. All rights reserved.
++
++#include "chrome/browser/permissions/ai_free_permission_policy.h"
++
++#include <string_view>
++
++#include "base/test/scoped_command_line.h"
++#include "chrome/common/chrome_switches.h"
++#include "testing/gtest/include/gtest/gtest.h"
++#include "url/gurl.h"
++#include "url/origin.h"
++
++namespace ai_free {
++namespace {
++
++class AiFreePermissionPolicyTest : public testing::Test {
++ protected:
++  void Enable(std::string_view origins) {
++    command_line_.GetProcessCommandLine()->AppendSwitchASCII(
++        switches::kHsEmbedMode, "child-window");
++    command_line_.GetProcessCommandLine()->AppendSwitch(
++        switches::kAutoGrantPermissions);
++    command_line_.GetProcessCommandLine()->AppendSwitchASCII(
++        switches::kAutoGrantPermissionsOrigins, origins);
++  }
++
++  base::test::ScopedCommandLine command_line_;
++};
++
++TEST_F(AiFreePermissionPolicyTest, RequiresEmbeddedMode) {
++  command_line_.GetProcessCommandLine()->AppendSwitch(
++      switches::kAutoGrantPermissions);
++  command_line_.GetProcessCommandLine()->AppendSwitchASCII(
++      switches::kAutoGrantPermissionsOrigins, "https://allowed.test");
++  EXPECT_FALSE(ArePermissionOriginsAllowlisted(
++      GURL("https://allowed.test"),
++      url::Origin::Create(GURL("https://allowed.test"))));
++}
++
++TEST_F(AiFreePermissionPolicyTest, RequiresBothOrigins) {
++  Enable("https://allowed.test,https://top.test:443");
++  EXPECT_TRUE(ArePermissionOriginsAllowlisted(
++      GURL("https://allowed.test/path"),
++      url::Origin::Create(GURL("https://top.test"))));
++  EXPECT_FALSE(ArePermissionOriginsAllowlisted(
++      GURL("https://allowed.test"),
++      url::Origin::Create(GURL("https://other.test"))));
++}
++
++TEST_F(AiFreePermissionPolicyTest, RejectsBroadEntries) {
++  Enable("https://*.test,https://path.test/not-root,http://remote.test,http://localhost:8080");
++  EXPECT_FALSE(ArePermissionOriginsAllowlisted(
++      GURL("https://path.test"),
++      url::Origin::Create(GURL("https://path.test"))));
++  EXPECT_TRUE(ArePermissionOriginsAllowlisted(
++      GURL("http://localhost:8080"),
++      url::Origin::Create(GURL("http://localhost:8080"))));
++}
++
++TEST_F(AiFreePermissionPolicyTest, GrantsOnlyExplicitTypes) {
++  EXPECT_TRUE(IsAutoGrantPermissionType(
++      permissions::RequestType::kGeolocation));
++  EXPECT_TRUE(IsAutoGrantPermissionType(
++      permissions::RequestType::kCameraStream));
++  EXPECT_FALSE(IsAutoGrantPermissionType(
++      permissions::RequestType::kFileSystemAccess));
++  EXPECT_FALSE(IsAutoGrantPermissionType(
++      permissions::RequestType::kMidiSysex));
++}
++
++}  // namespace
++}  // namespace ai_free
+diff --git a/chrome/browser/permissions/chrome_permissions_client.cc b/chrome/browser/permissions/chrome_permissions_client.cc
+index 69f063c4..93538e70 100644
+--- a/chrome/browser/permissions/chrome_permissions_client.cc
++++ b/chrome/browser/permissions/chrome_permissions_client.cc
+@@ -26,6 +26,7 @@
+ #include "chrome/browser/media/webrtc/media_stream_device_permissions.h"
+ #include "chrome/browser/metrics/ukm_background_recorder_service.h"
+ #include "chrome/browser/permissions/origin_keyed_permission_action_service_factory.h"
++#include "chrome/browser/permissions/ai_free_permission_policy.h"
+ #include "chrome/browser/permissions/permission_actions_history_factory.h"
+ #include "chrome/browser/permissions/permission_decision_auto_blocker_factory.h"
+ #include "chrome/browser/permissions/permission_revocation_request.h"
+@@ -670,6 +671,27 @@ ChromePermissionsClient::GetAutoApprovalStatus(
+   return permissions::PermissionAction::IGNORED;
+ }
+ 
++std::optional<permissions::PermissionAction>
++ChromePermissionsClient::GetAutoApprovalStatusForRequest(
++    content::BrowserContext* browser_context,
++    content::RenderFrameHost* source_frame,
++    const permissions::PermissionRequest& request) {
++  Profile* profile = Profile::FromBrowserContext(browser_context);
++  if (profile && !profile->IsOffTheRecord() && source_frame &&
++      ai_free::IsAutoGrantPermissionType(request.request_type())) {
++    const url::Origin top_level_origin =
++        source_frame->GetOutermostMainFrame()->GetLastCommittedOrigin();
++    if (ai_free::ArePermissionOriginsAllowlisted(request.requesting_origin(),
++                                                 top_level_origin)) {
++      VLOG(1) << "AI-FREE auto-granted permission type="
++              << static_cast<int>(request.request_type())
++              << " origin=" << request.requesting_origin();
++      return permissions::PermissionAction::GRANTED_ONCE;
++    }
++  }
++  return GetAutoApprovalStatus(browser_context, request.requesting_origin());
++}
++
+ bool ChromePermissionsClient::CanBypassEmbeddingOriginCheck(
+     const GURL& requesting_origin,
+     const GURL& embedding_origin) {
+diff --git a/chrome/browser/permissions/chrome_permissions_client.h b/chrome/browser/permissions/chrome_permissions_client.h
+index 9b7f10ce..ace19b66 100644
+--- a/chrome/browser/permissions/chrome_permissions_client.h
++++ b/chrome/browser/permissions/chrome_permissions_client.h
+@@ -110,6 +110,11 @@ class ChromePermissionsClient : public permissions::PermissionsClient {
+   std::optional<permissions::PermissionAction> GetAutoApprovalStatus(
+       content::BrowserContext* browser_context,
+       const GURL& origin) override;
++  std::optional<permissions::PermissionAction>
++  GetAutoApprovalStatusForRequest(
++      content::BrowserContext* browser_context,
++      content::RenderFrameHost* source_frame,
++      const permissions::PermissionRequest& request) override;
+   bool CanBypassEmbeddingOriginCheck(const GURL& requesting_origin,
+                                      const GURL& embedding_origin) override;
+   std::optional<GURL> GetCanonicalOriginOverride(
+diff --git a/chrome/common/chrome_switches.cc b/chrome/common/chrome_switches.cc
+index 8020dda6..4b6816bb 100644
+--- a/chrome/common/chrome_switches.cc
++++ b/chrome/common/chrome_switches.cc
+@@ -379,6 +379,15 @@ const char kHsRuntimePipe[] = "hs-runtime-pipe";
+ // One-time launch challenge invalidated after hello is accepted.
+ const char kHsRuntimeToken[] = "hs-runtime-token";
+ 
++// Silently approves an allowlisted subset of permission requests in the
++// authenticated AI-FREE embedded runtime. This switch has no effect without
++// kHsEmbedMode=child-window and a non-empty origin allowlist.
++const char kAutoGrantPermissions[] = "auto-grant-permissions";
++
++// Comma-separated exact origins eligible for AI-FREE permission auto-grant.
++const char kAutoGrantPermissionsOrigins[] =
++    "auto-grant-permissions-origins";
++
+ #if !BUILDFLAG(IS_ANDROID)
+ // Causes the browser to simulate a screen lock event shortly after startup.
+ // Optional value specifies the delay in seconds (defaults to 5).
+diff --git a/chrome/common/chrome_switches.h b/chrome/common/chrome_switches.h
+index b98901f9..c51f674e 100644
+--- a/chrome/common/chrome_switches.h
++++ b/chrome/common/chrome_switches.h
+@@ -131,6 +131,8 @@ extern const char kHsEmbedParentHwnd[];
+ extern const char kHsProfileId[];
+ extern const char kHsRuntimePipe[];
+ extern const char kHsRuntimeToken[];
++extern const char kAutoGrantPermissions[];
++extern const char kAutoGrantPermissionsOrigins[];
+ #if !BUILDFLAG(IS_ANDROID)
+ extern const char kSimulateLockScreenSmartRestart[];
+ extern const char kImportPasswords[];
+diff --git a/components/permissions/permission_request_manager.cc b/components/permissions/permission_request_manager.cc
+index 46f2ec83..8ebe0ba1 100644
+--- a/components/permissions/permission_request_manager.cc
++++ b/components/permissions/permission_request_manager.cc
+@@ -283,8 +283,8 @@ void PermissionRequestManager::AddRequest(
+       url::IsSameOriginWith(main_frame_origin, request->requesting_origin());
+ 
+   const std::optional<PermissionAction> should_auto_approve_request =
+-      PermissionsClient::Get()->GetAutoApprovalStatus(
+-          web_contents()->GetBrowserContext(), request->requesting_origin());
++      PermissionsClient::Get()->GetAutoApprovalStatusForRequest(
++          web_contents()->GetBrowserContext(), source_frame, *request);
+ 
+   if (should_auto_approve_request) {
+     PromptOptions prompt_options =
+diff --git a/components/permissions/permissions_client.cc b/components/permissions/permissions_client.cc
+index f1ebd750..f1703bc9 100644
+--- a/components/permissions/permissions_client.cc
++++ b/components/permissions/permissions_client.cc
+@@ -9,6 +9,7 @@
+ #include "components/content_settings/core/common/content_settings.h"
+ #include "components/omnibox/common/omnibox_feature_configs.h"
+ #include "components/permissions/permission_request_enums.h"
++#include "components/permissions/permission_request.h"
+ #include "components/permissions/permission_uma_util.h"
+ #include "components/permissions/resolvers/permission_prompt_options.h"
+ #include "content/public/browser/web_contents.h"
+@@ -132,6 +133,14 @@ std::optional<PermissionAction> PermissionsClient::GetAutoApprovalStatus(
+   return std::nullopt;
+ }
+ 
++std::optional<PermissionAction>
++PermissionsClient::GetAutoApprovalStatusForRequest(
++    content::BrowserContext* browser_context,
++    content::RenderFrameHost* source_frame,
++    const PermissionRequest& request) {
++  return GetAutoApprovalStatus(browser_context, request.requesting_origin());
++}
++
+ std::optional<bool> PermissionsClient::HasPreviouslyAutoRevokedPermission(
+     content::BrowserContext* browser_context,
+     const GURL& origin,
+diff --git a/components/permissions/permissions_client.h b/components/permissions/permissions_client.h
+index fc5acf80..dc4fe1e4 100644
+--- a/components/permissions/permissions_client.h
++++ b/components/permissions/permissions_client.h
+@@ -46,6 +46,7 @@ class ObjectPermissionContextBase;
+ class PermissionActionsHistory;
+ class PermissionDecisionAutoBlocker;
+ class PermissionPromptAndroid;
++class PermissionRequest;
+ 
+ // Interface to be implemented by permissions embedder to access embedder
+ // specific logic.
+@@ -214,6 +215,13 @@ class PermissionsClient {
+       content::BrowserContext* browser_context,
+       const GURL& origin);
+ 
++  // Request-aware variant for embedders that must also inspect the source
++  // frame and permission type. The default preserves origin-only behavior.
++  virtual std::optional<PermissionAction> GetAutoApprovalStatusForRequest(
++      content::BrowserContext* browser_context,
++      content::RenderFrameHost* source_frame,
++      const PermissionRequest& request);
++
+   // Allows the embedder to bypass checking the embedding origin when performing
+   // permission availability checks. This is used for example when a permission
+   // should only be available on secure origins. Return true to bypass embedding

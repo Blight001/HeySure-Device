@@ -1,0 +1,118 @@
+diff --git a/chrome/browser/ui/browser_command_controller.cc b/chrome/browser/ui/browser_command_controller.cc
+index 192fae30..dbf18252 100644
+--- a/chrome/browser/ui/browser_command_controller.cc
++++ b/chrome/browser/ui/browser_command_controller.cc
+@@ -210,6 +210,9 @@ bool IsAiFreeBlockedUserWindowCommand(int command_id) {
+     case IDC_RESTORE_TAB:
+     case IDC_MOVE_TAB_TO_NEW_WINDOW:
+     case IDC_EXIT:
++    case IDC_OPEN_CURRENT_URL:
++    case IDC_FOCUS_LOCATION:
++    case IDC_FOCUS_SEARCH:
+ #if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
+     case IDC_MINIMIZE_WINDOW:
+     case IDC_MAXIMIZE_WINDOW:
+diff --git a/chrome/browser/ui/views/location_bar/location_bar_view.cc b/chrome/browser/ui/views/location_bar/location_bar_view.cc
+index 24c769cf..f3e2031c 100644
+--- a/chrome/browser/ui/views/location_bar/location_bar_view.cc
++++ b/chrome/browser/ui/views/location_bar/location_bar_view.cc
+@@ -2273,7 +2273,7 @@ void LocationBarView::OnLocationIconGestureEvent(ui::GestureEvent* event) {
+ 
+ void LocationBarView::OnLocationIconPressed(const ui::MouseEvent& event) {
+   // "Paste-and-Go" behavior should take priority over all other interactions.
+-  if (event.IsOnlyMiddleMouseButton() &&
++  if (!omnibox_view_->GetReadOnly() && event.IsOnlyMiddleMouseButton() &&
+       ui::Clipboard::IsMiddleClickPasteEnabled() &&
+       ui::Clipboard::IsSupportedClipboardBuffer(
+           ui::ClipboardBuffer::kSelection)) {
+diff --git a/chrome/browser/ui/views/omnibox/omnibox_view_views.cc b/chrome/browser/ui/views/omnibox/omnibox_view_views.cc
+index a9a4fc45..3c337dec 100644
+--- a/chrome/browser/ui/views/omnibox/omnibox_view_views.cc
++++ b/chrome/browser/ui/views/omnibox/omnibox_view_views.cc
+@@ -67,6 +67,7 @@
+ #include "chrome/browser/ui/views/page_action/page_action_icon_controller.h"
+ #include "chrome/browser/ui/views/page_action/page_action_view.h"
+ #include "chrome/browser/ui/views/send_tab_to_self/send_tab_to_self_bubble_controller.h"
++#include "chrome/common/chrome_switches.h"
+ #include "chrome/common/webui_url_constants.h"
+ #include "chrome/grit/branded_strings.h"
+ #include "chrome/grit/generated_resources.h"
+@@ -155,6 +156,11 @@ namespace {
+ using ::metrics::OmniboxEventProto;
+ using ::ui::mojom::DragOperation;
+ 
++bool IsAiFreeEmbeddedChildWindow() {
++  return base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
++             switches::kHsEmbedMode) == "child-window";
++}
++
+ bool IsClipboardDataMarkedAsConfidential() {
+   return ui::Clipboard::GetForCurrentThread()
+       ->IsMarkedByOriginatorAsConfidential();
+@@ -260,19 +266,23 @@ OmniboxViewViews::OmniboxViewViews(bool popup_window_mode,
+   // ignored by accessibility since a plain text field should always be a leaf
+   // node in the accessibility trees of all the platforms we support.
+   GetViewAccessibility().SetIsLeaf(true);
+-  if (popup_window_mode_) {
++  const bool read_only =
++      popup_window_mode_ || IsAiFreeEmbeddedChildWindow();
++  if (read_only) {
+     GetViewAccessibility().SetReadOnly(true);
+   } else {
+     GetViewAccessibility().SetIsEditable(true);
+   }
+   GetViewAccessibility().SetAutoComplete("both");
+   GetViewAccessibility().AddHTMLAttributes(std::make_pair("type", "url"));
+-  // Expose keyboard shortcut where it makes sense.
++  // Expose the keyboard shortcut only for editable location bars.
++  if (!read_only) {
+ #if BUILDFLAG(IS_MAC)
+-  GetViewAccessibility().SetKeyShortcuts("⌘L");
++    GetViewAccessibility().SetKeyShortcuts("⌘L");
+ #else
+-  GetViewAccessibility().SetKeyShortcuts("Ctrl+L");
++    GetViewAccessibility().SetKeyShortcuts("Ctrl+L");
+ #endif
++  }
+ 
+   SetSelectionBackgroundColorId(kColorOmniboxSelectionBackground);
+   SetSelectionTextColorId(kColorOmniboxSelectionForeground);
+@@ -294,7 +304,7 @@ void OmniboxViewViews::Init() {
+   scoped_template_url_service_observation_.Observe(
+       controller()->client()->GetTemplateURLService());
+ 
+-  if (popup_window_mode_) {
++  if (popup_window_mode_ || IsAiFreeEmbeddedChildWindow()) {
+     SetReadOnly(true);
+   }
+ 
+@@ -717,6 +727,9 @@ void OmniboxViewViews::ExecuteCommand(int command_id, int event_flags) {
+   // executed. Since we are not always calling the base class implementation
+   // here, we need to deactivate touch text selection here, too.
+   DestroyTouchSelection();
++  if (GetReadOnly() && command_id == IDC_PASTE_AND_GO) {
++    return;
++  }
+   switch (command_id) {
+     // These commands don't invoke the popup via OnBefore/AfterPossibleChange().
+     case IDC_PASTE_AND_GO:
+@@ -2361,6 +2374,9 @@ void OmniboxViewViews::AppendDropFormats(
+ }
+ 
+ DragOperation OmniboxViewViews::OnDrop(const ui::DropTargetEvent& event) {
++  if (GetReadOnly()) {
++    return ui::mojom::DragOperation::kNone;
++  }
+   ui::mojom::DragOperation output_drag_op = ui::mojom::DragOperation::kNone;
+   PerformDrop(event, output_drag_op, /*drag_image_layer_owner=*/nullptr);
+   return output_drag_op;
+@@ -2368,6 +2384,9 @@ DragOperation OmniboxViewViews::OnDrop(const ui::DropTargetEvent& event) {
+ 
+ views::View::DropCallback OmniboxViewViews::CreateDropCallback(
+     const ui::DropTargetEvent& event) {
++  if (GetReadOnly()) {
++    return {};
++  }
+   return base::BindOnce(&OmniboxViewViews::PerformDrop,
+                         weak_factory_.GetWeakPtr());
+ }

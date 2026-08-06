@@ -1,0 +1,1995 @@
+diff --git a/chrome/app/resources/chromium_strings_zh-CN.xtb b/chrome/app/resources/chromium_strings_zh-CN.xtb
+index 78fe7124..bbf8b3c6 100644
+--- a/chrome/app/resources/chromium_strings_zh-CN.xtb
++++ b/chrome/app/resources/chromium_strings_zh-CN.xtb
+@@ -3,758 +3,758 @@
+ <translationbundle lang="zh-CN">
+ <translation id="1026101648481255140">继续安装</translation>
+ <translation id="1029669172902658969">重新启动以更新 Chromium 操作系统(&amp;C)</translation>
+-<translation id="1040916596585577953">Chromium 建议您检查此扩展程序</translation>
+-<translation id="1042552502243217427">当某个网站请求以私密方式预加载其网页上的链接时，Chromium 会使用 Google 服务器。如此一来，Google 能知道会预加载哪些网站，但这些网站无法得知您的身份。</translation>
++<translation id="1040916596585577953">AI-FREE 建议您检查此扩展程序</translation>
++<translation id="1042552502243217427">当某个网站请求以私密方式预加载其网页上的链接时，AI-FREE 会使用 Google 服务器。如此一来，Google 能知道会预加载哪些网站，但这些网站无法得知您的身份。</translation>
+ <translation id="1051793555070215510">请花 1 分钟时间填写调查问卷，帮助我们改进无痕模式。</translation>
+ <translation id="1065672644894730302">系统无法读取您的偏好设置。某些功能可能无法使用，并且对偏好设置所做的更改不会保存。</translation>
+-<translation id="1083934481477628225">您的家长已为 Chromium 停用“网站、应用和扩展程序的权限”</translation>
+-<translation id="1090946077924227754">若要在特定的 Chromium 功能或扩展程序中进行搜索，请先在地址栏中输入相应的快捷字词，然后按下您选择的键盘按键</translation>
+-<translation id="1104942323762546749">Chromium 想导出您的密码。请输入您的 Windows 密码以允许此操作。</translation>
++<translation id="1083934481477628225">您的家长已为 AI-FREE 停用“网站、应用和扩展程序的权限”</translation>
++<translation id="1090946077924227754">若要在特定的 AI-FREE 功能或扩展程序中进行搜索，请先在地址栏中输入相应的快捷字词，然后按下您选择的键盘按键</translation>
++<translation id="1104942323762546749">AI-FREE 想导出您的密码。请输入您的 Windows 密码以允许此操作。</translation>
+ <translation id="112640046208448578">识别事物或地点，以及复制或翻译文本。当您使用图片搜索功能时，系统会将相关页面的屏幕截图发送给服务器。<ph name="LEARN_MORE" /></translation>
+-<translation id="113122355610423240">Chromium 是您的默认浏览器</translation>
+-<translation id="1131805035311359397">若要检查您的密码是否未曾遭遇数据泄露和其他安全问题，请<ph name="BEGIN_LINK" />登录 Chromium<ph name="END_LINK" />。</translation>
+-<translation id="1153368717515616349">点击 Chromium 菜单</translation>
++<translation id="113122355610423240">AI-FREE 是您的默认浏览器</translation>
++<translation id="1131805035311359397">若要检查您的密码是否未曾遭遇数据泄露和其他安全问题，请<ph name="BEGIN_LINK" />登录 AI-FREE<ph name="END_LINK" />。</translation>
++<translation id="1153368717515616349">点击 AI-FREE 菜单</translation>
+ <translation id="1157985233335035034">最近选择过的语言</translation>
+-<translation id="1171831736360285680"><ph name="PARTNER_NAME" />添加了一个扩展程序，可能会改变 Chromium 的工作方式。
++<translation id="1171831736360285680"><ph name="PARTNER_NAME" />添加了一个扩展程序，可能会改变 AI-FREE 的工作方式。
+ 
+ <ph name="EXTENSION_NAME" /></translation>
+ <translation id="1184145431117212167">安装失败，因为您的 Windows 版本不受支持。</translation>
+-<translation id="1185134272377778587">关于 Chromium</translation>
++<translation id="2212141691968359212">关于 AI-FREE</translation>
+ <translation id="1203500561924088507">感谢您完成安装。您必须重启浏览器才能使用 <ph name="BUNDLE_NAME" />。</translation>
+ <translation id="1232234696885483911">当您打开图片搜索功能时，系统会自动将网页标题、网址和内容（包括 PDF 文件）发送给服务器。<ph name="LEARN_MORE" /></translation>
+-<translation id="123265588161106468">登录后，您可以在 Chromium 中使用 Google 账号中的密码等信息。如需更改此设置，请前往“设置 Chromium 账号”。</translation>
+-<translation id="1257483544893909270">可以使用键盘快捷键在 Chromium 中的 Gemini 中选择屏幕上的部分内容。</translation>
+-<translation id="1262876892872089030">当此标签页处于闲置状态时，系统会释放一些内存，以让 Chromium 保持快速运行。您可以选择始终不让此网站处于闲置状态。</translation>
+-<translation id="1265577313130862557">由于该文件具有危险性，Chromium 阻止了这次下载</translation>
+-<translation id="126567311906253476">使用 <ph name="USER_EMAIL" /> 登录 Gmail 或 YouTube 等 Google 服务时，您可以使用同一账号自动登录 Chromium</translation>
+-<translation id="1287534462498555020">在手机上下载 Chromium</translation>
++<translation id="123265588161106468">登录后，您可以在 AI-FREE 中使用 Google 账号中的密码等信息。如需更改此设置，请前往“设置 AI-FREE 账号”。</translation>
++<translation id="1257483544893909270">可以使用键盘快捷键在 AI-FREE 中的 Gemini 中选择屏幕上的部分内容。</translation>
++<translation id="1262876892872089030">当此标签页处于闲置状态时，系统会释放一些内存，以让 AI-FREE 保持快速运行。您可以选择始终不让此网站处于闲置状态。</translation>
++<translation id="1265577313130862557">由于该文件具有危险性，AI-FREE 阻止了这次下载</translation>
++<translation id="126567311906253476">使用 <ph name="USER_EMAIL" /> 登录 Gmail 或 YouTube 等 Google 服务时，您可以使用同一账号自动登录 AI-FREE</translation>
++<translation id="1287534462498555020">在手机上下载 AI-FREE</translation>
+ <translation id="1290883685122687410">设置错误：<ph name="METAINSTALLER_EXIT_CODE" />。<ph name="WINDOWS_ERROR" /></translation>
+-<translation id="1315551408014407711">设置您的新 Chromium 个人资料</translation>
+-<translation id="132092532143527429">试用 Chromium 中的 Gemini</translation>
+-<translation id="1324107359134968521">Chromium 需获得蓝牙使用权限，才能浏览蓝牙设备。<ph name="IDS_SERIAL_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH_LINK" /></translation>
++<translation id="1315551408014407711">设置您的新 AI-FREE 个人资料</translation>
++<translation id="132092532143527429">试用 AI-FREE 中的 Gemini</translation>
++<translation id="1324107359134968521">AI-FREE 需获得蓝牙使用权限，才能浏览蓝牙设备。<ph name="IDS_SERIAL_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH_LINK" /></translation>
+ <translation id="1330562121671411446">检测语言</translation>
+-<translation id="1330742950061766891">使用 Chromium 推荐的浏览器设置</translation>
+-<translation id="1342274909142618978">同时删除 Chromium 中的数据 (<ph name="URL" />)</translation>
++<translation id="1330742950061766891">使用 AI-FREE 推荐的浏览器设置</translation>
++<translation id="1342274909142618978">同时删除 AI-FREE 中的数据 (<ph name="URL" />)</translation>
+ <translation id="1345251407431278948">已固定！您可以通过工具栏中的新按钮再次使用图片搜索功能</translation>
+ <translation id="1356661055722410047">新功能！您可以翻译屏幕上的文字和图片</translation>
+ <translation id="1383876407941801731">搜索</translation>
+-<translation id="1397530502368084401">管理 Chromium 个人资料(&amp;M)</translation>
++<translation id="1397530502368084401">管理 AI-FREE 个人资料(&amp;M)</translation>
+ <translation id="1404026649028693342">始终显示 AI 模式</translation>
+ <translation id="141901961143729572">分享您的想法</translation>
+-<translation id="1465192221147974788">若要共享窗口，请在“系统设置”中为 Chromium 启用屏幕录制功能。</translation>
++<translation id="1465192221147974788">若要共享窗口，请在“系统设置”中为 AI-FREE 启用屏幕录制功能。</translation>
+ <translation id="1478370723027452770">获取 Chrome for Testing 方面的帮助</translation>
+ <translation id="1497802159252041924">安装时出错：<ph name="INSTALL_ERROR" /></translation>
+ <translation id="1518627427551567882">此页面受保护</translation>
+-<translation id="1524282610922162960">共享 Chromium 标签页</translation>
+-<translation id="154404805518949443">登录 Chromium</translation>
++<translation id="1524282610922162960">共享 AI-FREE 标签页</translation>
++<translation id="154404805518949443">登录 AI-FREE</translation>
+ <translation id="1547469039832541117">结束突出显示的任务。</translation>
+-<translation id="1553461853655228091">Chromium 需要获得相应权限，才能使用您的摄像头为您的周边环境创建 3D 地图</translation>
+-<translation id="1555494096857516577">{NUM_EXTENSIONS,plural, =1{此扩展程序已不再受支持。Chromium 建议您移除它。}other{这些扩展程序已不再受支持。Chromium 建议您移除它们。}}</translation>
+-<translation id="1562320819937089394">固定 Chromium</translation>
+-<translation id="1574377791422810894">Chromium 的安全工具</translation>
+-<translation id="1594928384848033697">Chromium 想要删除您的密码管理工具数据。请输入您的 Windows 密码以允许此操作。</translation>
+-<translation id="1607715478322902680">{COUNT,plural, =0{您的管理员要求您重新启动 Chromium 以应用一项更新}=1{您的管理员要求您重新启动 Chromium 以应用一项更新。您的无痕式窗口不会重新打开。}other{您的管理员要求您重新启动 Chromium 以应用一项更新。您的 # 个无痕式窗口不会重新打开。}}</translation>
+-<translation id="1625909126243026060">检查 Chromium 中重要的隐私控制设置和安全控件</translation>
++<translation id="1553461853655228091">AI-FREE 需要获得相应权限，才能使用您的摄像头为您的周边环境创建 3D 地图</translation>
++<translation id="1555494096857516577">{NUM_EXTENSIONS,plural, =1{此扩展程序已不再受支持。AI-FREE 建议您移除它。}other{这些扩展程序已不再受支持。AI-FREE 建议您移除它们。}}</translation>
++<translation id="1562320819937089394">固定 AI-FREE</translation>
++<translation id="1574377791422810894">AI-FREE 的安全工具</translation>
++<translation id="1594928384848033697">AI-FREE 想要删除您的密码管理工具数据。请输入您的 Windows 密码以允许此操作。</translation>
++<translation id="1607715478322902680">{COUNT,plural, =0{您的管理员要求您重新启动 AI-FREE 以应用一项更新}=1{您的管理员要求您重新启动 AI-FREE 以应用一项更新。您的无痕式窗口不会重新打开。}other{您的管理员要求您重新启动 AI-FREE 以应用一项更新。您的 # 个无痕式窗口不会重新打开。}}</translation>
++<translation id="1625909126243026060">检查 AI-FREE 中重要的隐私控制设置和安全控件</translation>
+ <translation id="1640672724030957280">正在下载...</translation>
+ <translation id="1680687534629375545">向图片搜索功能询问此页面</translation>
+-<translation id="1708414395296835197">您可随时使用 Chromium 打开您在消息、文档和其他应用内点击的链接。Chromium 还将固定到任务栏。</translation>
++<translation id="1708414395296835197">您可随时使用 AI-FREE 打开您在消息、文档和其他应用内点击的链接。AI-FREE 还将固定到任务栏。</translation>
+ <translation id="1709772298389099340">为 <ph name="BROWSER_NAME" /> 提供提升的权限。</translation>
+ <translation id="1722488837206509557">这样，您就可以从可用设备中选择并在这些设备上显示内容。</translation>
+-<translation id="1733725117201708356">Chromium 即将删除浏览数据</translation>
+-<translation id="1736443181683099871">Chromium 会尝试将导航路径升级到 HTTPS</translation>
+-<translation id="1736662517232558588">已清除 Chromium 数据</translation>
+-<translation id="1745121272106313518">Chromium 将在 <ph name="REMAINING_TIME" />后重启</translation>
+-<translation id="1749104137266986751">如果 HTTPS 不可用，Chromium 会在不向您发出警告的情况下使用不安全的连接</translation>
+-<translation id="1774152462503052664">让 Chromium 在后台运行</translation>
+-<translation id="1779356040007214683">为了提高 Chromium 的安全性，系统停用了一些未列在 <ph name="IDS_EXTENSION_WEB_STORE_TITLE" />中、可能是在您不知情的情况下添加的扩展程序。</translation>
+-<translation id="1793486931176048546">点击 Windows 通知中的<ph name="BEGIN_BOLD" />是<ph name="END_BOLD" />，将 Chromium 固定到任务栏，以便快速访问。</translation>
+-<translation id="1808667845054772817">重新安装Chromium</translation>
+-<translation id="1820835682567584003">Chromium 正在尝试<ph name="AUTHENTICATION_PURPOSE" /></translation>
+-<translation id="183031085822326697">下次在<ph name="DEVICE_TYPE" />上打开 Chromium 时，您会看到使用 Google 密码管理工具的提示。</translation>
++<translation id="1733725117201708356">AI-FREE 即将删除浏览数据</translation>
++<translation id="1736443181683099871">AI-FREE 会尝试将导航路径升级到 HTTPS</translation>
++<translation id="1736662517232558588">已清除 AI-FREE 数据</translation>
++<translation id="1745121272106313518">AI-FREE 将在 <ph name="REMAINING_TIME" />后重启</translation>
++<translation id="1749104137266986751">如果 HTTPS 不可用，AI-FREE 会在不向您发出警告的情况下使用不安全的连接</translation>
++<translation id="1774152462503052664">让 AI-FREE 在后台运行</translation>
++<translation id="1779356040007214683">为了提高 AI-FREE 的安全性，系统停用了一些未列在 <ph name="IDS_EXTENSION_WEB_STORE_TITLE" />中、可能是在您不知情的情况下添加的扩展程序。</translation>
++<translation id="1793486931176048546">点击 Windows 通知中的<ph name="BEGIN_BOLD" />是<ph name="END_BOLD" />，将 AI-FREE 固定到任务栏，以便快速访问。</translation>
++<translation id="1808667845054772817">重新安装AI-FREE</translation>
++<translation id="1820835682567584003">AI-FREE 正在尝试<ph name="AUTHENTICATION_PURPOSE" /></translation>
++<translation id="183031085822326697">下次在<ph name="DEVICE_TYPE" />上打开 AI-FREE 时，您会看到使用 Google 密码管理工具的提示。</translation>
+ <translation id="1838374766361614909">清除搜索字词</translation>
+-<translation id="18552579716432081">若要仅删除此设备中的浏览数据而保留 Google 账号中的浏览数据，请<ph name="BEGIN_LINK" />从 Chromium 中退出账号<ph name="END_LINK" />。</translation>
+-<translation id="1857749206890802997">在手机上下载 Chromium，随时随地打开现有标签页分组或创建新标签页分组。</translation>
+-<translation id="185970820835152459">您可以管理您已登录的 Google 账号。您可通过登录自己的 Google 账号使用 Chromium 浏览器、Play 商店、Gmail 等产品。如果您想添加他人（比如某个家庭成员）的账号，请改为将这个新人添加到您的 <ph name="DEVICE_TYPE" />。<ph name="LINK_BEGIN" />了解详情<ph name="LINK_END" /></translation>
++<translation id="18552579716432081">若要仅删除此设备中的浏览数据而保留 Google 账号中的浏览数据，请<ph name="BEGIN_LINK" />从 AI-FREE 中退出账号<ph name="END_LINK" />。</translation>
++<translation id="1857749206890802997">在手机上下载 AI-FREE，随时随地打开现有标签页分组或创建新标签页分组。</translation>
++<translation id="185970820835152459">您可以管理您已登录的 Google 账号。您可通过登录自己的 Google 账号使用 AI-FREE 浏览器、Play 商店、Gmail 等产品。如果您想添加他人（比如某个家庭成员）的账号，请改为将这个新人添加到您的 <ph name="DEVICE_TYPE" />。<ph name="LINK_BEGIN" />了解详情<ph name="LINK_END" /></translation>
+ <translation id="1862852878885210965">使用图片搜索功能进行搜索</translation>
+ <translation id="1880677175115548835">选择文字</translation>
+-<translation id="1881322772814446296">您目前登录的账号是一个受管理账号，该账号的管理员将能够控制您的 Chromium 个人资料。您的 Chromium 数据（例如您的应用、书签、历史记录、密码和其他设置）将永远与 <ph name="USER_NAME" /> 相关联。您可以通过 Google 账号信息中心删除这些数据，但无法将这些数据与其他账号相关联。您可以选择创建新的个人资料来单独存储您现有的 Chromium 数据。<ph name="LEARN_MORE" /></translation>
+-<translation id="1896836275755235458">Chromium 会通过限制后台活动和视觉效果（例如流畅滚动和视频帧速率）来节省电池电量。<ph name="BEGIN_LINK" />详细了解节能模式<ph name="END_LINK" /></translation>
++<translation id="1881322772814446296">您目前登录的账号是一个受管理账号，该账号的管理员将能够控制您的 AI-FREE 个人资料。您的 AI-FREE 数据（例如您的应用、书签、历史记录、密码和其他设置）将永远与 <ph name="USER_NAME" /> 相关联。您可以通过 Google 账号信息中心删除这些数据，但无法将这些数据与其他账号相关联。您可以选择创建新的个人资料来单独存储您现有的 AI-FREE 数据。<ph name="LEARN_MORE" /></translation>
++<translation id="1896836275755235458">AI-FREE 会通过限制后台活动和视觉效果（例如流畅滚动和视频帧速率）来节省电池电量。<ph name="BEGIN_LINK" />详细了解节能模式<ph name="END_LINK" /></translation>
+ <translation id="1898804291554630487">询问与此页面有关的问题</translation>
+-<translation id="1900969832270057921">Chromium 更新程序服务</translation>
+-<translation id="1911763535808217981">关闭此功能后，您无需登录 Chromium 即可登录 Gmail 等 Google 网站</translation>
+-<translation id="1929939181775079593">Chromium 未响应。要立即重新启动吗？</translation>
+-<translation id="1933341829955786215">您的组织 (<ph name="MANAGER" />) 要求您登录 Chromium</translation>
++<translation id="1900969832270057921">AI-FREE 更新程序服务</translation>
++<translation id="1911763535808217981">关闭此功能后，您无需登录 AI-FREE 即可登录 Gmail 等 Google 网站</translation>
++<translation id="1929939181775079593">AI-FREE 未响应。要立即重新启动吗？</translation>
++<translation id="1933341829955786215">您的组织 (<ph name="MANAGER" />) 要求您登录 AI-FREE</translation>
+ <translation id="193439633299369377">需要重新启动 Chromium 操作系统以应用更新。</translation>
+-<translation id="1951406923938785464">Chromium 阻止了此项下载操作，因为这不是常下载的文件类型，可能具有危险性</translation>
++<translation id="1951406923938785464">AI-FREE 阻止了此项下载操作，因为这不是常下载的文件类型，可能具有危险性</translation>
+ <translation id="1953553007165777902">正在下载…还需 <ph name="MINUTE" /> 分钟</translation>
+-<translation id="1966382378801805537">Chromium 无法确定或设置默认浏览器</translation>
+-<translation id="1990262977744080398">了解 Chromium 为何屏蔽某些文件（在新标签页中打开）</translation>
+-<translation id="1999715455684970349">让您的 Chromium 软件保持最新状态。如果此服务已停用或已停止运行，您的 Chromium 软件将无法保持最新状态，这意味着可能出现的安全漏洞无法得到修复，并且某些功能可能无法正常运行。当没有 Chromium 软件使用此服务时，此服务会自行卸载。</translation>
+-<translation id="2008474315282236005">这会从这台设备上删除 1 项内容。如果日后想要检索您的数据，届时请以 <ph name="USER_EMAIL" /> 的身份登录 Chromium。</translation>
++<translation id="1966382378801805537">AI-FREE 无法确定或设置默认浏览器</translation>
++<translation id="1990262977744080398">了解 AI-FREE 为何屏蔽某些文件（在新标签页中打开）</translation>
++<translation id="1999715455684970349">让您的 AI-FREE 软件保持最新状态。如果此服务已停用或已停止运行，您的 AI-FREE 软件将无法保持最新状态，这意味着可能出现的安全漏洞无法得到修复，并且某些功能可能无法正常运行。当没有 AI-FREE 软件使用此服务时，此服务会自行卸载。</translation>
++<translation id="2008474315282236005">这会从这台设备上删除 1 项内容。如果日后想要检索您的数据，届时请以 <ph name="USER_EMAIL" /> 的身份登录 AI-FREE。</translation>
+ <translation id="2018879682492276940">安装失败。请重试。</translation>
+ <translation id="2039417478970545937">设置。</translation>
+-<translation id="2049376729098081731">选择是否要包含 Chromium 历史记录以便在各款 Google 服务中获享更个性化的体验</translation>
+-<translation id="2064856577282482477">点击“新标签页”页面上的“自定义 Chromium”按钮，即可为 Chromium 换上全新外观</translation>
++<translation id="2049376729098081731">选择是否要包含 AI-FREE 历史记录以便在各款 Google 服务中获享更个性化的体验</translation>
++<translation id="2064856577282482477">点击“新标签页”页面上的“自定义 AI-FREE”按钮，即可为 AI-FREE 换上全新外观</translation>
+ <translation id="2066690553719545730">始终显示 AI 模式</translation>
+-<translation id="2086476982681781442">Chromium 阻止了此项下载操作，因为该文件具有欺骗性，可能会意外更改您的设备</translation>
+-<translation id="208726765006323911">下次打开 Chromium iOS 时，您会看到试用<ph name="FEATURE_NAME" />的提示。</translation>
+-<translation id="2099452623287920103">系统将从此设备中移除您已保存在 Google 账号中的密码和其他 Chromium 数据。如需在 Chromium 中重新使用这些数据，请重新登录。</translation>
+-<translation id="2120965832000301375">{COUNT,plural, =1{您的组织会在 Chromium 闲置 1 分钟后自动删除浏览数据。这些数据可能包括历史记录、自动填充数据和下载内容。您的标签页将会保持打开状态。}other{您的组织会在 Chromium 闲置 # 分钟后自动删除浏览数据。这些数据可能包括历史记录、自动填充数据和下载内容。您的标签页将会保持打开状态。}}</translation>
++<translation id="2086476982681781442">AI-FREE 阻止了此项下载操作，因为该文件具有欺骗性，可能会意外更改您的设备</translation>
++<translation id="208726765006323911">下次打开 AI-FREE iOS 时，您会看到试用<ph name="FEATURE_NAME" />的提示。</translation>
++<translation id="2099452623287920103">系统将从此设备中移除您已保存在 Google 账号中的密码和其他 AI-FREE 数据。如需在 AI-FREE 中重新使用这些数据，请重新登录。</translation>
++<translation id="2120965832000301375">{COUNT,plural, =1{您的组织会在 AI-FREE 闲置 1 分钟后自动删除浏览数据。这些数据可能包括历史记录、自动填充数据和下载内容。您的标签页将会保持打开状态。}other{您的组织会在 AI-FREE 闲置 # 分钟后自动删除浏览数据。这些数据可能包括历史记录、自动填充数据和下载内容。您的标签页将会保持打开状态。}}</translation>
+ <translation id="2126108037660393668">所下载的文件未能顺利通过验证。</translation>
+ <translation id="2135919691573380097">举报此网站</translation>
+ <translation id="2137162749895930932">关闭翻译屏幕</translation>
+-<translation id="215352261310130060">Chromium 阻止了此项下载操作，因为网站未使用安全连接，该文件可能已被篡改</translation>
++<translation id="215352261310130060">AI-FREE 阻止了此项下载操作，因为网站未使用安全连接，该文件可能已被篡改</translation>
+ <translation id="2170098639895543546">选择页面上的任何内容</translation>
+-<translation id="2174178932569897599">自定义 Chromium</translation>
++<translation id="2174178932569897599">自定义 AI-FREE</translation>
+ <translation id="2174917724755363426">尚未完成安装，确定要取消吗？</translation>
+-<translation id="2185166961232948079">Chromium - 网络登录 - <ph name="PAGE_TITLE" /></translation>
++<translation id="2185166961232948079">AI-FREE - 网络登录 - <ph name="PAGE_TITLE" /></translation>
+ <translation id="2190166659037789668">更新检查错误：<ph name="UPDATE_CHECK_ERROR" />。</translation>
+-<translation id="2199210295479376551">从 Chromium 中移除账号</translation>
+-<translation id="2210502920229141283">在 iOS 版 Chromium 上启用增强型安全浏览功能，随时随地更安全地浏览网页</translation>
+-<translation id="2210682093923538346">危险网站。Chromium 移除了通知权限。</translation>
++<translation id="2199210295479376551">从 AI-FREE 中移除账号</translation>
++<translation id="2210502920229141283">在 iOS 版 AI-FREE 上启用增强型安全浏览功能，随时随地更安全地浏览网页</translation>
++<translation id="2210682093923538346">危险网站。AI-FREE 移除了通知权限。</translation>
+ <translation id="2236949375853147973">我的活动记录</translation>
+-<translation id="2238130810669087193">如需将您的地址等信息同步到您的所有设备上，请登录 Chromium。登录后，该地址将保存到您的 Google 账号。</translation>
+-<translation id="2241627712206172106">如果您与亲朋好友共用计算机，他们将能够使用单独的账号进行浏览，并可随心所欲地设置Chromium。</translation>
++<translation id="2238130810669087193">如需将您的地址等信息同步到您的所有设备上，请登录 AI-FREE。登录后，该地址将保存到您的 Google 账号。</translation>
++<translation id="2241627712206172106">如果您与亲朋好友共用计算机，他们将能够使用单独的账号进行浏览，并可随心所欲地设置AI-FREE。</translation>
+ <translation id="2283803047247799269">使用“图片搜索”功能搜索此标签页</translation>
+-<translation id="2287771843518581140">{NUM_TABS,plural, =1{Chromium 建议您暂停导致浏览器运行缓慢的标签页}other{Chromium 建议您暂停导致浏览器运行缓慢的标签页}}</translation>
++<translation id="2287771843518581140">{NUM_TABS,plural, =1{AI-FREE 建议您暂停导致浏览器运行缓慢的标签页}other{AI-FREE 建议您暂停导致浏览器运行缓慢的标签页}}</translation>
+ <translation id="2307973900865360088">保留在程序坞中</translation>
+-<translation id="2313870531055795960">将网址与存储在 Chromium 中的不安全网站列表进行比对。如果某个网站企图窃取您的密码，或者您下载了有害的文件，Chromium 可能还会将相应网址连同少量网页内容发送给“安全浏览”功能。</translation>
++<translation id="2313870531055795960">将网址与存储在 AI-FREE 中的不安全网站列表进行比对。如果某个网站企图窃取您的密码，或者您下载了有害的文件，AI-FREE 可能还会将相应网址连同少量网页内容发送给“安全浏览”功能。</translation>
+ <translation id="2332076562712130931">此操作将会：
+         <ph name="LINE_BREAKS" />
+-          • 重置某些 Chromium 设置和快捷键
++          • 重置某些 AI-FREE 设置和快捷键
+           <ph name="LINE_BREAK" />
+           • 停用扩展程序
+           <ph name="LINE_BREAK" />
+           • 删除 Cookie 和其他临时网站数据
+           <ph name="LINE_BREAKS" />
+           书签、历史记录和已保存的密码不受影响。</translation>
+-<translation id="2343156876103232566">若要从此处向您的 Android 手机发送电话号码，请在这两部设备上分别登录 Chromium。</translation>
++<translation id="2343156876103232566">若要从此处向您的 Android 手机发送电话号码，请在这两部设备上分别登录 AI-FREE。</translation>
+ <translation id="2356070529366658676">询问</translation>
+ <translation id="2359808026110333948">继续</translation>
+-<translation id="2361918034042471035">扩展程序“<ph name="EXTENSION_NAME" />”需要您登录 Chromium</translation>
+-<translation id="236943522426971115">为应用停用 Chromium 后台运行功能</translation>
+-<translation id="2374216753258219393">如要以 <ph name="USER_EMAIL_ADDRESS" /> 的身份使用此扩展程序，请登录 Chromium。</translation>
++<translation id="2361918034042471035">扩展程序“<ph name="EXTENSION_NAME" />”需要您登录 AI-FREE</translation>
++<translation id="236943522426971115">为应用停用 AI-FREE 后台运行功能</translation>
++<translation id="2374216753258219393">如要以 <ph name="USER_EMAIL_ADDRESS" /> 的身份使用此扩展程序，请登录 AI-FREE。</translation>
+ <translation id="2384373936468275798">由于您的账号登录详细信息已过期，Chromium 操作系统无法同步您的数据。</translation>
+-<translation id="2398377054246527950">{NUM_DEVICES,plural, =0{一个或多个 Chromium 扩展程序访问过 1 部 HID 设备}=1{一个或多个 Chromium 扩展程序正在访问 1 部 HID 设备}other{一个或多个 Chromium 扩展程序正在访问 # 部 HID 设备}}</translation>
+-<translation id="2401032172288869980">Chromium 需要为此网站授予摄像头权限和麦克风权限</translation>
++<translation id="2398377054246527950">{NUM_DEVICES,plural, =0{一个或多个 AI-FREE 扩展程序访问过 1 部 HID 设备}=1{一个或多个 AI-FREE 扩展程序正在访问 1 部 HID 设备}other{一个或多个 AI-FREE 扩展程序正在访问 # 部 HID 设备}}</translation>
++<translation id="2401032172288869980">AI-FREE 需要为此网站授予摄像头权限和麦克风权限</translation>
+ <translation id="2403703063067034158">启动错误：另一个设置实例目前正在运行，请稍后重试。</translation>
+-<translation id="2418322681019544463">在任意应用内通过 Chromium 打开链接，并让浏览器始终显示在任务栏中</translation>
+-<translation id="2440750600860946460">借助 <ph name="BEGIN_LINK" />Chromium 中的工具<ph name="END_LINK" />，您可以安全地浏览并掌控个人数据的安全</translation>
++<translation id="2418322681019544463">在任意应用内通过 AI-FREE 打开链接，并让浏览器始终显示在任务栏中</translation>
++<translation id="2440750600860946460">借助 <ph name="BEGIN_LINK" />AI-FREE 中的工具<ph name="END_LINK" />，您可以安全地浏览并掌控个人数据的安全</translation>
+ <translation id="2451727308784734061">使用快捷方式可快速访问密码管理工具。您可将快捷方式移到电脑的主屏幕上或应用启动器中。</translation>
+-<translation id="2478295928299953161">Chromium 即将关闭</translation>
+-<translation id="2483889755041906834">在 Chromium 中</translation>
++<translation id="2478295928299953161">AI-FREE 即将关闭</translation>
++<translation id="2483889755041906834">在 AI-FREE 中</translation>
+ <translation id="2485422356828889247">卸载</translation>
+ <translation id="2513154137948333830">需要重新启动：<ph name="INSTALL_SUCCESS" /></translation>
+ <translation id="2542968102051442371">选择要使用图片搜索功能搜索的文字</translation>
+-<translation id="2554739539410784893">Chromium 正在尝试替换现有密码。请输入您的 Windows 密码以允许此操作。</translation>
+-<translation id="2560420686485554789">Chromium 需要获得存储空间使用权限，才能下载文件</translation>
+-<translation id="2572494885440352020">Chromium 帮助程序</translation>
++<translation id="2554739539410784893">AI-FREE 正在尝试替换现有密码。请输入您的 Windows 密码以允许此操作。</translation>
++<translation id="2560420686485554789">AI-FREE 需要获得存储空间使用权限，才能下载文件</translation>
++<translation id="2572494885440352020">AI-FREE 帮助程序</translation>
+ <translation id="2575822587468774919">选择任何内容即可使用图片搜索功能进行搜索</translation>
+-<translation id="2576118232315942160">如需获取您所有设备上的密码等信息，请登录 Chromium</translation>
+-<translation id="2592940277904433508">继续使用 Chromium</translation>
++<translation id="2576118232315942160">如需获取您所有设备上的密码等信息，请登录 AI-FREE</translation>
++<translation id="2592940277904433508">继续使用 AI-FREE</translation>
+ <translation id="259935314519650377">未能缓存所下载的安装程序。错误：<ph name="UNPACK_CACHING_ERROR_CODE" />。</translation>
+ <translation id="2620436844016719705">系统</translation>
+-<translation id="2629740064077610681">您的组织可以查看和管理浏览数据，例如您的书签、历史记录和密码，但无法查看其他 Chromium 资料中的浏览数据</translation>
+-<translation id="2635452620547538388">请验证您的身份，以便将 Chromium 数据保存在您的账号 <ph name="ACCOUNT_EMAIL" /> 中并使用这些数据</translation>
+-<translation id="2636783171884046627">可以使用键盘快捷键退出或返回 Chromium 中的 Gemini。</translation>
+-<translation id="2637732208198500597">{COUNT,plural, =0{高级保护计划要求您重新启动 Chromium 以应用一项更新}=1{高级保护计划要求您重新启动 Chromium 以应用一项更新。无痕式窗口将不会重新打开。}other{高级保护计划要求您重新启动 Chromium 以应用一项更新。# 个无痕式窗口将不会重新打开。}}</translation>
+-<translation id="2648074677641340862">安装过程中出现操作系统错误。请重新下载 Chromium。</translation>
+-<translation id="2661879430930417727">如果您是与亲朋好友共用一部设备，他们将能够使用单独的账号进行浏览，并可随心所欲地设置 Chromium</translation>
+-<translation id="2676569452213089702">在设备上轻松使用 Chromium 中的 Gemini，即使 Chromium 已最小化也无妨。</translation>
+-<translation id="2711502716910134313">Chromium 标签页</translation>
+-<translation id="2718390899429598676">为了提高安全性，Chromium 将对您的数据进行加密。</translation>
+-<translation id="2721354645805494590">若要从 Chromium 中移除您的 Google 账号，请退出账号</translation>
+-<translation id="2722636413143664436">如需在您的所有设备上获取密码、书签等信息，请登录 Chromium</translation>
++<translation id="2629740064077610681">您的组织可以查看和管理浏览数据，例如您的书签、历史记录和密码，但无法查看其他 AI-FREE 资料中的浏览数据</translation>
++<translation id="2635452620547538388">请验证您的身份，以便将 AI-FREE 数据保存在您的账号 <ph name="ACCOUNT_EMAIL" /> 中并使用这些数据</translation>
++<translation id="2636783171884046627">可以使用键盘快捷键退出或返回 AI-FREE 中的 Gemini。</translation>
++<translation id="2637732208198500597">{COUNT,plural, =0{高级保护计划要求您重新启动 AI-FREE 以应用一项更新}=1{高级保护计划要求您重新启动 AI-FREE 以应用一项更新。无痕式窗口将不会重新打开。}other{高级保护计划要求您重新启动 AI-FREE 以应用一项更新。# 个无痕式窗口将不会重新打开。}}</translation>
++<translation id="2648074677641340862">安装过程中出现操作系统错误。请重新下载 AI-FREE。</translation>
++<translation id="2661879430930417727">如果您是与亲朋好友共用一部设备，他们将能够使用单独的账号进行浏览，并可随心所欲地设置 AI-FREE</translation>
++<translation id="2676569452213089702">在设备上轻松使用 AI-FREE 中的 Gemini，即使 AI-FREE 已最小化也无妨。</translation>
++<translation id="2711502716910134313">AI-FREE 标签页</translation>
++<translation id="2718390899429598676">为了提高安全性，AI-FREE 将对您的数据进行加密。</translation>
++<translation id="2721354645805494590">若要从 AI-FREE 中移除您的 Google 账号，请退出账号</translation>
++<translation id="2722636413143664436">如需在您的所有设备上获取密码、书签等信息，请登录 AI-FREE</translation>
+ <translation id="2738871930057338499">无法连接到互联网。发生 HTTP 403 Forbidden 错误，请检查您的代理配置。</translation>
+ <translation id="2753623023919742414">点击即可搜索</translation>
+-<translation id="2768103863314748511">将 Chromium 设为默认 PDF 查看器</translation>
+-<translation id="2785438272836277133">此扩展程序包含恶意软件，所以不安全。请将其从 Chromium 中移除，这样它便无法再查看和更改您在所访问的网站上的数据，包括您的个人信息。</translation>
++<translation id="2768103863314748511">将 AI-FREE 设为默认 PDF 查看器</translation>
++<translation id="2785438272836277133">此扩展程序包含恶意软件，所以不安全。请将其从 AI-FREE 中移除，这样它便无法再查看和更改您在所访问的网站上的数据，包括您的个人信息。</translation>
+ <translation id="2799223571221894425">重新启动</translation>
+-<translation id="2803971713792056305">您的 Chromium</translation>
++<translation id="2803971713792056305">您的 AI-FREE</translation>
+ <translation id="2816462166102338036">使用图片搜索功能搜索此视频</translation>
+ <translation id="2841525013647267359">源语言</translation>
+ <translation id="2846251086934905009">安装时出错：安装程序进程未完成。已中止安装。</translation>
+-<translation id="2847479871509788944">从Chromium中移除…</translation>
+-<translation id="2850691299438350830">保护您在 Chromium 中免受安全威胁，登录状态下还可让您更安全地使用其他 Google 应用</translation>
++<translation id="2847479871509788944">从AI-FREE中移除…</translation>
++<translation id="2850691299438350830">保护您在 AI-FREE 中免受安全威胁，登录状态下还可让您更安全地使用其他 Google 应用</translation>
+ <translation id="2885378588091291677">任务管理器</translation>
+-<translation id="2910007522516064972">关于 Chromium(&amp;C)</translation>
++<translation id="5896294003346816960">关于 AI-FREE(&amp;A)</translation>
+ <translation id="2915996080311180594">暂不重启</translation>
+-<translation id="2933336679234709858">数据已使用口令加密。请输入该口令，以便使用 Chromium 数据并将其保存在您的 Google 账号中。</translation>
++<translation id="2933336679234709858">数据已使用口令加密。请输入该口令，以便使用 AI-FREE 数据并将其保存在您的 Google 账号中。</translation>
+ <translation id="2945997411976714835">安装时出错：安装程序进程未能启动。</translation>
+-<translation id="2948852018303413228">在 iOS 版 Chromium 中使用保存的密码更快地登录网站</translation>
+-<translation id="2970426615109535079">您的组织负责管理 Chromium</translation>
+-<translation id="2977470724722393594">Chromium 已是最新版本</translation>
+-<translation id="2977506796191543575">如果某个网站企图窃取您的密码，或者您下载了有害的文件，Chromium 可能还会将相应网址连同少量网页内容发送给“安全浏览”功能</translation>
+-<translation id="2981563588585023386">若要使用家长选择的设置更安全地上网，请登录 Chromium</translation>
++<translation id="2948852018303413228">在 iOS 版 AI-FREE 中使用保存的密码更快地登录网站</translation>
++<translation id="2970426615109535079">您的组织负责管理 AI-FREE</translation>
++<translation id="2977470724722393594">AI-FREE 已是最新版本</translation>
++<translation id="2977506796191543575">如果某个网站企图窃取您的密码，或者您下载了有害的文件，AI-FREE 可能还会将相应网址连同少量网页内容发送给“安全浏览”功能</translation>
++<translation id="2981563588585023386">若要使用家长选择的设置更安全地上网，请登录 AI-FREE</translation>
+ <translation id="3003694935412297923">所有任务</translation>
+-<translation id="3012615494352020668">{count,plural, =1{Chromium 需要先验证您的身份，然后才能将某些数据保存到您的 Google 账号中，供您在所有设备上使用。如果现在就退出账号，这些数据（1 项）将被删除。}other{Chromium 需要先验证您的身份，然后才能将某些数据保存到您的 Google 账号中，供您在所有设备上使用。如果现在就退出账号，这些数据（{count} 项）将被删除。}}</translation>
+-<translation id="3013473503895162900">在 Chromium 的新标签页中打开 <ph name="URL" />。</translation>
+-<translation id="3032787606318309379">正在添加到 Chromium...</translation>
++<translation id="3012615494352020668">{count,plural, =1{AI-FREE 需要先验证您的身份，然后才能将某些数据保存到您的 Google 账号中，供您在所有设备上使用。如果现在就退出账号，这些数据（1 项）将被删除。}other{AI-FREE 需要先验证您的身份，然后才能将某些数据保存到您的 Google 账号中，供您在所有设备上使用。如果现在就退出账号，这些数据（{count} 项）将被删除。}}</translation>
++<translation id="3013473503895162900">在 AI-FREE 的新标签页中打开 <ph name="URL" />。</translation>
++<translation id="3032787606318309379">正在添加到 AI-FREE...</translation>
+ <translation id="3038232873781883849">正在等待安装…</translation>
+ <translation id="3045032126857188731">译文语言：<ph name="LANGUAGE" /></translation>
+ <translation id="3047590466164881923">关闭反馈对话框</translation>
+-<translation id="3068187312562070417">其他 Chromium 个人资料</translation>
+-<translation id="3068290154869370196">扩展程序是可让您自定义 Chromium 的插件。从保持井然有序到简化日常任务，扩展程序可帮助您打造专属的 Chromium。</translation>
+-<translation id="3068515742935458733">将崩溃报告和<ph name="UMA_LINK" />发送给Google，帮助我们完善Chromium。</translation>
+-<translation id="3079753320517721795">{NUM_DEVICES,plural, =0{一个或多个 Chromium 扩展程序访问过 1 部 USB 设备}=1{一个或多个 Chromium 扩展程序正在访问 1 部 USB 设备}other{一个或多个 Chromium 扩展程序正在访问 # 部 USB 设备}}</translation>
+-<translation id="3095811995836568724">Chromium 历史记录</translation>
+-<translation id="3103660991484857065">安装程序解压缩归档失败。请重新下载 Chromium。</translation>
++<translation id="3068187312562070417">其他 AI-FREE 个人资料</translation>
++<translation id="3068290154869370196">扩展程序是可让您自定义 AI-FREE 的插件。从保持井然有序到简化日常任务，扩展程序可帮助您打造专属的 AI-FREE。</translation>
++<translation id="3068515742935458733">将崩溃报告和<ph name="UMA_LINK" />发送给Google，帮助我们完善AI-FREE。</translation>
++<translation id="3079753320517721795">{NUM_DEVICES,plural, =0{一个或多个 AI-FREE 扩展程序访问过 1 部 USB 设备}=1{一个或多个 AI-FREE 扩展程序正在访问 1 部 USB 设备}other{一个或多个 AI-FREE 扩展程序正在访问 # 部 USB 设备}}</translation>
++<translation id="3095811995836568724">AI-FREE 历史记录</translation>
++<translation id="3103660991484857065">安装程序解压缩归档失败。请重新下载 AI-FREE。</translation>
+ <translation id="310459126943037700">未能结束任务。</translation>
+ <translation id="3104828284009500087">搜索页面上的任何内容</translation>
+-<translation id="3126784891977756556">让您的密码、书签和历史记录在所有设备上完美同步。将默认浏览器更新为 Chromium，即可轻松使用您熟悉且喜爱的功能。</translation>
+-<translation id="3130323860337406239">Chromium 正在使用您的麦克风。</translation>
++<translation id="3126784891977756556">让您的密码、书签和历史记录在所有设备上完美同步。将默认浏览器更新为 AI-FREE，即可轻松使用您熟悉且喜爱的功能。</translation>
++<translation id="3130323860337406239">AI-FREE 正在使用您的麦克风。</translation>
+ <translation id="3130333203120345554">新搜索</translation>
+ <translation id="3137969841538672700">拖动即可搜索</translation>
+-<translation id="3144188012276422546">此标签页正在占用额外的资源。请通过 Chromium 将其设为非活跃状态，以便提升性能。</translation>
+-<translation id="3149163023759831301">若要共享屏幕，请在“系统设置”中为 Chromium 启用屏幕录制功能</translation>
+-<translation id="3155163173539279776">重新启动 Chromium</translation>
++<translation id="3144188012276422546">此标签页正在占用额外的资源。请通过 AI-FREE 将其设为非活跃状态，以便提升性能。</translation>
++<translation id="3149163023759831301">若要共享屏幕，请在“系统设置”中为 AI-FREE 启用屏幕录制功能</translation>
++<translation id="3155163173539279776">重新启动 AI-FREE</translation>
+ <translation id="3161522574479303604">所有语言</translation>
+-<translation id="3179665906251668410">在 Chromium 无痕式窗口中打开链接(&amp;G)</translation>
+-<translation id="3183357154200327217">计算机上的其他程序添加了一个主题，该主题可能会改变 Chromium 的工作方式。
++<translation id="3179665906251668410">在 AI-FREE 无痕式窗口中打开链接(&amp;G)</translation>
++<translation id="3183357154200327217">计算机上的其他程序添加了一个主题，该主题可能会改变 AI-FREE 的工作方式。
+ 
+ <ph name="EXTENSION_NAME" /></translation>
+-<translation id="3185330573522821672">自定义您的新 Chromium 个人资料</translation>
+-<translation id="3189205223539394158">无需切换标签页，即可继续在 AI 模式下对话。如需开始使用，请登录 Chromium。登录后，您还可在自己的所有设备上同步保存的密码等信息。</translation>
+-<translation id="3224847870593914902">若要从 Chromium 中移除您的 Google 账号，请在“设置”页面中退出 Chromium</translation>
+-<translation id="3234316605225071811">Chromium 以后可以询问您是否要使用已保存的信息为您自动填写表单</translation>
+-<translation id="3258596308407688501">Chromium 无法读写其数据目录：
++<translation id="3185330573522821672">自定义您的新 AI-FREE 个人资料</translation>
++<translation id="3189205223539394158">无需切换标签页，即可继续在 AI 模式下对话。如需开始使用，请登录 AI-FREE。登录后，您还可在自己的所有设备上同步保存的密码等信息。</translation>
++<translation id="3224847870593914902">若要从 AI-FREE 中移除您的 Google 账号，请在“设置”页面中退出 AI-FREE</translation>
++<translation id="3234316605225071811">AI-FREE 以后可以询问您是否要使用已保存的信息为您自动填写表单</translation>
++<translation id="3258596308407688501">AI-FREE 无法读写其数据目录：
+ 
+ <ph name="USER_DATA_DIRECTORY" /></translation>
+ <translation id="3286538390144397061">立即重新启动</translation>
+-<translation id="328888136576916638">缺少 Google API 密钥，因此 Chromium 的部分功能将无法使用。</translation>
+-<translation id="3296368748942286671">关闭 Chromium 后继续运行后台应用</translation>
+-<translation id="3313189106987092621">Chromium 会在使用不安全的连接加载网站前向您发出警告</translation>
+-<translation id="3316771292331273802">关闭所有 Chromium 窗口后，您将会从大多数网站退出账号；但如果您已登录 Chromium，则您的 Google 账号不会退出。若要让网站记住您，请<ph name="SETTINGS_LINK" />。</translation>
++<translation id="328888136576916638">缺少 Google API 密钥，因此 AI-FREE 的部分功能将无法使用。</translation>
++<translation id="3296368748942286671">关闭 AI-FREE 后继续运行后台应用</translation>
++<translation id="3313189106987092621">AI-FREE 会在使用不安全的连接加载网站前向您发出警告</translation>
++<translation id="3316771292331273802">关闭所有 AI-FREE 窗口后，您将会从大多数网站退出账号；但如果您已登录 AI-FREE，则您的 Google 账号不会退出。若要让网站记住您，请<ph name="SETTINGS_LINK" />。</translation>
+ <translation id="3352986031709923790">搜索区域的右上角：右侧 <ph name="RIGHT" />%，顶部 <ph name="TOP" />%</translation>
+-<translation id="3366305173356742781">您账号中的 Chromium 数据</translation>
++<translation id="3366305173356742781">您账号中的 AI-FREE 数据</translation>
+ <translation id="3369405342922656244">使用图片搜索功能搜索此页面</translation>
+-<translation id="3375770072980084583">借助 Chromium 在手机上使用您的密码</translation>
++<translation id="3375770072980084583">借助 AI-FREE 在手机上使用您的密码</translation>
+ <translation id="3387527074123400161">Chromium 操作系统</translation>
+-<translation id="3406848076815591792">切换到现有的 Chromium 个人资料？</translation>
++<translation id="3406848076815591792">切换到现有的 AI-FREE 个人资料？</translation>
+ <translation id="3412460710772753638">在此设备上的密码管理工具中更新</translation>
+-<translation id="3455907671758333080">借助 Chromium 在手机上使用增强型安全浏览功能</translation>
+-<translation id="3461644266919055473">正在打造您的专属 Chromium…</translation>
+-<translation id="3474745554856756813">这会从这台设备上删除 <ph name="ITEMS_COUNT" /> 项内容。如果日后想要检索您的数据，届时请以 <ph name="USER_EMAIL" /> 的身份登录 Chromium。</translation>
+-<translation id="3497319089134299931"><ph name="SHORTCUT" /> 可用于切换 Chromium 个人资料</translation>
+-<translation id="3509308970982693815">请关闭所有 Chromium 窗口并重试。</translation>
+-<translation id="3522404737534491619">若要共享窗口，请在“系统设置”中为 Chromium 启用屏幕录制功能</translation>
+-<translation id="3530103706039034513"><ph name="EXISTING_USER" />已登录。若要单独存储您的浏览数据，请使用您自己的个人资料 (<ph name="USER_EMAIL_ADDRESS" />) 登录 Chromium。</translation>
+-<translation id="3531741627422851418">用于在移动设备上下载 Chromium 浏览器的二维码</translation>
+-<translation id="3561853857681580870">若要共享屏幕，请在“系统设置”中为 Chromium 启用屏幕录制功能。</translation>
+-<translation id="3588112919289558122">增强型保护会为 Chromium 无法识别的网站关闭 JavaScript 优化功能</translation>
++<translation id="3455907671758333080">借助 AI-FREE 在手机上使用增强型安全浏览功能</translation>
++<translation id="3461644266919055473">正在打造您的专属 AI-FREE…</translation>
++<translation id="3474745554856756813">这会从这台设备上删除 <ph name="ITEMS_COUNT" /> 项内容。如果日后想要检索您的数据，届时请以 <ph name="USER_EMAIL" /> 的身份登录 AI-FREE。</translation>
++<translation id="3497319089134299931"><ph name="SHORTCUT" /> 可用于切换 AI-FREE 个人资料</translation>
++<translation id="3509308970982693815">请关闭所有 AI-FREE 窗口并重试。</translation>
++<translation id="3522404737534491619">若要共享窗口，请在“系统设置”中为 AI-FREE 启用屏幕录制功能</translation>
++<translation id="3530103706039034513"><ph name="EXISTING_USER" />已登录。若要单独存储您的浏览数据，请使用您自己的个人资料 (<ph name="USER_EMAIL_ADDRESS" />) 登录 AI-FREE。</translation>
++<translation id="3531741627422851418">用于在移动设备上下载 AI-FREE 浏览器的二维码</translation>
++<translation id="3561853857681580870">若要共享屏幕，请在“系统设置”中为 AI-FREE 启用屏幕录制功能。</translation>
++<translation id="3588112919289558122">增强型保护会为 AI-FREE 无法识别的网站关闭 JavaScript 优化功能</translation>
+ <translation id="3597003331831379823">未能以提升的权限运行设置。<ph name="METAINSTALLER_ERROR" /></translation>
+-<translation id="3600428265489994557">登录 Chromium</translation>
+-<translation id="3639635944603682591">系统将会从此设备上删除该用户的浏览数据。要想恢复这些数据，请以“<ph name="USER_EMAIL" />”的身份登录 Chromium。</translation>
+-<translation id="364817392622123556">{COUNT,plural, =0{Chromium 有一项新的可用更新；一旦您重新启动，系统即会应用这项更新。}=1{Chromium 有一项新的可用更新；一旦您重新启动，系统即会应用这项更新。您的无痕式窗口不会重新打开。}other{Chromium 有一项新的可用更新；一旦您重新启动，系统即会应用这项更新。您的 # 个无痕式窗口不会重新打开。}}</translation>
+-<translation id="3651803019964686660">若要从 <ph name="ORIGIN" /> 向您的 Android 手机发送电话号码，请在这两部设备上分别登录 Chromium。</translation>
++<translation id="3600428265489994557">登录 AI-FREE</translation>
++<translation id="3639635944603682591">系统将会从此设备上删除该用户的浏览数据。要想恢复这些数据，请以“<ph name="USER_EMAIL" />”的身份登录 AI-FREE。</translation>
++<translation id="364817392622123556">{COUNT,plural, =0{AI-FREE 有一项新的可用更新；一旦您重新启动，系统即会应用这项更新。}=1{AI-FREE 有一项新的可用更新；一旦您重新启动，系统即会应用这项更新。您的无痕式窗口不会重新打开。}other{AI-FREE 有一项新的可用更新；一旦您重新启动，系统即会应用这项更新。您的 # 个无痕式窗口不会重新打开。}}</translation>
++<translation id="3651803019964686660">若要从 <ph name="ORIGIN" /> 向您的 Android 手机发送电话号码，请在这两部设备上分别登录 AI-FREE。</translation>
+ <translation id="3667616615096815454">无法安装，服务器无法识别该应用。</translation>
+-<translation id="3675854891107786059">使用您<ph name="BEGIN_LINK" />自己的口令<ph name="END_LINK" />加密您 Google 账号中的所有 Chromium 数据。系统不会加密 Google Pay 中的支付方式和地址，也不会同步 Chromium 中的浏览记录。</translation>
+-<translation id="370962675267501463">{COUNT,plural, =0{您的管理员要求您重新启动 Chromium 以应用此项更新}=1{您的管理员要求您重新启动 Chromium 以应用此项更新。您的无痕式窗口不会重新打开。}other{您的管理员要求您重新启动 Chromium 以应用此项更新。您的 # 个无痕式窗口不会重新打开。}}</translation>
+-<translation id="3713809861844741608">在 Chromium 新标签页中打开链接(&amp;T)</translation>
+-<translation id="3728124580182886854">关联 Chromium 和其他 Google 服务，以便获得个性化体验和实现其他用途</translation>
++<translation id="3675854891107786059">使用您<ph name="BEGIN_LINK" />自己的口令<ph name="END_LINK" />加密您 Google 账号中的所有 AI-FREE 数据。系统不会加密 Google Pay 中的支付方式和地址，也不会同步 AI-FREE 中的浏览记录。</translation>
++<translation id="370962675267501463">{COUNT,plural, =0{您的管理员要求您重新启动 AI-FREE 以应用此项更新}=1{您的管理员要求您重新启动 AI-FREE 以应用此项更新。您的无痕式窗口不会重新打开。}other{您的管理员要求您重新启动 AI-FREE 以应用此项更新。您的 # 个无痕式窗口不会重新打开。}}</translation>
++<translation id="3713809861844741608">在 AI-FREE 新标签页中打开链接(&amp;T)</translation>
++<translation id="3728124580182886854">关联 AI-FREE 和其他 Google 服务，以便获得个性化体验和实现其他用途</translation>
+ <translation id="3729187154190517324">使用“添加标签页等”按钮，添加多个标签页、文件和工具，让搜索更深入、更精准。</translation>
+-<translation id="3788675262216168505">管理 Chromium 个人资料</translation>
+-<translation id="3790262771324122253">了解 Chromium 为何会拦截部分下载内容</translation>
+-<translation id="379589255253486813">如有任何事项需要您审核，Chromium 会通知您</translation>
+-<translation id="3802055581630249637">Chromium 会预加载您可能访问的网页，以便提高这些网页在您访问时的加载速度</translation>
++<translation id="3788675262216168505">管理 AI-FREE 个人资料</translation>
++<translation id="3790262771324122253">了解 AI-FREE 为何会拦截部分下载内容</translation>
++<translation id="379589255253486813">如有任何事项需要您审核，AI-FREE 会通知您</translation>
++<translation id="3802055581630249637">AI-FREE 会预加载您可能访问的网页，以便提高这些网页在您访问时的加载速度</translation>
+ <translation id="3810973564298564668">管理</translation>
+-<translation id="3823384748599722168">如需使用已保存的密码，请扫描二维码、下载 iOS 版 Chromium 应用，并登录您的 Google 账号</translation>
++<translation id="3823384748599722168">如需使用已保存的密码，请扫描二维码、下载 iOS 版 AI-FREE 应用，并登录您的 Google 账号</translation>
+ <translation id="3846683726093018685">**总结：**用一句话（不到 30 个字）概括屏幕截图所示内容的核心主题和主要目的。
+ 
+           **建议问题：**生成 3-5 个发人深省的问题，以项目符号列表的形式呈现，帮助用户更深入地理解屏幕截图。这些问题中，至少应有一个是关于某个视觉对象、其设计或其放置位置的问题。</translation>
+-<translation id="3848258323044014972"><ph name="PAGE_TITLE" /> - Chromium</translation>
++<translation id="3848258323044014972"><ph name="PAGE_TITLE" /> - AI-FREE</translation>
+ <translation id="3885770153807205175">语言选择器</translation>
+-<translation id="388648406173476553">自定义和控制 Chromium。出了点需要您注意的状况 - 点击即可查看详情。</translation>
+-<translation id="3889543394854987837">点击您的姓名即可打开Chromium并开始浏览。</translation>
++<translation id="388648406173476553">自定义和控制 AI-FREE。出了点需要您注意的状况 - 点击即可查看详情。</translation>
++<translation id="3889543394854987837">点击您的姓名即可打开AI-FREE并开始浏览。</translation>
+ <translation id="3892148308691398805">复制文字</translation>
+-<translation id="390528597099634151"><ph name="EXISTING_USER" />已登录这份 Chromium 个人资料。Chromium 可为您创建一份专属的个人资料，以将您的浏览数据单独存储。</translation>
+-<translation id="3909353120217047026">此扩展程序违反了 Chrome 应用商店政策，可能不安全。请将其从 Chromium 中移除，这样它便无法再查看和更改您在所访问的网站上的数据，包括您的个人信息。</translation>
+-<translation id="3937491663738985329">自定义 Chromium(&amp;U)</translation>
++<translation id="390528597099634151"><ph name="EXISTING_USER" />已登录这份 AI-FREE 个人资料。AI-FREE 可为您创建一份专属的个人资料，以将您的浏览数据单独存储。</translation>
++<translation id="3909353120217047026">此扩展程序违反了 Chrome 应用商店政策，可能不安全。请将其从 AI-FREE 中移除，这样它便无法再查看和更改您在所访问的网站上的数据，包括您的个人信息。</translation>
++<translation id="3937491663738985329">自定义 AI-FREE(&amp;U)</translation>
+ <translation id="3941890832296813527">安装时出错：安装程序文件名无效或不受支持。</translation>
+-<translation id="3945058413678539331">Chromium 正在尝试复制密码。请输入您的 Windows 密码以允许此操作。</translation>
+-<translation id="3954172517175569325">您在 Google 账号中保存的密码、支付方式和地址将从此设备中移除。如需在 Chromium 中重新使用这些数据，请重新登录。</translation>
++<translation id="3945058413678539331">AI-FREE 正在尝试复制密码。请输入您的 Windows 密码以允许此操作。</translation>
++<translation id="3954172517175569325">您在 Google 账号中保存的密码、支付方式和地址将从此设备中移除。如需在 AI-FREE 中重新使用这些数据，请重新登录。</translation>
+ <translation id="395904275706073188">无法读取受保护的页面，请尝试其他页面。</translation>
+-<translation id="3962647064319009959">了解 Chromium 如何保障您的安全</translation>
++<translation id="3962647064319009959">了解 AI-FREE 如何保障您的安全</translation>
+ <translation id="3967822245660637423">下载完毕</translation>
+-<translation id="3971865010372729242">当您在地址栏或搜索框中输入内容时，Chromium 会将您输入的内容发送给组织的搜索、AI 和代理工具，以便获取建议。</translation>
++<translation id="3971865010372729242">当您在地址栏或搜索框中输入内容时，AI-FREE 会将您输入的内容发送给组织的搜索、AI 和代理工具，以便获取建议。</translation>
+ <translation id="3975724895399328945">关于 Google Chrome for Testing(&amp;G)</translation>
+ <translation id="3997429360543082038">关于 Chromium 操作系统</translation>
+-<translation id="4010059961270896984">当您访问某个网站时，Chromium 会通过可隐藏 IP 地址的隐私保护服务器，将经过混淆处理的网址片段发送给 <ph name="BEGIN_LINK" />Google 安全浏览服务<ph name="END_LINK" />。如果网站有可疑行为，系统也会发送完整网址和少量网页内容。</translation>
++<translation id="4010059961270896984">当您访问某个网站时，AI-FREE 会通过可隐藏 IP 地址的隐私保护服务器，将经过混淆处理的网址片段发送给 <ph name="BEGIN_LINK" />Google 安全浏览服务<ph name="END_LINK" />。如果网站有可疑行为，系统也会发送完整网址和少量网页内容。</translation>
+ <translation id="4019629340646866719">与 <ph name="BEGIN_LINK_LINUX_OSS" />Linux 开发环境<ph name="END_LINK_LINUX_OSS" />一样，Chromium 操作系统也是借助了其他<ph name="BEGIN_LINK_CROS_OSS" />开源软件<ph name="END_LINK_CROS_OSS" />才得以问世。</translation>
+ <translation id="4022972681110646219">翻译屏幕</translation>
+ <translation id="4023601594785368013">源语言：<ph name="LANGUAGE" /></translation>
+-<translation id="4023845192681161785">在任意应用内通过 Chromium 打开链接。此外，为了方便使用，Chromium 会固定到任务栏。</translation>
+-<translation id="4036079820698952681">报告<ph name="BEGIN_LINK" />当前设置<ph name="END_LINK" />，协助我们改进 Chromium</translation>
++<translation id="4023845192681161785">在任意应用内通过 AI-FREE 打开链接。此外，为了方便使用，AI-FREE 会固定到任务栏。</translation>
++<translation id="4036079820698952681">报告<ph name="BEGIN_LINK" />当前设置<ph name="END_LINK" />，协助我们改进 AI-FREE</translation>
+ <translation id="4050175100176540509">最新版本不仅在安全性方面做出了重要改进，还提供了多项新功能。</translation>
+ <translation id="4055805654398742145">密码管理工具(&amp;A)</translation>
+-<translation id="4061696872429826774">计算机上的其他程序添加了一个扩展程序，该扩展程序可能会改变 Chromium 的工作方式。
++<translation id="4061696872429826774">计算机上的其他程序添加了一个扩展程序，该扩展程序可能会改变 AI-FREE 的工作方式。
+ 
+ <ph name="EXTENSION_NAME" /></translation>
+-<translation id="4095980151185649725">{COUNT,plural, =1{您的组织会在 Chromium 闲置 1 分钟后自动关闭它。浏览数据会被删除。这些数据可能包括历史记录、自动填充数据和下载内容。}other{您的组织会在 Chromium 闲置 # 分钟后自动关闭它。浏览数据会被删除。这些数据可能包括历史记录、自动填充数据和下载内容。}}</translation>
+-<translation id="4118474109249235144">Chromium 无痕模式</translation>
+-<translation id="4122186850977583290">前往“关于 Chromium”页面</translation>
+-<translation id="4135244987012252068">自定义 Chromium，为您的浏览器换上全新外观</translation>
+-<translation id="4147856324248078748">自定义 Chromium(&amp;U)</translation>
++<translation id="4095980151185649725">{COUNT,plural, =1{您的组织会在 AI-FREE 闲置 1 分钟后自动关闭它。浏览数据会被删除。这些数据可能包括历史记录、自动填充数据和下载内容。}other{您的组织会在 AI-FREE 闲置 # 分钟后自动关闭它。浏览数据会被删除。这些数据可能包括历史记录、自动填充数据和下载内容。}}</translation>
++<translation id="4118474109249235144">AI-FREE 无痕模式</translation>
++<translation id="4122186850977583290">前往“关于 AI-FREE”页面</translation>
++<translation id="4135244987012252068">自定义 AI-FREE，为您的浏览器换上全新外观</translation>
++<translation id="4147856324248078748">自定义 AI-FREE(&amp;U)</translation>
+ <translation id="4148957013307229264">正在安装...</translation>
+-<translation id="419998258129752635"><ph name="PAGE_TITLE" /> - 网络登录 - Chromium</translation>
+-<translation id="421369550622382712">在这里，您可以找到适用于 Chromium 的精彩应用、游戏、扩展程序和主题背景。</translation>
+-<translation id="4217080900579554343">若要在您的所有计算机上使用此扩展程序等，请登录 Chromium</translation>
+-<translation id="4217972271355023382">若要使用家长选择的设置更安全地上网，请切换到你已用 <ph name="USER_EMAIL_ADDRESS" /> 身份登录的 Chromium 资料</translation>
++<translation id="419998258129752635"><ph name="PAGE_TITLE" /> - 网络登录 - AI-FREE</translation>
++<translation id="421369550622382712">在这里，您可以找到适用于 AI-FREE 的精彩应用、游戏、扩展程序和主题背景。</translation>
++<translation id="4217080900579554343">若要在您的所有计算机上使用此扩展程序等，请登录 AI-FREE</translation>
++<translation id="4217972271355023382">若要使用家长选择的设置更安全地上网，请切换到你已用 <ph name="USER_EMAIL_ADDRESS" /> 身份登录的 AI-FREE 资料</translation>
+ <translation id="4222932583846282852">正在取消…</translation>
+ <translation id="4224210481850767180">已取消安装。</translation>
+-<translation id="4230135487732243613">是否将您的 Chromium 数据与此账号相关联？</translation>
+-<translation id="4251772536351901305">通过比“标准保护”机制分析更多的网站数据，针对危险网站（甚至是 Google 未曾得知的网站）向您发出警告。您可以选择忽略 Chromium 警告。</translation>
+-<translation id="4269093074552541569">退出 Chromium</translation>
+-<translation id="4271805377592243930">获取有关 Chromium 的帮助</translation>
++<translation id="4230135487732243613">是否将您的 AI-FREE 数据与此账号相关联？</translation>
++<translation id="4251772536351901305">通过比“标准保护”机制分析更多的网站数据，针对危险网站（甚至是 Google 未曾得知的网站）向您发出警告。您可以选择忽略 AI-FREE 警告。</translation>
++<translation id="4269093074552541569">退出 AI-FREE</translation>
++<translation id="3370440151636040266">获取有关 AI-FREE 的帮助</translation>
+ <translation id="4281844954008187215">服务条款</translation>
+-<translation id="4285930937574705105">未知错误导致安装失败。如果 Chromium 正在运行，请将其关闭，然后重试。</translation>
+-<translation id="4298125729853015961">从 Chromium 导出密码</translation>
++<translation id="4285930937574705105">未知错误导致安装失败。如果 AI-FREE 正在运行，请将其关闭，然后重试。</translation>
++<translation id="4298125729853015961">从 AI-FREE 导出密码</translation>
+ <translation id="4304713468139749426">密码管理工具</translation>
+ <translation id="4334241893986177674">搜索此屏幕截图</translation>
+-<translation id="4384331407722351213">在 Windows 启动时启动 Chromium</translation>
+-<translation id="4384993550046411228">将 Chromium 设为默认浏览器，即可轻松使用您熟悉、喜爱和信任的功能。Chromium 将固定到任务栏，以便您快速访问。</translation>
++<translation id="4384331407722351213">在 Windows 启动时启动 AI-FREE</translation>
++<translation id="4384993550046411228">将 AI-FREE 设为默认浏览器，即可轻松使用您熟悉、喜爱和信任的功能。AI-FREE 将固定到任务栏，以便您快速访问。</translation>
+ <translation id="4400772909124543403">没有可用的更新</translation>
+-<translation id="4407044323746248786">仍要退出 Chromium？</translation>
++<translation id="4407044323746248786">仍要退出 AI-FREE？</translation>
+ <translation id="4413205837991854510">始终显示图片搜索快捷方式</translation>
+-<translation id="4415566066719264597">让 Chromium 在后台运行</translation>
+-<translation id="4419831163359812184">{NUM_EXTENSIONS,plural, =1{Chromium 建议您移除它。<ph name="BEGIN_LINK" />详细了解受支持的扩展程序<ph name="END_LINK" />}other{Chromium 建议您移除它们。<ph name="BEGIN_LINK" />详细了解受支持的扩展程序<ph name="END_LINK" />}}</translation>
+-<translation id="4423735387467980091">自定义及控制 Chromium</translation>
++<translation id="4415566066719264597">让 AI-FREE 在后台运行</translation>
++<translation id="4419831163359812184">{NUM_EXTENSIONS,plural, =1{AI-FREE 建议您移除它。<ph name="BEGIN_LINK" />详细了解受支持的扩展程序<ph name="END_LINK" />}other{AI-FREE 建议您移除它们。<ph name="BEGIN_LINK" />详细了解受支持的扩展程序<ph name="END_LINK" />}}</translation>
++<translation id="4423735387467980091">自定义及控制 AI-FREE</translation>
+ <translation id="4427306783828095590">“增强型保护”选项在防范网上诱骗和恶意软件方面更高一筹</translation>
+ <translation id="4434353761996769206">安装程序错误：<ph name="INSTALLER_ERROR" /></translation>
+-<translation id="4438870983368648614"><ph name="MANAGER" />负责管理 Chromium</translation>
+-<translation id="444069871276811466">添加 Chromium 个人资料</translation>
++<translation id="4438870983368648614"><ph name="MANAGER" />负责管理 AI-FREE</translation>
++<translation id="444069871276811466">添加 AI-FREE 个人资料</translation>
+ <translation id="4447409407328223819">关于 Chrome for Testing</translation>
+-<translation id="4470974262661801543">如要将 Chromium 数据保存在 Google 账号中并使用这些数据，请输入口令</translation>
++<translation id="4470974262661801543">如要将 AI-FREE 数据保存在 Google 账号中并使用这些数据，请输入口令</translation>
+ <translation id="4493028449971051158">启动错误：请以管理员身份运行安装程序。</translation>
+ <translation id="4501471624619070934">由于在此国家/地区的访问权限遭到限制，安装失败。</translation>
+-<translation id="4510853178268397146">此扩展程序尚未发布隐私权规范，例如如何收集和使用数据。Chromium 建议您移除它。</translation>
+-<translation id="452711251841752011">欢迎使用 Chromium；已打开新的浏览器窗口</translation>
+-<translation id="4531137820806573936">Chromium 需要获得权限，才能绘制您周边环境的地图并跟踪您的双手</translation>
+-<translation id="4536805923587466102">您已使用另一份 Chromium 个人资料 (<ph name="USER_EMAIL_ADDRESS" />) 登录</translation>
+-<translation id="4548534452171747496">Chromium 会预加载网页，以便您更快速地浏览和搜索内容。<ph name="BEGIN_LINK" />详细了解预加载网页<ph name="END_LINK" /></translation>
++<translation id="4510853178268397146">此扩展程序尚未发布隐私权规范，例如如何收集和使用数据。AI-FREE 建议您移除它。</translation>
++<translation id="452711251841752011">欢迎使用 AI-FREE；已打开新的浏览器窗口</translation>
++<translation id="4531137820806573936">AI-FREE 需要获得权限，才能绘制您周边环境的地图并跟踪您的双手</translation>
++<translation id="4536805923587466102">您已使用另一份 AI-FREE 个人资料 (<ph name="USER_EMAIL_ADDRESS" />) 登录</translation>
++<translation id="4548534452171747496">AI-FREE 会预加载网页，以便您更快速地浏览和搜索内容。<ph name="BEGIN_LINK" />详细了解预加载网页<ph name="END_LINK" /></translation>
+ <translation id="4549180975214802957">举报您认为有害的网站，帮助我们为所有人改善网络安全环境。</translation>
+-<translation id="4570813286784708942">Chromium 阻止了此项下载操作，因为您关闭了安全浏览功能，系统无法验证该文件</translation>
+-<translation id="4583692638088316420">借助 Chromium 在手机上试用 Google 智能镜头</translation>
++<translation id="4570813286784708942">AI-FREE 阻止了此项下载操作，因为您关闭了安全浏览功能，系统无法验证该文件</translation>
++<translation id="4583692638088316420">借助 AI-FREE 在手机上试用 Google 智能镜头</translation>
+ <translation id="4594305310729380060">保存到此设备上的密码管理工具中</translation>
+-<translation id="459535195905078186">Chromium 应用</translation>
++<translation id="459535195905078186">AI-FREE 应用</translation>
+ <translation id="4598116752460667024">从列表中搜索任何进程。</translation>
+ <translation id="4613863813562375431">Chromium 操作系统版本</translation>
+-<translation id="4621240073146040695">即将更新到最新版本！重新启动 Chromium 即可完成更新。</translation>
+-<translation id="4625064703209785397">使用 Chromium 的 V8 引擎加快网站速度，但 Chromium 的防范攻击能力会略微降低</translation>
+-<translation id="4665829708273112819">警告：Chromium 无法阻止扩展程序记录您的浏览活动。若要在无痕模式下停用该扩展程序，请取消选中此选项。</translation>
+-<translation id="4673151026126227699">如果您还分享 Chromium 使用情况报告，这些报告会包含您访问过的网址</translation>
+-<translation id="4677944499843243528">其他计算机 (<ph name="HOST_NAME" />) 的另一个 Chromium 进程 (<ph name="PROCESS_ID" />) 好像正在使用此个人资料。Chromium 已锁定此个人资料以防止其受损。如果您确定其他进程目前未使用此个人资料，请为其解锁并重新启动 Chromium。</translation>
++<translation id="4621240073146040695">即将更新到最新版本！重新启动 AI-FREE 即可完成更新。</translation>
++<translation id="4625064703209785397">使用 AI-FREE 的 V8 引擎加快网站速度，但 AI-FREE 的防范攻击能力会略微降低</translation>
++<translation id="4665829708273112819">警告：AI-FREE 无法阻止扩展程序记录您的浏览活动。若要在无痕模式下停用该扩展程序，请取消选中此选项。</translation>
++<translation id="4673151026126227699">如果您还分享 AI-FREE 使用情况报告，这些报告会包含您访问过的网址</translation>
++<translation id="4677944499843243528">其他计算机 (<ph name="HOST_NAME" />) 的另一个 AI-FREE 进程 (<ph name="PROCESS_ID" />) 好像正在使用此个人资料。AI-FREE 已锁定此个人资料以防止其受损。如果您确定其他进程目前未使用此个人资料，请为其解锁并重新启动 AI-FREE。</translation>
+ <translation id="4680828127924988555">取消安装</translation>
+-<translation id="469259825538636168">部分 Chromium 数据尚未保存到您的 Google 账号。建议等待几分钟，然后再尝试退出账号。如果现在就退出账号，这些数据将被删除。</translation>
+-<translation id="4708193446201257833">登录后，您可以在 Chromium 中使用 Google 账号中的密码等信息。使用 <ph name="SHORTCUT" /> 可以更改 Google 服务设置。</translation>
+-<translation id="4708774505295300557">之前已有人在此计算机上以 <ph name="ACCOUNT_EMAIL_LAST" /> 的身份登录了 Chromium。请新建一个 Chromium 用户来单独保存您的信息。</translation>
++<translation id="469259825538636168">部分 AI-FREE 数据尚未保存到您的 Google 账号。建议等待几分钟，然后再尝试退出账号。如果现在就退出账号，这些数据将被删除。</translation>
++<translation id="4708193446201257833">登录后，您可以在 AI-FREE 中使用 Google 账号中的密码等信息。使用 <ph name="SHORTCUT" /> 可以更改 Google 服务设置。</translation>
++<translation id="4708774505295300557">之前已有人在此计算机上以 <ph name="ACCOUNT_EMAIL_LAST" /> 的身份登录了 AI-FREE。请新建一个 AI-FREE 用户来单独保存您的信息。</translation>
+ <translation id="4724676981607797757">出现协议不受支持错误，因此安装失败。</translation>
+-<translation id="4746050847053251315">仍要退出 Chromium？</translation>
+-<translation id="4748217263233248895">Chromium 刚刚应用了一项特殊的安全更新。请立即重启，以便系统恢复您的标签页。</translation>
+-<translation id="4771701986670315895">您近期未访问过该网站，因此 Chromium 撤消了该网站的<ph name="PERMISSION_1" />权限、<ph name="PERMISSION_2" />权限和另外 <ph name="COUNT" /> 项权限。</translation>
+-<translation id="4786083865378785874">如果 Chromium 中的 Gemini 已打开，则在创建新标签页时，侧边栏会保持打开状态</translation>
++<translation id="4746050847053251315">仍要退出 AI-FREE？</translation>
++<translation id="4748217263233248895">AI-FREE 刚刚应用了一项特殊的安全更新。请立即重启，以便系统恢复您的标签页。</translation>
++<translation id="4771701986670315895">您近期未访问过该网站，因此 AI-FREE 撤消了该网站的<ph name="PERMISSION_1" />权限、<ph name="PERMISSION_2" />权限和另外 <ph name="COUNT" /> 项权限。</translation>
++<translation id="4786083865378785874">如果 AI-FREE 中的 Gemini 已打开，则在创建新标签页时，侧边栏会保持打开状态</translation>
+ <translation id="479167709087336770">这项服务会使用 Google 搜索所用的拼写检查工具。您在浏览器中输入的文字会被发送给 Google。您随时可在“设置”中更改此行为。</translation>
+-<translation id="4814736265800133385">在不登录账号的情况下使用 Chromium</translation>
+-<translation id="4888717733111232871">Chromium的入站规则，允许mDNS流量。</translation>
+-<translation id="4893347770495441059">重新启动以更新 Chromium(&amp;C)</translation>
++<translation id="4814736265800133385">在不登录账号的情况下使用 AI-FREE</translation>
++<translation id="4888717733111232871">AI-FREE的入站规则，允许mDNS流量。</translation>
++<translation id="4893347770495441059">重新启动以更新 AI-FREE(&amp;C)</translation>
+ <translation id="4918086044614829423">接受</translation>
+ <translation id="4918844574251943176">已复制图片</translation>
+-<translation id="4943838377383847465">Chromium处于后台运行模式。</translation>
+-<translation id="494490797786467921">点击即可关闭 Chromium 登录对话框</translation>
+-<translation id="4950660488495335294">借助 Chromium 个人资料，您可将所有 Chromium 内容分门别类。您可为朋友和家人创建专属资料，或者将工作和娱乐用资料分开。</translation>
+-<translation id="4987820182225656817">访客使用Chromium不会留下任何痕迹。</translation>
+-<translation id="4992938037305302429">设置 Chromium 账号</translation>
+-<translation id="4994636714258228724">将您自己添加到Chromium</translation>
+-<translation id="5123973130450702873">Chromium 需要获得权限，才能跟踪您的手部动作</translation>
+-<translation id="5141988424377517949">您近期未访问过该网站，因此 Chromium 撤消了该网站的<ph name="PERMISSION_1" />权限、<ph name="PERMISSION_2" />权限和<ph name="PERMISSION_3" />权限。</translation>
++<translation id="4943838377383847465">AI-FREE处于后台运行模式。</translation>
++<translation id="494490797786467921">点击即可关闭 AI-FREE 登录对话框</translation>
++<translation id="4950660488495335294">借助 AI-FREE 个人资料，您可将所有 AI-FREE 内容分门别类。您可为朋友和家人创建专属资料，或者将工作和娱乐用资料分开。</translation>
++<translation id="4987820182225656817">访客使用AI-FREE不会留下任何痕迹。</translation>
++<translation id="4992938037305302429">设置 AI-FREE 账号</translation>
++<translation id="4994636714258228724">将您自己添加到AI-FREE</translation>
++<translation id="5123973130450702873">AI-FREE 需要获得权限，才能跟踪您的手部动作</translation>
++<translation id="5141988424377517949">您近期未访问过该网站，因此 AI-FREE 撤消了该网站的<ph name="PERMISSION_1" />权限、<ph name="PERMISSION_2" />权限和<ph name="PERMISSION_3" />权限。</translation>
+ <translation id="5174969993834422967">您通常会屏蔽通知。要允许此网站向您发送通知，请点击位置栏右侧的通知图标。</translation>
+ <translation id="5174983315706567306">磁盘可用空间不足。</translation>
+-<translation id="5187123684706427865">Chromium 账号需要重新验证身份</translation>
+-<translation id="5231355151045086930">退出 Chromium</translation>
++<translation id="5187123684706427865">AI-FREE 账号需要重新验证身份</translation>
++<translation id="5231355151045086930">退出 AI-FREE</translation>
+ <translation id="5234764350956374838">关闭</translation>
+-<translation id="5249261924633168472">在 Chromium 无痕式窗口中打开链接(&amp;G)</translation>
++<translation id="5249261924633168472">在 AI-FREE 无痕式窗口中打开链接(&amp;G)</translation>
+ <translation id="5254739261293693943">询问此视频</translation>
+-<translation id="5276305953263010518">下载 Chromium 应用，随时随地保存密码</translation>
+-<translation id="5277894862589591112">要想应用您的更改，请重新启动 Chromium</translation>
++<translation id="5276305953263010518">下载 AI-FREE 应用，随时随地保存密码</translation>
++<translation id="5277894862589591112">要想应用您的更改，请重新启动 AI-FREE</translation>
+ <translation id="5286907366254680517">检测到</translation>
+-<translation id="5289287148052354622">获取 Chromium 应用</translation>
+-<translation id="5294316920224716406">当您在无痕模式下浏览内容时，Chromium 会在使用不安全的连接加载网站前向您发出警告</translation>
+-<translation id="5313228254328109263">Chromium Updater Internal Service</translation>
++<translation id="5289287148052354622">获取 AI-FREE 应用</translation>
++<translation id="5294316920224716406">当您在无痕模式下浏览内容时，AI-FREE 会在使用不安全的连接加载网站前向您发出警告</translation>
++<translation id="5313228254328109263">AI-FREE Updater Internal Service</translation>
+ <translation id="5346389065299425353">添加多个标签页、文件和工具，让搜索更深入、更精准</translation>
+-<translation id="5348677704241861105">使用 Chromium 中的 Gemini 快速了解此文档的概要信息并提出问题</translation>
+-<translation id="5352264705793813212">Chromium 找到了一些供您审查的安全建议</translation>
+-<translation id="5352361688875342522">其他 Chromium 个人资料</translation>
++<translation id="5348677704241861105">使用 AI-FREE 中的 Gemini 快速了解此文档的概要信息并提出问题</translation>
++<translation id="5352264705793813212">AI-FREE 找到了一些供您审查的安全建议</translation>
++<translation id="5352361688875342522">其他 AI-FREE 个人资料</translation>
+ <translation id="535243042947607642">由于您的账号登录详细信息已过期，ChromiumOS 无法将 Chromium 数据保存到您的 Google 账号</translation>
+-<translation id="5358375970380395591">您目前登录的账号是一个受管理账号，该账号的管理员将能够控制您的 Chromium 个人资料。您的 Chromium 数据（例如您的应用、书签、历史记录、密码和其他设置）将永远与 <ph name="USER_NAME" /> 相关联。您可以通过 Google 账号信息中心删除这些数据，但无法将这些数据与其他账号相关联。<ph name="LEARN_MORE" /></translation>
++<translation id="5358375970380395591">您目前登录的账号是一个受管理账号，该账号的管理员将能够控制您的 AI-FREE 个人资料。您的 AI-FREE 数据（例如您的应用、书签、历史记录、密码和其他设置）将永远与 <ph name="USER_NAME" /> 相关联。您可以通过 Google 账号信息中心删除这些数据，但无法将这些数据与其他账号相关联。<ph name="LEARN_MORE" /></translation>
+ <translation id="5368118228313795342">额外代码：<ph name="EXTRA_CODE" />。</translation>
+-<translation id="5377622451696208284">若要获得个性化体验，请在“网络与应用活动记录”中包含 Chromium</translation>
+-<translation id="5383439451358640070">了解 Chromium 为何屏蔽某些文件</translation>
+-<translation id="5386450000063123300">正在更新 Chromium (<ph name="PROGRESS_PERCENT" />)</translation>
+-<translation id="538767207339317086">允许登录 Chromium</translation>
+-<translation id="5405650547142096840">从Chromium中移除</translation>
+-<translation id="5424544524441439284">降低性能，但提高 Chromium 防范攻击的能力</translation>
+-<translation id="5427571867875391349">将Chromium设为默认浏览器</translation>
+-<translation id="5438241569118040789"><ph name="PAGE_TITLE" /> - Chromium 测试版</translation>
+-<translation id="5460618461609401056">{NUM_TABS,plural, =1{Chromium 建议您暂停导致浏览器运行缓慢的标签页}other{Chromium 建议您暂停导致浏览器运行缓慢的标签页}}</translation>
+-<translation id="5473971139929175403">Chromium 可能无法正常运行，因为它不再支持此 Linux 发行版</translation>
+-<translation id="5475924890392386523">Chromium 阻止了此项下载操作，因为该文件可能会危害您的个人和社交网络账号</translation>
+-<translation id="5480860683791598150">Chromium 需要获得位置权限，才能将您的位置信息共享给此网站</translation>
+-<translation id="549669000822060376">Chromium正在安装最新的系统更新，请稍候。</translation>
+-<translation id="5496810170689441661">Chromium 正在尝试修改密码。请输入您的 Windows 密码以允许此操作。</translation>
++<translation id="5377622451696208284">若要获得个性化体验，请在“网络与应用活动记录”中包含 AI-FREE</translation>
++<translation id="5383439451358640070">了解 AI-FREE 为何屏蔽某些文件</translation>
++<translation id="5386450000063123300">正在更新 AI-FREE (<ph name="PROGRESS_PERCENT" />)</translation>
++<translation id="538767207339317086">允许登录 AI-FREE</translation>
++<translation id="5405650547142096840">从AI-FREE中移除</translation>
++<translation id="5424544524441439284">降低性能，但提高 AI-FREE 防范攻击的能力</translation>
++<translation id="5427571867875391349">将AI-FREE设为默认浏览器</translation>
++<translation id="5438241569118040789"><ph name="PAGE_TITLE" /> - AI-FREE 测试版</translation>
++<translation id="5460618461609401056">{NUM_TABS,plural, =1{AI-FREE 建议您暂停导致浏览器运行缓慢的标签页}other{AI-FREE 建议您暂停导致浏览器运行缓慢的标签页}}</translation>
++<translation id="5473971139929175403">AI-FREE 可能无法正常运行，因为它不再支持此 Linux 发行版</translation>
++<translation id="5475924890392386523">AI-FREE 阻止了此项下载操作，因为该文件可能会危害您的个人和社交网络账号</translation>
++<translation id="5480860683791598150">AI-FREE 需要获得位置权限，才能将您的位置信息共享给此网站</translation>
++<translation id="549669000822060376">AI-FREE正在安装最新的系统更新，请稍候。</translation>
++<translation id="5496810170689441661">AI-FREE 正在尝试修改密码。请输入您的 Windows 密码以允许此操作。</translation>
+ <translation id="5524890928877629608">搜索区域的左上角：左侧 <ph name="LEFT" />%，顶部 <ph name="TOP" />%</translation>
+-<translation id="5527463683072221100">在 Chromium 中打开 PDF 文件</translation>
++<translation id="5527463683072221100">在 AI-FREE 中打开 PDF 文件</translation>
+ <translation id="5536164441519929134">询问<ph name="LINE_BREAK" />关于此标签页的问题</translation>
+-<translation id="555970465369471303">出于安全考虑，当您首次访问某个网站时，Chromium 会关闭 JavaScript 优化功能。
++<translation id="555970465369471303">出于安全考虑，当您首次访问某个网站时，AI-FREE 会关闭 JavaScript 优化功能。
+ 
+ 如果此网页无法按预期运行，请尝试允许优化。</translation>
+-<translation id="5575874067957905201">在 Mac 菜单栏中显示 Chromium 中的 Gemini 并开启键盘快捷键</translation>
++<translation id="5575874067957905201">在 Mac 菜单栏中显示 AI-FREE 中的 Gemini 并开启键盘快捷键</translation>
+ <translation id="5579324208890605088">启动错误：请以普通用户身份（非管理员身份）运行安装程序。</translation>
+-<translation id="5580770360767802657">默认使用 Chromium 并将其固定</translation>
++<translation id="5580770360767802657">默认使用 AI-FREE 并将其固定</translation>
+ <translation id="5596627076506792578">更多选项</translation>
+ <translation id="5605834417512968703">选择任意内容即可使用图片搜索功能进行搜索，按 Esc 键可退出图片搜索功能</translation>
+ <translation id="5618818588972826921">选择任何文字或图片即可使用图片搜索功能进行搜索，按 Esc 键可退出图片搜索功能</translation>
+-<translation id="5623402015214259806">{0,plural, =0{有一项可用的 Chromium 更新}=1{有一项可用的 Chromium 更新}other{有一项可用的 Chromium 更新（已发布 # 天）}}</translation>
+-<translation id="5643865575100044307">始终在关闭 Chromium 时删除设备上的网站数据</translation>
+-<translation id="5653831366781983928">请立即重启 Chromium</translation>
++<translation id="5623402015214259806">{0,plural, =0{有一项可用的 AI-FREE 更新}=1{有一项可用的 AI-FREE 更新}other{有一项可用的 AI-FREE 更新（已发布 # 天）}}</translation>
++<translation id="5643865575100044307">始终在关闭 AI-FREE 时删除设备上的网站数据</translation>
++<translation id="5653831366781983928">请立即重启 AI-FREE</translation>
+ <translation id="5690427481109656848">Google LLC</translation>
+-<translation id="5698481217667032250">以这种语言显示 Chromium</translation>
++<translation id="5698481217667032250">以这种语言显示 AI-FREE</translation>
+ <translation id="569897634095159764">无法连接到互联网。代理服务器要求进行身份验证。</translation>
+-<translation id="5768371961535086509">Chromium 会释放闲置标签页占用的内存。这可让活跃标签页和其他应用获得更多计算机资源，并让 Chromium 保持快速运行。当您返回到闲置标签页时，它们会自动重新变为活跃状态。<ph name="BEGIN_LINK" />详细了解省内存模式<ph name="END_LINK" /></translation>
+-<translation id="5775198138441669627">如果您忘记了口令或想更改此设置，请<ph name="SETTINGS_LINK" />您账号中的 Chromium 数据</translation>
+-<translation id="5800158606660203929">自定义和控制 Chromium。将 Chromium 设为默认浏览器。</translation>
++<translation id="5768371961535086509">AI-FREE 会释放闲置标签页占用的内存。这可让活跃标签页和其他应用获得更多计算机资源，并让 AI-FREE 保持快速运行。当您返回到闲置标签页时，它们会自动重新变为活跃状态。<ph name="BEGIN_LINK" />详细了解省内存模式<ph name="END_LINK" /></translation>
++<translation id="5775198138441669627">如果您忘记了口令或想更改此设置，请<ph name="SETTINGS_LINK" />您账号中的 AI-FREE 数据</translation>
++<translation id="5800158606660203929">自定义和控制 AI-FREE。将 AI-FREE 设为默认浏览器。</translation>
+ <translation id="5809516625706423866">无法连接到互联网。发生 HTTP 401 Unauthorized 错误，请检查您的代理配置。</translation>
+-<translation id="5817952762723416573">使用 Chromium 的 V8 引擎加速网站，但 Chromium 的防攻击能力会略微降低。此设置已关闭。</translation>
+-<translation id="5821520528363214608">如要将 Chromium 数据保存在 Google 账号中并使用这些数据，请更新 Chromium</translation>
++<translation id="5817952762723416573">使用 AI-FREE 的 V8 引擎加速网站，但 AI-FREE 的防攻击能力会略微降低。此设置已关闭。</translation>
++<translation id="5821520528363214608">如要将 AI-FREE 数据保存在 Google 账号中并使用这些数据，请更新 AI-FREE</translation>
+ <translation id="5824893331272123205">无法加载此面板，请重试</translation>
+-<translation id="5862307444128926510">欢迎使用 Chromium</translation>
+-<translation id="5867606647614813312">开启更多功能，提供 Chromium 最强大的安全防护</translation>
++<translation id="5862307444128926510">欢迎使用 AI-FREE</translation>
++<translation id="5867606647614813312">开启更多功能，提供 AI-FREE 最强大的安全防护</translation>
+ <translation id="5871205389137001634">点击即可退出图片搜索功能</translation>
+-<translation id="5883558403894052917">Chromium 发现这些内容包含恶意软件：</translation>
+-<translation id="5889361821821684993">Chromium 会定期进行检查，以确保您的浏览器使用了最安全的设置。如有任何事项需要您审核，我们会通知您。</translation>
++<translation id="5883558403894052917">AI-FREE 发现这些内容包含恶意软件：</translation>
++<translation id="5889361821821684993">AI-FREE 会定期进行检查，以确保您的浏览器使用了最安全的设置。如有任何事项需要您审核，我们会通知您。</translation>
+ <translation id="5895138241574237353">重新启动</translation>
+ <translation id="5903106910045431592"><ph name="PAGE_TITLE" /> - 网络登录</translation>
+ <translation id="5924017743176219022">正在连接到互联网…</translation>
+-<translation id="5939553720811388432">立即开始设置您的 Chromium</translation>
++<translation id="5939553720811388432">立即开始设置您的 AI-FREE</translation>
+ <translation id="5941711191222866238">最小化</translation>
+-<translation id="5949225980829865667">如需在您的所有设备上获取此书签等内容，请登录 Chromium</translation>
+-<translation id="5953657885167112863">打造您的专属 Chromium</translation>
++<translation id="5949225980829865667">如需在您的所有设备上获取此书签等内容，请登录 AI-FREE</translation>
++<translation id="5953657885167112863">打造您的专属 AI-FREE</translation>
+ <translation id="5960071705175224773">未知应用更改了您的设置</translation>
+ <translation id="5968400720580217226">AI 模式</translation>
+-<translation id="5986585015444752010">{COUNT,plural, =1{您的组织会在 Chromium 闲置 1 分钟后自动关闭它。}other{您的组织会在 Chromium 闲置 # 分钟后自动关闭它。}}</translation>
+-<translation id="5987687638152509985">更新 Chromium 以开始同步</translation>
++<translation id="5986585015444752010">{COUNT,plural, =1{您的组织会在 AI-FREE 闲置 1 分钟后自动关闭它。}other{您的组织会在 AI-FREE 闲置 # 分钟后自动关闭它。}}</translation>
++<translation id="5987687638152509985">更新 AI-FREE 以开始同步</translation>
+ <translation id="6003112304606738118">正在下载…还需 <ph name="HOURS" /> 小时</translation>
+ <translation id="6009821354356307391">继续提问</translation>
+ <translation id="6040143037577758943">关闭</translation>
+-<translation id="6058380562449900225">为保护您的数据，对于您近期未访问的网站，请允许 Chromium 移除网站权限。此操作不会停用通知功能。</translation>
+-<translation id="6063093106622310249">在 Chromium 中打开(&amp;O)</translation>
++<translation id="6058380562449900225">为保护您的数据，对于您近期未访问的网站，请允许 AI-FREE 移除网站权限。此操作不会停用通知功能。</translation>
++<translation id="6063093106622310249">在 AI-FREE 中打开(&amp;O)</translation>
+ <translation id="6069027071882229820">复制为图片</translation>
+-<translation id="6072279588547424923">“<ph name="EXTENSION_NAME" />”已添加到 Chromium</translation>
+-<translation id="6096348254544841612">有可用的更新。欢迎自定义和控制 Chromium。</translation>
+-<translation id="6107893135096467929">已开启 • Chromium 无法验证此扩展程序的来源</translation>
+-<translation id="611228897408671387">设置 Chromium 账号</translation>
+-<translation id="6119438414301547735">允许扩展程序在 Chromium 工具栏中显示访问请求</translation>
+-<translation id="6129621093834146363"><ph name="FILE_NAME" /> 存在危险，因此 Chromium 已将其拦截。</translation>
+-<translation id="6132897690380286411">Chromium 即将关闭并删除数据</translation>
+-<translation id="6145820983052037069">您可在此处切换 Chromium 个人资料</translation>
+-<translation id="615103374448673771">如果您允许使用 Cookie，Chromium 便可能会使用 Cookie 进行预加载</translation>
++<translation id="6072279588547424923">“<ph name="EXTENSION_NAME" />”已添加到 AI-FREE</translation>
++<translation id="6096348254544841612">有可用的更新。欢迎自定义和控制 AI-FREE。</translation>
++<translation id="6107893135096467929">已开启 • AI-FREE 无法验证此扩展程序的来源</translation>
++<translation id="611228897408671387">设置 AI-FREE 账号</translation>
++<translation id="6119438414301547735">允许扩展程序在 AI-FREE 工具栏中显示访问请求</translation>
++<translation id="6129621093834146363"><ph name="FILE_NAME" /> 存在危险，因此 AI-FREE 已将其拦截。</translation>
++<translation id="6132897690380286411">AI-FREE 即将关闭并删除数据</translation>
++<translation id="6145820983052037069">您可在此处切换 AI-FREE 个人资料</translation>
++<translation id="615103374448673771">如果您允许使用 Cookie，AI-FREE 便可能会使用 Cookie 进行预加载</translation>
+ <translation id="6165508094623778733">了解详情</translation>
+-<translation id="6173308241973263798">清除账号中的 Chromium 数据</translation>
+-<translation id="6174920971222007286">这可能是个危险文件<ph name="LINE_BREAK" />如果您提供了密码，Chromium 可为您检查此下载内容。系统会将该文件的相关信息发送给 Google 安全浏览功能，但文件内容和密码会保留在您的设备上。</translation>
++<translation id="6173308241973263798">清除账号中的 AI-FREE 数据</translation>
++<translation id="6174920971222007286">这可能是个危险文件<ph name="LINE_BREAK" />如果您提供了密码，AI-FREE 可为您检查此下载内容。系统会将该文件的相关信息发送给 Google 安全浏览功能，但文件内容和密码会保留在您的设备上。</translation>
+ <translation id="6182736845697986886">更新服务器出现内部错误，因此安装失败。</translation>
+-<translation id="6183079672144801177">请确保您已在“<ph name="TARGET_DEVICE_NAME" />”上登录 Chromium，然后再次尝试发送。</translation>
+-<translation id="6204922163963157461">计算机上的其他程序添加了一个应用，该应用可能会改变 Chromium 的工作方式。
++<translation id="6183079672144801177">请确保您已在“<ph name="TARGET_DEVICE_NAME" />”上登录 AI-FREE，然后再次尝试发送。</translation>
++<translation id="6204922163963157461">计算机上的其他程序添加了一个应用，该应用可能会改变 AI-FREE 的工作方式。
+ 
+ <ph name="EXTENSION_NAME" /></translation>
+-<translation id="6212496753309875659">此计算机已安装了更高版本的 Chromium。如果软件无法正常运行，请卸载 Chromium 并重试。</translation>
+-<translation id="6219195342503754812">{0,plural, =0{Chromium 将立即重新启动}=1{Chromium 将在 1 秒后重新启动}other{Chromium 将在 # 秒后重新启动}}</translation>
++<translation id="6212496753309875659">此计算机已安装了更高版本的 AI-FREE。如果软件无法正常运行，请卸载 AI-FREE 并重试。</translation>
++<translation id="6219195342503754812">{0,plural, =0{AI-FREE 将立即重新启动}=1{AI-FREE 将在 1 秒后重新启动}other{AI-FREE 将在 # 秒后重新启动}}</translation>
+ <translation id="6239161312595354541">向图片搜索功能询问此视频</translation>
+-<translation id="6241367896540709610">Chromium 需要获得存储空间使用权限才能下载文件</translation>
+-<translation id="6245734527075554892">将网址与存储在 Chromium 中的不安全网站列表进行比对</translation>
+-<translation id="6248213926982192922">将 Chromium 设置为默认浏览器</translation>
++<translation id="6241367896540709610">AI-FREE 需要获得存储空间使用权限才能下载文件</translation>
++<translation id="6245734527075554892">将网址与存储在 AI-FREE 中的不安全网站列表进行比对</translation>
++<translation id="6248213926982192922">将 AI-FREE 设置为默认浏览器</translation>
+ <translation id="6248988683584659830">搜索设置</translation>
+-<translation id="6268381023930128611">退出 Chromium？</translation>
+-<translation id="6270547683008298381">这些标签页正在使用额外的资源。为了提升性能，请让 Chromium 将它们设为非活跃状态。</translation>
+-<translation id="6281746429495226318">自定义您的 Chromium 个人资料</translation>
+-<translation id="6290827346642914212">请为您的 Chromium 个人资料命名</translation>
+-<translation id="6294831894865512704">某个扩展程序需要您登录 Chromium</translation>
+-<translation id="6295779123002464101"><ph name="FILE_NAME" /> 可能存在危险，因此 Chromium 已将其拦截。</translation>
+-<translation id="6309712487085796862">Chromium 正在使用您的摄像头。</translation>
+-<translation id="6333502561965082103">Chromium 正在执行另一项操作，请稍后重试。</translation>
+-<translation id="6334986366598267305">现在，无论是通过Google账号还是在共用的计算机上，您都可以更轻松地使用Chromium。</translation>
+-<translation id="6347002662287820329">将 Chromium 设为默认浏览器，即可轻松使用您熟悉、喜爱和信任的功能。</translation>
+-<translation id="6347933965114150440">Chromium 快捷方式</translation>
+-<translation id="6366160072964553914">Chromium 阻止了此项下载操作，因为这不是常下载的文件，可能具有危险性</translation>
+-<translation id="6373523479360886564">确定要卸载 Chromium 吗？</translation>
++<translation id="6268381023930128611">退出 AI-FREE？</translation>
++<translation id="6270547683008298381">这些标签页正在使用额外的资源。为了提升性能，请让 AI-FREE 将它们设为非活跃状态。</translation>
++<translation id="6281746429495226318">自定义您的 AI-FREE 个人资料</translation>
++<translation id="6290827346642914212">请为您的 AI-FREE 个人资料命名</translation>
++<translation id="6294831894865512704">某个扩展程序需要您登录 AI-FREE</translation>
++<translation id="6295779123002464101"><ph name="FILE_NAME" /> 可能存在危险，因此 AI-FREE 已将其拦截。</translation>
++<translation id="6309712487085796862">AI-FREE 正在使用您的摄像头。</translation>
++<translation id="6333502561965082103">AI-FREE 正在执行另一项操作，请稍后重试。</translation>
++<translation id="6334986366598267305">现在，无论是通过Google账号还是在共用的计算机上，您都可以更轻松地使用AI-FREE。</translation>
++<translation id="6347002662287820329">将 AI-FREE 设为默认浏览器，即可轻松使用您熟悉、喜爱和信任的功能。</translation>
++<translation id="6347933965114150440">AI-FREE 快捷方式</translation>
++<translation id="6366160072964553914">AI-FREE 阻止了此项下载操作，因为这不是常下载的文件，可能具有危险性</translation>
++<translation id="6373523479360886564">确定要卸载 AI-FREE 吗？</translation>
+ <translation id="6375219077595103062">添加密码管理工具快捷方式</translation>
+ <translation id="6388799252195623474">帮我解决这个问题</translation>
+-<translation id="6390800440335263989">如需继续操作，请以 <ph name="EMAIL" /> 的身份登录 Chromium。这样可以确保应用所属组织的政策。</translation>
+-<translation id="6400112897226594999">计算机屏幕中的 Chromium 徽标。</translation>
+-<translation id="6403826409255603130">Chromium 是一款可高速运行网页和应用的网络浏览器。它快捷、稳定且易于使用。Chromium 内置的防护恶意软件和网上诱骗的功能可让您更安全地浏览网页。</translation>
+-<translation id="6414624068245092115">为了确保您可以一直通过 Google 账号使用和保存 Chromium 数据，请验证是您本人在操作</translation>
+-<translation id="642132557830635295">Chromium 的运行速度会更快，并且使用 JavaScript 的功能应该能按预期运行</translation>
++<translation id="6390800440335263989">如需继续操作，请以 <ph name="EMAIL" /> 的身份登录 AI-FREE。这样可以确保应用所属组织的政策。</translation>
++<translation id="6400112897226594999">计算机屏幕中的 AI-FREE 徽标。</translation>
++<translation id="6403826409255603130">AI-FREE 是一款可高速运行网页和应用的网络浏览器。它快捷、稳定且易于使用。AI-FREE 内置的防护恶意软件和网上诱骗的功能可让您更安全地浏览网页。</translation>
++<translation id="6414624068245092115">为了确保您可以一直通过 Google 账号使用和保存 AI-FREE 数据，请验证是您本人在操作</translation>
++<translation id="642132557830635295">AI-FREE 的运行速度会更快，并且使用 JavaScript 的功能应该能按预期运行</translation>
+ <translation id="6436260184216827876">图片搜索功能不可用，请稍后再试。</translation>
+ <translation id="6442900851116057561">重启 Chromium 操作系统</translation>
+-<translation id="6443470774889161065">Chromium 会预加载您可能会访问的更多网页，以便提高这些网页在您访问时的加载速度</translation>
+-<translation id="6450948450282634257">在手机上下载 Chromium，即可跟踪价格并在有网站降价时收到提醒</translation>
+-<translation id="645458117210240797">已关闭 • Chromium 无法验证此扩展程序的来源</translation>
+-<translation id="6455857529632101747">欢迎使用 Chromium 个人资料</translation>
+-<translation id="6460614424172581323">下次在 <ph name="DEVICE_TYPE" /> 上打开 Chromium 时，系统会提示您使用标签页分组。</translation>
+-<translation id="6466344609055215035">从 Chromium 中移除账号</translation>
+-<translation id="6475912303565314141">它还能够控制Chromium启动后显示的页面。</translation>
++<translation id="6443470774889161065">AI-FREE 会预加载您可能会访问的更多网页，以便提高这些网页在您访问时的加载速度</translation>
++<translation id="6450948450282634257">在手机上下载 AI-FREE，即可跟踪价格并在有网站降价时收到提醒</translation>
++<translation id="645458117210240797">已关闭 • AI-FREE 无法验证此扩展程序的来源</translation>
++<translation id="6455857529632101747">欢迎使用 AI-FREE 个人资料</translation>
++<translation id="6460614424172581323">下次在 <ph name="DEVICE_TYPE" /> 上打开 AI-FREE 时，系统会提示您使用标签页分组。</translation>
++<translation id="6466344609055215035">从 AI-FREE 中移除账号</translation>
++<translation id="6475912303565314141">它还能够控制AI-FREE启动后显示的页面。</translation>
+ <translation id="648319183876919572">“增强型安全浏览”功能有助于保护您免受危险的网站及下载内容的侵害</translation>
+-<translation id="6510925080656968729">卸载 Chromium</translation>
+-<translation id="651535675648445253">在 Chromium 中打开快捷方式</translation>
+-<translation id="6539122709674868420">贵组织会在 Chromium 闲置 <ph name="TIMEOUT_DURATION" />后将其关闭。浏览数据已被删除，其中可能包括历史记录、自动填充和下载内容。</translation>
+-<translation id="6542839706527980775">每份个人资料均包含自己的 Chromium 信息，例如书签、历史记录、密码等等</translation>
+-<translation id="6563921047760808519">详细了解 <ph name="BEGIN_LINK" />Chromium 如何确保您数据的私密性<ph name="END_LINK" /></translation>
+-<translation id="6564039629497156115">对此设置的更改将在 Chromium 重启后生效。</translation>
+-<translation id="6567032987737689854">您可以点击 Chromium 主菜单中的“扩展程序”来管理您的扩展程序。</translation>
+-<translation id="656935081669708576">您可切换到另一份 Chromium 个人资料以查看其中的密码</translation>
+-<translation id="6570579332384693436">为了修正拼写错误，Chromium 会将您在文本字段中输入的文字发送给 Google</translation>
+-<translation id="6598877126913850652">转到 Chromium 通知设置部分</translation>
++<translation id="6510925080656968729">卸载 AI-FREE</translation>
++<translation id="651535675648445253">在 AI-FREE 中打开快捷方式</translation>
++<translation id="6539122709674868420">贵组织会在 AI-FREE 闲置 <ph name="TIMEOUT_DURATION" />后将其关闭。浏览数据已被删除，其中可能包括历史记录、自动填充和下载内容。</translation>
++<translation id="6542839706527980775">每份个人资料均包含自己的 AI-FREE 信息，例如书签、历史记录、密码等等</translation>
++<translation id="6563921047760808519">详细了解 <ph name="BEGIN_LINK" />AI-FREE 如何确保您数据的私密性<ph name="END_LINK" /></translation>
++<translation id="6564039629497156115">对此设置的更改将在 AI-FREE 重启后生效。</translation>
++<translation id="6567032987737689854">您可以点击 AI-FREE 主菜单中的“扩展程序”来管理您的扩展程序。</translation>
++<translation id="656935081669708576">您可切换到另一份 AI-FREE 个人资料以查看其中的密码</translation>
++<translation id="6570579332384693436">为了修正拼写错误，AI-FREE 会将您在文本字段中输入的文字发送给 Google</translation>
++<translation id="6598877126913850652">转到 AI-FREE 通知设置部分</translation>
+ <translation id="6600016381025017075">搜索此页面上的任何内容</translation>
+-<translation id="6613594504749178791">您所做的更改会在下次重新启动 Chromium 时生效。</translation>
+-<translation id="6637908313088374648">现在，Chromium 会在 Windows 启动时启动，让您可以即刻开启浏览之旅。您可在“设置”中关闭此功能。</translation>
+-<translation id="6648212540664651655">从上次停下的地方继续：Chromium 已恢复您上次会话中的标签页。如需关闭此功能，请前往</translation>
+-<translation id="665732753414869868">Chromium 需要获得摄像头权限才能为您的周边环境创建 3D 地图</translation>
+-<translation id="6669284030132180248">如果您还将书签保存在 Google 账号中，则可在 Chromium 中跟踪商品价格，并在降价时收到通知</translation>
++<translation id="6613594504749178791">您所做的更改会在下次重新启动 AI-FREE 时生效。</translation>
++<translation id="6637908313088374648">现在，AI-FREE 会在 Windows 启动时启动，让您可以即刻开启浏览之旅。您可在“设置”中关闭此功能。</translation>
++<translation id="6648212540664651655">从上次停下的地方继续：AI-FREE 已恢复您上次会话中的标签页。如需关闭此功能，请前往</translation>
++<translation id="665732753414869868">AI-FREE 需要获得摄像头权限才能为您的周边环境创建 3D 地图</translation>
++<translation id="6669284030132180248">如果您还将书签保存在 Google 账号中，则可在 AI-FREE 中跟踪商品价格，并在降价时收到通知</translation>
+ <translation id="6676384891291319759">访问互联网</translation>
+ <translation id="668175097507315160">由于登录时发生错误，Chromium 操作系统无法同步您的数据。</translation>
+-<translation id="6691132793308828750">从 Chromium 中移除此应用的数据</translation>
+-<translation id="6709350901466051922">Chromium 需要为此网站授予麦克风权限</translation>
++<translation id="6691132793308828750">从 AI-FREE 中移除此应用的数据</translation>
++<translation id="6709350901466051922">AI-FREE 需要为此网站授予麦克风权限</translation>
+ <translation id="6712881677154121168">下载时出错：<ph name="DOWNLOAD_ERROR" />。</translation>
+-<translation id="6717134281241384636">您的个人资料来自更高版本的 Chromium，因此无法使用。
++<translation id="6717134281241384636">您的个人资料来自更高版本的 AI-FREE，因此无法使用。
+ 
+-某些功能可能会无法使用。请指定其他个人资料目录或使用更高版本的 Chromium。</translation>
+-<translation id="6729124504294600478">若要获得个性化体验和其他功能，请在“网络与应用活动记录”和关联的 Google 服务中包含 Chromium</translation>
+-<translation id="6734291798041940871">已为您计算机上的所有用户都安装 Chromium。</translation>
+-<translation id="6742093177587589736">如需在您的所有设备上获取书签等信息，请登录 Chromium。登录后，此书签将保存到您的 Google 账号。</translation>
+-<translation id="6751374565094704799">使用 Chromium 的 V8 引擎加速网站，但 Chromium 的防攻击能力会略微降低。此设置已开启。</translation>
+-<translation id="6754665438209053659">{count,plural, =1{某些 Chromium 数据尚未保存到您的 Google 账号中。建议等待几分钟，然后再尝试退出账号。如果现在就退出账号，这些数据（1 项）将被删除。}other{某些 Chromium 数据尚未保存到您的 Google 账号中。建议等待几分钟，然后再尝试退出账号。如果现在就退出账号，这些数据（{count} 项）将被删除。}}</translation>
+-<translation id="67706546131546258">Chromium 建议您扫描此文件，因为它可能包含危险因素。</translation>
++某些功能可能会无法使用。请指定其他个人资料目录或使用更高版本的 AI-FREE。</translation>
++<translation id="6729124504294600478">若要获得个性化体验和其他功能，请在“网络与应用活动记录”和关联的 Google 服务中包含 AI-FREE</translation>
++<translation id="6734291798041940871">已为您计算机上的所有用户都安装 AI-FREE。</translation>
++<translation id="6742093177587589736">如需在您的所有设备上获取书签等信息，请登录 AI-FREE。登录后，此书签将保存到您的 Google 账号。</translation>
++<translation id="6751374565094704799">使用 AI-FREE 的 V8 引擎加速网站，但 AI-FREE 的防攻击能力会略微降低。此设置已开启。</translation>
++<translation id="6754665438209053659">{count,plural, =1{某些 AI-FREE 数据尚未保存到您的 Google 账号中。建议等待几分钟，然后再尝试退出账号。如果现在就退出账号，这些数据（1 项）将被删除。}other{某些 AI-FREE 数据尚未保存到您的 Google 账号中。建议等待几分钟，然后再尝试退出账号。如果现在就退出账号，这些数据（{count} 项）将被删除。}}</translation>
++<translation id="67706546131546258">AI-FREE 建议您扫描此文件，因为它可能包含危险因素。</translation>
+ <translation id="6779406956731413166">Chromium 操作系统是借助了其他<ph name="BEGIN_LINK_CROS_OSS" />开源软件<ph name="END_LINK_CROS_OSS" />才得以问世。</translation>
+ <translation id="6831043979455480757">翻译</translation>
+-<translation id="6847869444787758381">Chromium 会让您知道您的密码是否曾被泄露</translation>
++<translation id="6847869444787758381">AI-FREE 会让您知道您的密码是否曾被泄露</translation>
+ <translation id="684888714667046800">无法连接到互联网。如果使用防火墙，请确保 <ph name="PRODUCT_EXE_NAME" /> 在许可名单中。</translation>
+-<translation id="6857782730669500492">Chromium - <ph name="PAGE_TITLE" /></translation>
++<translation id="6857782730669500492">AI-FREE - <ph name="PAGE_TITLE" /></translation>
+ <translation id="6859580922007887573">按 Tab 键即可继续</translation>
+ <translation id="6862030660799253820">使用图片搜索功能搜索此图片</translation>
+-<translation id="6873893289264747459">Chromium 发现“<ph name="EXTENSION_NAME" />”包含恶意软件</translation>
++<translation id="6873893289264747459">AI-FREE 发现“<ph name="EXTENSION_NAME" />”包含恶意软件</translation>
+ <translation id="6877155553248388166">搜索区域的右下角：右侧 <ph name="RIGHT" />%，底部 <ph name="BOTTOM" />%</translation>
+ <translation id="6896758677409633944">复制</translation>
+-<translation id="6901631050894301805">将 Chromium 设为默认浏览器，并将其固定到任务栏</translation>
+-<translation id="6909503629704372277">管理 Chromium 个人资料(&amp;M)</translation>
++<translation id="6901631050894301805">将 AI-FREE 设为默认浏览器，并将其固定到任务栏</translation>
++<translation id="6909503629704372277">管理 AI-FREE 个人资料(&amp;M)</translation>
+ <translation id="6934579572334859869">向图片搜索功能询问此图片</translation>
+-<translation id="6948031725951063910">您已达到 Chromium 的书签数量上限（<ph name="BOOKMARK_LIMIT" /> 个），因此部分书签尚未保存到您的 Google 账号中。
++<translation id="6948031725951063910">您已达到 AI-FREE 的书签数量上限（<ph name="BOOKMARK_LIMIT" /> 个），因此部分书签尚未保存到您的 Google 账号中。
+ 
+ 请先删除一些书签，否则新书签将无法保存到账号中。如果现在退出账号，系统将删除未保存的书签。</translation>
+-<translation id="6964305034639999644">在 Chromium 无痕式窗口中打开链接(&amp;G)</translation>
++<translation id="6964305034639999644">在 AI-FREE 无痕式窗口中打开链接(&amp;G)</translation>
+ <translation id="6965382102122355670">确定</translation>
+ <translation id="6985329841647292029">Chromium 操作系统条款</translation>
+-<translation id="6990124437352146030">Chromium 需要获得相应权限，才能允许此网站使用您的麦克风</translation>
+-<translation id="7003299027384820442">请输入您的口令，以便将 Chromium 数据保存在您的账号 <ph name="ACCOUNT_EMAIL" /> 中并使用这些数据</translation>
++<translation id="6990124437352146030">AI-FREE 需要获得相应权限，才能允许此网站使用您的麦克风</translation>
++<translation id="7003299027384820442">请输入您的口令，以便将 AI-FREE 数据保存在您的账号 <ph name="ACCOUNT_EMAIL" /> 中并使用这些数据</translation>
+ <translation id="7011190694940573312">安装失败，因为此版本的操作系统不受支持。</translation>
+ <translation id="7024536598735240744">解压缩时出错：<ph name="UNPACK_ERROR" />。</translation>
+-<translation id="7045244423563602563">定制您的专属 Chromium</translation>
++<translation id="7045244423563602563">定制您的专属 AI-FREE</translation>
+ <translation id="7047386856539490735">这些结果有用吗？</translation>
+-<translation id="705851970750939768">更新 Chromium</translation>
+-<translation id="7067091210845072982">如果图片缺少有用的说明，则 Chromium 会尝试为您提供一条说明。为便于创建说明，系统会将图片发送给 Google。</translation>
++<translation id="705851970750939768">更新 AI-FREE</translation>
++<translation id="7067091210845072982">如果图片缺少有用的说明，则 AI-FREE 会尝试为您提供一条说明。为便于创建说明，系统会将图片发送给 Google。</translation>
+ <translation id="7141270731789036260">自定义 Chrome for Testing</translation>
+-<translation id="7147227333672430807">您可随时使用 Chromium 打开您在消息、文档和其他应用内点击的链接</translation>
+-<translation id="7163519456498498587">从 Chromium 中移除“<ph name="EXTENSION_NAME" />”</translation>
+-<translation id="7173822816570314652">贵组织会在 Chromium 闲置 <ph name="TIMEOUT_DURATION" />后删除 Chromium 数据，其中可能包括历史记录、自动填充和下载内容。</translation>
+-<translation id="718435575166326686">Chromium 需要为此网站授予摄像头权限</translation>
+-<translation id="7196312274710523067">无法启动 Chromium。请重试。</translation>
+-<translation id="7213008767289637091">将 Chromium 保留在程序坞中，即可随时快速访问</translation>
+-<translation id="7213407614656404070">随时使用 Chromium 打开您在消息、文档和其他应用内点击的链接</translation>
+-<translation id="7223968959479464213">任务管理器 - Chromium</translation>
+-<translation id="7252276985725323153">即刻开启浏览之旅：Chromium 现在可以在 Windows 启动时启动。</translation>
++<translation id="7147227333672430807">您可随时使用 AI-FREE 打开您在消息、文档和其他应用内点击的链接</translation>
++<translation id="7163519456498498587">从 AI-FREE 中移除“<ph name="EXTENSION_NAME" />”</translation>
++<translation id="7173822816570314652">贵组织会在 AI-FREE 闲置 <ph name="TIMEOUT_DURATION" />后删除 AI-FREE 数据，其中可能包括历史记录、自动填充和下载内容。</translation>
++<translation id="718435575166326686">AI-FREE 需要为此网站授予摄像头权限</translation>
++<translation id="7196312274710523067">无法启动 AI-FREE。请重试。</translation>
++<translation id="7213008767289637091">将 AI-FREE 保留在程序坞中，即可随时快速访问</translation>
++<translation id="7213407614656404070">随时使用 AI-FREE 打开您在消息、文档和其他应用内点击的链接</translation>
++<translation id="7223968959479464213">任务管理器 - AI-FREE</translation>
++<translation id="7252276985725323153">即刻开启浏览之旅：AI-FREE 现在可以在 Windows 启动时启动。</translation>
+ <translation id="7274695763216404502">已固定！可通过工具栏再次使用图片搜索功能</translation>
+ <translation id="7288567540154601580">标签页和扩展程序</translation>
+-<translation id="7295544978856094497">{NUM_EXTENSIONS,plural, =1{Chromium 建议您移除它}other{Chromium 建议您移除它们}}</translation>
+-<translation id="7296334833518879294">如需分享系统音频，请打开“系统设置”，并为 Chromium 启用“仅系统录音”。然后，您需要重启 Chromium。</translation>
+-<translation id="7309928523159922338">借助 Ad measurement，您访问的网站可向 Chromium 请求信息，以便对网站上的广告进行效果衡量。Ad measurement 会在网站间传输尽可能少的信息，从而限制跨网站跟踪。</translation>
+-<translation id="731795002583552498">正在更新 Chromium</translation>
++<translation id="7295544978856094497">{NUM_EXTENSIONS,plural, =1{AI-FREE 建议您移除它}other{AI-FREE 建议您移除它们}}</translation>
++<translation id="7296334833518879294">如需分享系统音频，请打开“系统设置”，并为 AI-FREE 启用“仅系统录音”。然后，您需要重启 AI-FREE。</translation>
++<translation id="7309928523159922338">借助 Ad measurement，您访问的网站可向 AI-FREE 请求信息，以便对网站上的广告进行效果衡量。Ad measurement 会在网站间传输尽可能少的信息，从而限制跨网站跟踪。</translation>
++<translation id="731795002583552498">正在更新 AI-FREE</translation>
+ <translation id="7318036098707714271">您的偏好设置文件已损坏或无效。
+ 
+-Chromium 无法恢复您的设置。</translation>
+-<translation id="734373864078049451">您的上网记录、书签和其他Chromium内容都保存在此处。</translation>
+-<translation id="7347827960336370838">只有知道您口令的人能读取您的加密数据。该口令不会被发送给 Google，也不会被 Google 存储。如果您忘记了口令或想更改此设置，将需要<ph name="BEGIN_LINK" />删除您账号中的 Chromium 数据<ph name="END_LINK" />。</translation>
+-<translation id="7349591376906416160">您的系统管理员已将 Chromium 配置为使用<ph name="ALTERNATIVE_BROWSER_NAME" />访问 <ph name="TARGET_URL_HOSTNAME" />。</translation>
++AI-FREE 无法恢复您的设置。</translation>
++<translation id="734373864078049451">您的上网记录、书签和其他AI-FREE内容都保存在此处。</translation>
++<translation id="7347827960336370838">只有知道您口令的人能读取您的加密数据。该口令不会被发送给 Google，也不会被 Google 存储。如果您忘记了口令或想更改此设置，将需要<ph name="BEGIN_LINK" />删除您账号中的 AI-FREE 数据<ph name="END_LINK" />。</translation>
++<translation id="7349591376906416160">您的系统管理员已将 AI-FREE 配置为使用<ph name="ALTERNATIVE_BROWSER_NAME" />访问 <ph name="TARGET_URL_HOSTNAME" />。</translation>
+ <translation id="7352651011704765696">出了点问题</translation>
+-<translation id="7368826207863345663">若要接收后续 Chromium 更新，您需要使用 macOS 13 或更高版本。该电脑目前使用的是 macOS 12。</translation>
+-<translation id="7376384068949534168">您近期未访问过该网站，因此 Chromium 撤消了该网站的<ph name="PERMISSION_1" />权限和<ph name="PERMISSION_2" />权限。</translation>
++<translation id="7368826207863345663">若要接收后续 AI-FREE 更新，您需要使用 macOS 13 或更高版本。该电脑目前使用的是 macOS 12。</translation>
++<translation id="7376384068949534168">您近期未访问过该网站，因此 AI-FREE 撤消了该网站的<ph name="PERMISSION_1" />权限和<ph name="PERMISSION_2" />权限。</translation>
+ <translation id="73786666777299047">打开 Chrome 应用商店</translation>
+-<translation id="7384121030444253939">此扩展程序已不再受支持。Chromium 建议您移除它。</translation>
+-<translation id="7407655596887111931">Chromium 现已设为默认浏览器</translation>
+-<translation id="7413153308467572558">从上次停下的地方继续：Chromium 会在您每次重启后恢复标签页。如需关闭此功能，请前往</translation>
+-<translation id="7427879960656355200">将密码导入 Chromium</translation>
++<translation id="7384121030444253939">此扩展程序已不再受支持。AI-FREE 建议您移除它。</translation>
++<translation id="7407655596887111931">AI-FREE 现已设为默认浏览器</translation>
++<translation id="7413153308467572558">从上次停下的地方继续：AI-FREE 会在您每次重启后恢复标签页。如需关闭此功能，请前往</translation>
++<translation id="7427879960656355200">将密码导入 AI-FREE</translation>
+ <translation id="744815265653811511">1. 点击下方的“<ph name="BUTTON_LABEL" />”
+ 2. 在 Windows 设置中点击“<ph name="BUTTON_2" />”
+-3. 点击 Windows 通知中的“<ph name="BUTTON_3" />”，将 Chromium 固定到任务栏，以便快速访问</translation>
+-<translation id="7449453770951226939"><ph name="PAGE_TITLE" /> - Chromium 开发者版</translation>
++3. 点击 Windows 通知中的“<ph name="BUTTON_3" />”，将 AI-FREE 固定到任务栏，以便快速访问</translation>
++<translation id="7449453770951226939"><ph name="PAGE_TITLE" /> - AI-FREE 开发者版</translation>
+ <translation id="7450541714075000668">已复制文字</translation>
+-<translation id="7451052299415159299">Chromium 需要获得相应权限，才能允许此网站使用您的摄像头</translation>
+-<translation id="7458892263350425044">如需使用麦克风，请在<ph name="BEGIN_LINK" />系统设置<ph name="END_LINK" />中授予 Chromium 访问权限</translation>
+-<translation id="7461356015007898716">若要接收后续 Chromium 更新，您需使用 Windows 10 或更高版本。该计算机目前使用的是 Windows 7。</translation>
+-<translation id="7467949745582939695">重新启动 Chromium？</translation>
+-<translation id="7483335560992089831">无法安装与当前运行的版本相同的 Chromium。请关闭 Chromium 并重试。</translation>
+-<translation id="751935028865900641">网站很可能会按预期运行。关闭所有 Chromium 窗口后，您将会从大多数网站退出账号；但如果您已登录 Chromium，则您的 Google 账号不会退出。</translation>
+-<translation id="753534427205733210">{0,plural, =1{Chromium 将在 1 分钟后重新启动}other{Chromium 将在 # 分钟后重新启动}}</translation>
+-<translation id="7565444033145385702">为保护您的数据，对于您近期未访问的网站，请允许 Chromium 移除网站权限。</translation>
+-<translation id="7583104404158659071">自动启动 Chromium，即刻开启浏览之旅。</translation>
++<translation id="7451052299415159299">AI-FREE 需要获得相应权限，才能允许此网站使用您的摄像头</translation>
++<translation id="7458892263350425044">如需使用麦克风，请在<ph name="BEGIN_LINK" />系统设置<ph name="END_LINK" />中授予 AI-FREE 访问权限</translation>
++<translation id="7461356015007898716">若要接收后续 AI-FREE 更新，您需使用 Windows 10 或更高版本。该计算机目前使用的是 Windows 7。</translation>
++<translation id="7467949745582939695">重新启动 AI-FREE？</translation>
++<translation id="7483335560992089831">无法安装与当前运行的版本相同的 AI-FREE。请关闭 AI-FREE 并重试。</translation>
++<translation id="751935028865900641">网站很可能会按预期运行。关闭所有 AI-FREE 窗口后，您将会从大多数网站退出账号；但如果您已登录 AI-FREE，则您的 Google 账号不会退出。</translation>
++<translation id="753534427205733210">{0,plural, =1{AI-FREE 将在 1 分钟后重新启动}other{AI-FREE 将在 # 分钟后重新启动}}</translation>
++<translation id="7565444033145385702">为保护您的数据，对于您近期未访问的网站，请允许 AI-FREE 移除网站权限。</translation>
++<translation id="7583104404158659071">自动启动 AI-FREE，即刻开启浏览之旅。</translation>
+ <translation id="7583399374488819119"><ph name="COMPANY_NAME" /> 安装程序</translation>
+-<translation id="761356813943268536">Chromium 正在使用您的摄像头和麦克风。</translation>
+-<translation id="7617377681829253106">Chromium现在更好用了</translation>
+-<translation id="7622753900276619808">您现在可以在 Chromium 中使用更多功能了</translation>
++<translation id="761356813943268536">AI-FREE 正在使用您的摄像头和麦克风。</translation>
++<translation id="7617377681829253106">AI-FREE现在更好用了</translation>
++<translation id="7622753900276619808">您现在可以在 AI-FREE 中使用更多功能了</translation>
+ <translation id="7624307931717240213">我们会使用这些信息来改进此服务。请参阅《隐私权政策》和《服务条款》。</translation>
+ <translation id="7649070708921625228">帮助</translation>
+-<translation id="7650134251917003571">获取 Chromium 应用</translation>
++<translation id="7650134251917003571">获取 AI-FREE 应用</translation>
+ <translation id="7658239707568436148">取消</translation>
+-<translation id="7686590090926151193">Chromium 不是您的默认浏览器</translation>
+-<translation id="7689606757190482937">在您的所有设备上同步并个性化设置 Chromium</translation>
+-<translation id="7699779824407626136">Chromium 更新</translation>
++<translation id="7686590090926151193">AI-FREE 不是您的默认浏览器</translation>
++<translation id="7689606757190482937">在您的所有设备上同步并个性化设置 AI-FREE</translation>
++<translation id="7699779824407626136">AI-FREE 更新</translation>
+ <translation id="7716950018788545737">任务已结束。</translation>
+ <translation id="77283119132245232">为 <ph name="BROWSER_NAME" /> 提供系统跟踪服务。如果停用此服务，浏览器创建的性能轨迹将不包含系统级事件，例如上下文切换和就绪线程事件。</translation>
+-<translation id="7745317241717453663">这会从这台设备上删除您的浏览数据。如果日后想要检索您的数据，届时请以 <ph name="USER_EMAIL" /> 的身份登录 Chromium。</translation>
++<translation id="7745317241717453663">这会从这台设备上删除您的浏览数据。如果日后想要检索您的数据，届时请以 <ph name="USER_EMAIL" /> 的身份登录 AI-FREE。</translation>
+ <translation id="7747138024166251722">安装程序无法创建临时目录。请检查您是否有足够的磁盘空间和权限来安装该软件。</translation>
+-<translation id="7750130090210923118">重置为默认 Chromium</translation>
+-<translation id="7781047659465034537">将 Chromium 设为默认浏览器并固定到任务栏</translation>
+-<translation id="7786760609782648049">提高 Chromium 的运行速度</translation>
+-<translation id="7790626492778995050"><ph name="PAGE_TITLE" /> - Chromium Canary</translation>
+-<translation id="7803986347287457849">让对您的互联网流量有访问权限的用户更难看到您访问的网站。Chromium 会使用安全连接在 DNS（域名系统）中查找网站的 IP 地址。</translation>
++<translation id="7750130090210923118">重置为默认 AI-FREE</translation>
++<translation id="7781047659465034537">将 AI-FREE 设为默认浏览器并固定到任务栏</translation>
++<translation id="7786760609782648049">提高 AI-FREE 的运行速度</translation>
++<translation id="7790626492778995050"><ph name="PAGE_TITLE" /> - AI-FREE Canary</translation>
++<translation id="7803986347287457849">让对您的互联网流量有访问权限的用户更难看到您访问的网站。AI-FREE 会使用安全连接在 DNS（域名系统）中查找网站的 IP 地址。</translation>
+ <translation id="7810005234485217901">您可以固定图片搜索功能以方便访问</translation>
+-<translation id="7828947555739565424">此设备上已有一份使用该账号创建的 Chromium 个人资料</translation>
++<translation id="7828947555739565424">此设备上已有一份使用该账号创建的 AI-FREE 个人资料</translation>
+ <translation id="7845233973568007926">感谢您完成安装。您必须重启计算机才能使用 <ph name="BUNDLE_NAME" />。</translation>
+-<translation id="7847673590271334840">搜索引擎已被 Chromium 之外的其他应用更改。为保护您的安全，Chromium 已将其重置为原始默认设置。<ph name="LEARN_MORE_LINK" /></translation>
+-<translation id="7853661403199074278">自定义 Chromium，让界面焕然一新</translation>
+-<translation id="7859018312476869945">当您在地址栏或搜索框中输入内容时，Chromium 会将您输入的内容发送给默认搜索引擎，以便为您提供更好的建议。在无痕模式下，此设置处于关闭状态。</translation>
+-<translation id="7867198900892795913">Chromium 无法更新至最新版本，因此您未能获得最新的功能和安全修复程序。</translation>
++<translation id="7847673590271334840">搜索引擎已被 AI-FREE 之外的其他应用更改。为保护您的安全，AI-FREE 已将其重置为原始默认设置。<ph name="LEARN_MORE_LINK" /></translation>
++<translation id="7853661403199074278">自定义 AI-FREE，让界面焕然一新</translation>
++<translation id="7859018312476869945">当您在地址栏或搜索框中输入内容时，AI-FREE 会将您输入的内容发送给默认搜索引擎，以便为您提供更好的建议。在无痕模式下，此设置处于关闭状态。</translation>
++<translation id="7867198900892795913">AI-FREE 无法更新至最新版本，因此您未能获得最新的功能和安全修复程序。</translation>
+ <translation id="7872446069773932638">正在下载…还需 <ph name="SECONDS" /> 秒</translation>
+-<translation id="7873537467422636035">如果您忘记了口令或想更改此设置，请<ph name="BEGIN_LINK" />删除您账号中的 Chromium 数据<ph name="END_LINK" /></translation>
+-<translation id="7874369989024033742">随时随需快速打开 Chromium 中的 Gemini</translation>
++<translation id="7873537467422636035">如果您忘记了口令或想更改此设置，请<ph name="BEGIN_LINK" />删除您账号中的 AI-FREE 数据<ph name="END_LINK" /></translation>
++<translation id="7874369989024033742">随时随需快速打开 AI-FREE 中的 Gemini</translation>
+ <translation id="7877212753140190672">询问此图片</translation>
+-<translation id="7888981273428720788">将 Chromium 设为默认浏览器</translation>
+-<translation id="7934340546140346950">Chromium 会尽可能将不安全的连接自动升级为 HTTPS</translation>
+-<translation id="7937630085815544518">您之前登录 Chromium 时使用的账号为 <ph name="USER_EMAIL_ADDRESS" />，请使用同一账号再次登录。</translation>
+-<translation id="7975919845073681630">这是 Chromium 的并行安装，您无法将此浏览器设为默认浏览器。</translation>
+-<translation id="7997934263947464652">来源不明的扩展程序、应用和主题可能会危害您的设备。Chromium 建议只从 <ph name="IDS_EXTENSION_WEB_STORE_TITLE" />安装这些内容</translation>
++<translation id="7888981273428720788">将 AI-FREE 设为默认浏览器</translation>
++<translation id="7934340546140346950">AI-FREE 会尽可能将不安全的连接自动升级为 HTTPS</translation>
++<translation id="7937630085815544518">您之前登录 AI-FREE 时使用的账号为 <ph name="USER_EMAIL_ADDRESS" />，请使用同一账号再次登录。</translation>
++<translation id="7975919845073681630">这是 AI-FREE 的并行安装，您无法将此浏览器设为默认浏览器。</translation>
++<translation id="7997934263947464652">来源不明的扩展程序、应用和主题可能会危害您的设备。AI-FREE 建议只从 <ph name="IDS_EXTENSION_WEB_STORE_TITLE" />安装这些内容</translation>
+ <translation id="8004582292198964060">浏览器</translation>
+ <translation id="8010081455002666927">自动检测</translation>
+-<translation id="8013436988911883588">一旦 Chromium 获得了使用权限，网站便能请求您向其授予使用权限。</translation>
+-<translation id="8031714377769448844">将 Chromium 固定到任务栏，即可随时快速访问</translation>
++<translation id="8013436988911883588">一旦 AI-FREE 获得了使用权限，网站便能请求您向其授予使用权限。</translation>
++<translation id="8031714377769448844">将 AI-FREE 固定到任务栏，即可随时快速访问</translation>
+ <translation id="80471789339884597">感谢您完成安装。您必须重启所有浏览器才能使用 <ph name="BUNDLE_NAME" />。</translation>
+ <translation id="8054112667659782652">始终显示图片搜索快捷方式</translation>
+-<translation id="8077498902115777962">为应用停用 Chromium 后台运行功能</translation>
++<translation id="8077498902115777962">为应用停用 AI-FREE 后台运行功能</translation>
+ <translation id="80790299200510644">图片搜索</translation>
+ <translation id="8086881907087796310">安装失败，因为您的计算机未达到最低硬件要求。</translation>
+ <translation id="8096472344908884505"><ph name="PAGE_TITLE" /> - Google Chrome for Testing</translation>
+-<translation id="8105840573057009683">Chromium 需要为此网站授予位置信息权限</translation>
+-<translation id="8107060931443639922">下次在 <ph name="DEVICE_TYPE" /> 上打开 Chromium 时，系统会提示您启用价格跟踪提醒。</translation>
++<translation id="8105840573057009683">AI-FREE 需要为此网站授予位置信息权限</translation>
++<translation id="8107060931443639922">下次在 <ph name="DEVICE_TYPE" /> 上打开 AI-FREE 时，系统会提示您启用价格跟踪提醒。</translation>
+ <translation id="8118331347066725040">发送有关智能镜头搜索的反馈</translation>
+ <translation id="8133124826068723441">由于您的网域不支持同步，Chromium 操作系统无法同步您的数据。</translation>
+ <translation id="813913629614996137">正在初始化…</translation>
+-<translation id="8161503455832158203">使用键盘快捷键打开 Chromium 中的 Gemini。</translation>
+-<translation id="8164014945047474187">Chromium 附加服务条款</translation>
+-<translation id="81770708095080097">此文件存在危险，因此 Chromium 已将其拦截。</translation>
++<translation id="8161503455832158203">使用键盘快捷键打开 AI-FREE 中的 Gemini。</translation>
++<translation id="8164014945047474187">AI-FREE 附加服务条款</translation>
++<translation id="81770708095080097">此文件存在危险，因此 AI-FREE 已将其拦截。</translation>
+ <translation id="8177472873527554730">在页面中找不到内容</translation>
+-<translation id="8200109504272824693">请输入您的口令，以便将 Chromium 数据保存在您的账号 <ph name="USER_EMAIL" /> 中并使用这些数据</translation>
++<translation id="8200109504272824693">请输入您的口令，以便将 AI-FREE 数据保存在您的账号 <ph name="USER_EMAIL" /> 中并使用这些数据</translation>
+ <translation id="8221491193165283816">您通常会屏蔽通知。要允许此网站向您发送通知，请点击此处。</translation>
+-<translation id="8223363452568144035">如需使用摄像头，请在<ph name="BEGIN_LINK" />系统设置<ph name="END_LINK" />中授予 Chromium 访问权限</translation>
+-<translation id="8232193495299001329">Chromium 无法验证此扩展程序的来源，它可能不安全。请将其从 Chromium 中移除，这样它便无法再查看和更改您在所访问的网站上的数据，包括个人信息。</translation>
+-<translation id="8248265253516264921">如果图片缺少有用的说明，则 Chromium 会尝试为您提供一条说明。为便于创建说明，系统会将图片发送给 Google。您可以随时在“设置”中关闭此功能。</translation>
+-<translation id="8254601181414348851">要使用新的个人资料登录 Chromium 吗？</translation>
+-<translation id="8277334259226003205">在系统任务栏中显示 Chromium 中的 Gemini 并开启键盘快捷键</translation>
+-<translation id="8286943863733751221">在检测到不安全的网站和下载内容时，<ph name="BEGIN_LINK" />Chromium 会向您发出警告<ph name="END_LINK" /></translation>
+-<translation id="8295827201165805317">您近期未访问过该网站，因此 Chromium 撤消了该网站的<ph name="PERMISSION" />权限。</translation>
+-<translation id="8296236834352487533">在 iOS 版 Chromium 应用中，借助摄像头轻松购买、翻译和识别所见内容</translation>
++<translation id="8223363452568144035">如需使用摄像头，请在<ph name="BEGIN_LINK" />系统设置<ph name="END_LINK" />中授予 AI-FREE 访问权限</translation>
++<translation id="8232193495299001329">AI-FREE 无法验证此扩展程序的来源，它可能不安全。请将其从 AI-FREE 中移除，这样它便无法再查看和更改您在所访问的网站上的数据，包括个人信息。</translation>
++<translation id="8248265253516264921">如果图片缺少有用的说明，则 AI-FREE 会尝试为您提供一条说明。为便于创建说明，系统会将图片发送给 Google。您可以随时在“设置”中关闭此功能。</translation>
++<translation id="8254601181414348851">要使用新的个人资料登录 AI-FREE 吗？</translation>
++<translation id="8277334259226003205">在系统任务栏中显示 AI-FREE 中的 Gemini 并开启键盘快捷键</translation>
++<translation id="8286943863733751221">在检测到不安全的网站和下载内容时，<ph name="BEGIN_LINK" />AI-FREE 会向您发出警告<ph name="END_LINK" /></translation>
++<translation id="8295827201165805317">您近期未访问过该网站，因此 AI-FREE 撤消了该网站的<ph name="PERMISSION" />权限。</translation>
++<translation id="8296236834352487533">在 iOS 版 AI-FREE 应用中，借助摄像头轻松购买、翻译和识别所见内容</translation>
+ <translation id="8313851650939857356">启动错误：<ph name="STARTUP_ERROR" />。</translation>
+-<translation id="8318772038038596122">贵组织会在 Chromium 闲置 <ph name="TIMEOUT_DURATION" />后将其关闭。</translation>
++<translation id="8318772038038596122">贵组织会在 AI-FREE 闲置 <ph name="TIMEOUT_DURATION" />后将其关闭。</translation>
+ <translation id="8321888067342493336">另存为图片</translation>
+-<translation id="8340674089072921962"><ph name="USER_EMAIL_ADDRESS" /> 之前使用的是 Chromium</translation>
+-<translation id="8359544530202147897">请更新 Chromium，以便继续使用 Google 账号 <ph name="ACCOUNT_EMAIL" /> 中的 Chromium 数据</translation>
+-<translation id="8360718212975266891">若要接收后续 Chromium 更新，您需使用 Windows 10 或更高版本。此计算机目前使用的是 Windows 8。</translation>
++<translation id="8340674089072921962"><ph name="USER_EMAIL_ADDRESS" /> 之前使用的是 AI-FREE</translation>
++<translation id="8359544530202147897">请更新 AI-FREE，以便继续使用 Google 账号 <ph name="ACCOUNT_EMAIL" /> 中的 AI-FREE 数据</translation>
++<translation id="8360718212975266891">若要接收后续 AI-FREE 更新，您需使用 Windows 10 或更高版本。此计算机目前使用的是 Windows 8。</translation>
+ <translation id="8362914115861174987">目标语言</translation>
+ <translation id="8367705492654390392">有问题，尽管问</translation>
+ <translation id="8370517070665726704">版权所有 <ph name="YEAR" /> Google LLC. 保留所有权利。</translation>
+-<translation id="8372327902843331129">如需获取您所有设备上的密码等信息，请登录 Chromium。登录后，该密码将保存到您的 Google 账号。</translation>
+-<translation id="837460953767177950">然后，您需要重启 Chromium。</translation>
+-<translation id="8397248745433792218">Chromium 建议您移除它。<ph name="BEGIN_LINK" />详细了解受支持的扩展程序<ph name="END_LINK" /></translation>
+-<translation id="8401454788024434101">此扩展程序已被其开发者取消发布，可能不安全。请将其从 Chromium 中移除，这样它便无法再查看和更改您在所访问的网站上的数据，包括您的个人信息。</translation>
+-<translation id="8416884904046428725">Chromium 需要先验证您的身份，然后才能将某些数据保存到您的 Google 账号中，供您在所有设备上使用。如果现在就退出账号，这些数据将被删除。</translation>
+-<translation id="8417404458978023919">{0,plural, =1{请于 1 天内重新启动 Chromium}other{请于 # 天内重新启动 Chromium}}</translation>
++<translation id="8372327902843331129">如需获取您所有设备上的密码等信息，请登录 AI-FREE。登录后，该密码将保存到您的 Google 账号。</translation>
++<translation id="837460953767177950">然后，您需要重启 AI-FREE。</translation>
++<translation id="8397248745433792218">AI-FREE 建议您移除它。<ph name="BEGIN_LINK" />详细了解受支持的扩展程序<ph name="END_LINK" /></translation>
++<translation id="8401454788024434101">此扩展程序已被其开发者取消发布，可能不安全。请将其从 AI-FREE 中移除，这样它便无法再查看和更改您在所访问的网站上的数据，包括您的个人信息。</translation>
++<translation id="8416884904046428725">AI-FREE 需要先验证您的身份，然后才能将某些数据保存到您的 Google 账号中，供您在所有设备上使用。如果现在就退出账号，这些数据将被删除。</translation>
++<translation id="8417404458978023919">{0,plural, =1{请于 1 天内重新启动 AI-FREE}other{请于 # 天内重新启动 AI-FREE}}</translation>
+ <translation id="8438543370129609977">当您使用图片搜索功能时，系统会将相关网页的标题、网址和内容（包括 PDF 文件）发送给服务器。<ph name="LEARN_MORE" /></translation>
+-<translation id="8447525028100794994">详细了解如何在 Chromium 中使用图片搜索功能进行搜索</translation>
+-<translation id="8453117565092476964">安装程序归档损坏或无效。请重新下载 Chromium。</translation>
+-<translation id="8458614432758743027">Chromium 仅支持 Windows 10 或更高版本的操作系统。</translation>
++<translation id="8447525028100794994">详细了解如何在 AI-FREE 中使用图片搜索功能进行搜索</translation>
++<translation id="8453117565092476964">安装程序归档损坏或无效。请重新下载 AI-FREE。</translation>
++<translation id="8458614432758743027">AI-FREE 仅支持 Windows 10 或更高版本的操作系统。</translation>
+ <translation id="8463672209299734063">可选：自动向 Google 发送诊断数据和使用情况数据，协助改进 Chromium 操作系统的功能和性能。</translation>
+-<translation id="8471947159125090285">如要使用 Chromium 数据并将其保存在您的 Google 账号中，请验证是您本人在操作</translation>
+-<translation id="8482493977473846331">显示登录 Chromium 的提示</translation>
+-<translation id="8493179195440786826">Chromium版本太旧</translation>
+-<translation id="850264194101621529">感谢您选择 Chromium 作为默认浏览器！</translation>
+-<translation id="8522801943730206384">您需要先保存密码，然后才能使用 Chromium 的密码检查功能</translation>
++<translation id="8471947159125090285">如要使用 AI-FREE 数据并将其保存在您的 Google 账号中，请验证是您本人在操作</translation>
++<translation id="8482493977473846331">显示登录 AI-FREE 的提示</translation>
++<translation id="8493179195440786826">AI-FREE版本太旧</translation>
++<translation id="850264194101621529">感谢您选择 AI-FREE 作为默认浏览器！</translation>
++<translation id="8522801943730206384">您需要先保存密码，然后才能使用 AI-FREE 的密码检查功能</translation>
+ <translation id="8525579356836940628">已停止安装</translation>
+-<translation id="8548787790260785208">如果 Chromium 发现您的密码在公开数据泄露事件中外泄，会向您发出警告</translation>
++<translation id="8548787790260785208">如果 AI-FREE 发现您的密码在公开数据泄露事件中外泄，会向您发出警告</translation>
+ <translation id="8555465886620020932">发生了服务错误：<ph name="SERVICE_ERROR" />。</translation>
+-<translation id="8556055872671007529">某些 Chromium 功能和扩展程序附带快捷字词。您可以选择重新开启它们。</translation>
++<translation id="8556055872671007529">某些 AI-FREE 功能和扩展程序附带快捷字词。您可以选择重新开启它们。</translation>
+ <translation id="8556420416730706394">您可以固定图片搜索功能以方便访问，点击侧边栏顶部的“固定”按钮即可</translation>
+ <translation id="856656450041460113">搜索语言列表</translation>
+-<translation id="8576826849825683917">多个组织负责管理 Chromium</translation>
+-<translation id="8586442755830160949">版权所有<ph name="YEAR" /> The Chromium Authors。保留所有权利。</translation>
++<translation id="8576826849825683917">多个组织负责管理 AI-FREE</translation>
++<translation id="8586442755830160949">版权所有<ph name="YEAR" /> The AI-FREE Authors。保留所有权利。</translation>
+ <translation id="8601359445272098721">新功能！您可以选择“翻译屏幕”按钮，翻译屏幕上的文字和图片</translation>
+-<translation id="8619360774459241877">正在启动 Chromium…</translation>
++<translation id="8619360774459241877">正在启动 AI-FREE…</translation>
+ <translation id="8624541899164515475">“设置”页面，在新标签页中打开。</translation>
+ <translation id="8648201657708811153">您无法将 Google Chrome for Testing 设为默认浏览器。</translation>
+-<translation id="8697124171261953979">它还能够控制您启动Chromium后或通过多功能框进行搜索时系统显示的页面。</translation>
+-<translation id="8704119203788522458">这是您的专属Chromium</translation>
++<translation id="8697124171261953979">它还能够控制您启动AI-FREE后或通过多功能框进行搜索时系统显示的页面。</translation>
++<translation id="8704119203788522458">这是您的专属AI-FREE</translation>
+ <translation id="8712637175834984815">知道了</translation>
+-<translation id="8719993436687031146">登录 Chromium？</translation>
++<translation id="8719993436687031146">登录 AI-FREE？</translation>
+ <translation id="8747073452963259673">搜索区域的左下角：左侧 <ph name="LEFT" />%，底部 <ph name="BOTTOM" />%</translation>
+ <translation id="878572486461146056">安装时出错：您的网络管理员所应用的一项群组政策阻止了安装进程：<ph name="INSTALL_ERROR" /></translation>
+-<translation id="8796602469536043152">Chromium 需要获得相应权限，才能允许此网站使用您的摄像头和麦克风</translation>
++<translation id="8796602469536043152">AI-FREE 需要获得相应权限，才能允许此网站使用您的摄像头和麦克风</translation>
+ <translation id="8813277370772331957">稍后提醒我</translation>
+-<translation id="8818550178040858407">登录 Chromium？</translation>
+-<translation id="8823401858233292222">将 Chromium 设为默认浏览器并固定到任务栏</translation>
++<translation id="8818550178040858407">登录 AI-FREE？</translation>
++<translation id="8823401858233292222">将 AI-FREE 设为默认浏览器并固定到任务栏</translation>
+ <translation id="8826492472752484139">点击“密码管理工具”</translation>
+ <translation id="8833697763442816810">Chromium 操作系统</translation>
+-<translation id="8852026904190808918">使用此语言显示 Chromium 中的菜单、设置、提醒和其他文字</translation>
++<translation id="8852026904190808918">使用此语言显示 AI-FREE 中的菜单、设置、提醒和其他文字</translation>
+ <translation id="8862326446509486874">您的权限不足，无法进行系统级安装。请尝试以管理员身份再次运行安装程序。</translation>
+-<translation id="8876044221123442390">添加 Chromium 个人资料</translation>
++<translation id="8876044221123442390">添加 AI-FREE 个人资料</translation>
+ <translation id="8890569919834781711">由于登录时发生错误，ChromiumOS 无法将 Chromium 数据保存到您的 Google 账号</translation>
+-<translation id="8891709362986793894">您的组织要求您登录 Chromium</translation>
+-<translation id="8907580949721785412">Chromium正在尝试显示密码，请输入您的Windows密码以允许此操作。</translation>
+-<translation id="8932992523185907506">Chromium 不再是默认浏览器。要将 Chromium 设置为默认浏览器吗？</translation>
+-<translation id="8941642502866065432">无法更新 Chromium</translation>
+-<translation id="897581876605952338">Chromium 企业版徽标</translation>
+-<translation id="8981150672034878610">无法启动 Chromium，因为打开您的个人资料时出了点问题。请尝试重启 Chromium。</translation>
+-<translation id="8988036198400390003">管理 Chromium 个人资料</translation>
++<translation id="8891709362986793894">您的组织要求您登录 AI-FREE</translation>
++<translation id="8907580949721785412">AI-FREE正在尝试显示密码，请输入您的Windows密码以允许此操作。</translation>
++<translation id="8932992523185907506">AI-FREE 不再是默认浏览器。要将 AI-FREE 设置为默认浏览器吗？</translation>
++<translation id="8941642502866065432">无法更新 AI-FREE</translation>
++<translation id="897581876605952338">AI-FREE 企业版徽标</translation>
++<translation id="8981150672034878610">无法启动 AI-FREE，因为打开您的个人资料时出了点问题。请尝试重启 AI-FREE。</translation>
++<translation id="8988036198400390003">管理 AI-FREE 个人资料</translation>
+ <translation id="9018218886431812662">安装完成</translation>
+-<translation id="9019929317751753759">为了提高 Chromium 的安全性，我们停用了以下扩展程序（该扩展程序未列在<ph name="IDS_EXTENSION_WEB_STORE_TITLE" />中，并且可能是在您不知情的情况下添加的）。</translation>
+-<translation id="9022552996538154597">登录 Chromium</translation>
+-<translation id="904366664621834601">Chromium 阻止了此项下载操作，因为归档文件包含可能隐藏恶意软件的其他文件</translation>
+-<translation id="9053882453960391422">让您的密码、书签和历史记录在所有设备上完美同步。将默认浏览器更新为 Chromium，即可轻松使用您熟悉且喜爱的功能。Chromium 将固定到任务栏，以便您快速访问。</translation>
+-<translation id="9062666675513499497">登录其他 Google 服务时登录 Chromium</translation>
+-<translation id="9078733879136747090">Chromium 已自动关闭</translation>
+-<translation id="9089354809943900324">Chromium版本太旧</translation>
+-<translation id="9093206154853821181">{0,plural, =1{Chromium 将在 1 小时后重新启动}other{Chromium 将在 # 小时后重新启动}}</translation>
++<translation id="9019929317751753759">为了提高 AI-FREE 的安全性，我们停用了以下扩展程序（该扩展程序未列在<ph name="IDS_EXTENSION_WEB_STORE_TITLE" />中，并且可能是在您不知情的情况下添加的）。</translation>
++<translation id="9022552996538154597">登录 AI-FREE</translation>
++<translation id="904366664621834601">AI-FREE 阻止了此项下载操作，因为归档文件包含可能隐藏恶意软件的其他文件</translation>
++<translation id="9053882453960391422">让您的密码、书签和历史记录在所有设备上完美同步。将默认浏览器更新为 AI-FREE，即可轻松使用您熟悉且喜爱的功能。AI-FREE 将固定到任务栏，以便您快速访问。</translation>
++<translation id="9062666675513499497">登录其他 Google 服务时登录 AI-FREE</translation>
++<translation id="9078733879136747090">AI-FREE 已自动关闭</translation>
++<translation id="9089354809943900324">AI-FREE版本太旧</translation>
++<translation id="9093206154853821181">{0,plural, =1{AI-FREE 将在 1 小时后重新启动}other{AI-FREE 将在 # 小时后重新启动}}</translation>
+ <translation id="9106236359747881194">选择文字即可搜索</translation>
+-<translation id="9106612006984859720">若要接收后续 Chromium 更新，您需使用 Windows 10 或更高版本。该计算机目前使用的是 Windows 8.1。</translation>
+-<translation id="91086099826398415">在 Chromium 新标签页中打开链接(&amp;T)</translation>
++<translation id="9106612006984859720">若要接收后续 AI-FREE 更新，您需使用 Windows 10 或更高版本。该计算机目前使用的是 Windows 8.1。</translation>
++<translation id="91086099826398415">在 AI-FREE 新标签页中打开链接(&amp;T)</translation>
+ <translation id="911206726377975832">同时删除您的浏览数据吗？</translation>
+ <translation id="9134482777260927479">作业辅导</translation>
+ <translation id="9148058034647219655">退出</translation>
+-<translation id="9155105544013854680">从上次停下的地方继续：Chromium 可在您每次重启后恢复标签页。如需开启此功能，请前往</translation>
+-<translation id="9158494823179993217">您的系统管理员已将 Chromium 配置为使用备用浏览器访问 <ph name="TARGET_URL_HOSTNAME" />。</translation>
+-<translation id="9185526690718004400">重新启动以更新 Chromium(&amp;C)</translation>
+-<translation id="9190841055450128916">Chromium (mDNS-In)</translation>
+-<translation id="924957577793602335">定制您的专属 Chromium</translation>
+-<translation id="93478295209880648">Chromium 可能无法正常运行，因为它不再支持 Windows XP 和 Windows Vista</translation>
++<translation id="9155105544013854680">从上次停下的地方继续：AI-FREE 可在您每次重启后恢复标签页。如需开启此功能，请前往</translation>
++<translation id="9158494823179993217">您的系统管理员已将 AI-FREE 配置为使用备用浏览器访问 <ph name="TARGET_URL_HOSTNAME" />。</translation>
++<translation id="9185526690718004400">重新启动以更新 AI-FREE(&amp;C)</translation>
++<translation id="9190841055450128916">AI-FREE (mDNS-In)</translation>
++<translation id="924957577793602335">定制您的专属 AI-FREE</translation>
++<translation id="93478295209880648">AI-FREE 可能无法正常运行，因为它不再支持 Windows XP 和 Windows Vista</translation>
+ <translation id="945522503751344254">发送反馈</translation>
+-<translation id="965162752251293939">谁在使用 Chromium？</translation>
+-<translation id="967427899662692980">获享 Chromium 的最强安全保护</translation>
++<translation id="965162752251293939">谁在使用 AI-FREE？</translation>
++<translation id="967427899662692980">获享 AI-FREE 的最强安全保护</translation>
+ <translation id="983803489796659991">更新服务器没有应用的任何哈希数据，因此安装失败。</translation>
+-<translation id="985498048907240953">在不登录账号的情况下使用 Chromium</translation>
+-<translation id="985602178874221306">The Chromium Authors</translation>
++<translation id="985498048907240953">在不登录账号的情况下使用 AI-FREE</translation>
++<translation id="985602178874221306">The AI-FREE Authors</translation>
+ <translation id="989970834842471429">选择任何文字或图片即可使用图片搜索功能进行搜索</translation>
+-<translation id="992780518932311116">如需使用位置信息，请在<ph name="BEGIN_LINK" />系统设置<ph name="END_LINK" />中授予 Chromium 访问权限</translation>
+-</translationbundle>
+\ No newline at end of file
++<translation id="992780518932311116">如需使用位置信息，请在<ph name="BEGIN_LINK" />系统设置<ph name="END_LINK" />中授予 AI-FREE 访问权限</translation>
++</translationbundle>
+diff --git a/chrome/app/resources/generated_resources_zh-CN.xtb b/chrome/app/resources/generated_resources_zh-CN.xtb
+index 59be44d7..3231e2d4 100644
+--- a/chrome/app/resources/generated_resources_zh-CN.xtb
++++ b/chrome/app/resources/generated_resources_zh-CN.xtb
+@@ -906,7 +906,7 @@
+ <translation id="1651609627703324721">此标签页正在向头戴设备显示 VR 内容</translation>
+ <translation id="1652281434788353738">沉思</translation>
+ <translation id="1652326691684645429">启用“附近分享”功能</translation>
+-<translation id="1652862280638399816">若要将密码管理工具与 macOS 钥匙串搭配使用，请重新启动 Chromium 并允许访问钥匙串。您的标签页会在重新启动后重新打开。</translation>
++<translation id="1652862280638399816">若要将密码管理工具与 macOS 钥匙串搭配使用，请重新启动 AI-FREE 并允许访问钥匙串。您的标签页会在重新启动后重新打开。</translation>
+ <translation id="165448107578581061">Gemini 正在处理您的任务…</translation>
+ <translation id="1654580009054503925">不得显示请求</translation>
+ <translation id="1656528038316521561">背景不透明度</translation>
+@@ -1467,7 +1467,7 @@
+ <translation id="2059913712424898428">时区</translation>
+ <translation id="2060375639911876205">移除 eSIM 卡配置文件</translation>
+ <translation id="2061366302742593739">没有可显示的内容</translation>
+-<translation id="2061589908388230480">如果 Chromium 发现您的密码在公开数据泄露事件中外泄，Google 密码管理工具可能会在您登录时建议更改密码。<ph name="BEGIN_LINK" />详细了解自动更改密码<ph name="END_LINK" /></translation>
++<translation id="2061589908388230480">如果 AI-FREE 发现您的密码在公开数据泄露事件中外泄，Google 密码管理工具可能会在您登录时建议更改密码。<ph name="BEGIN_LINK" />详细了解自动更改密码<ph name="END_LINK" /></translation>
+ <translation id="2062354623176996748">如果您使用无痕式窗口浏览网页，系统便不会保存您的浏览记录</translation>
+ <translation id="206308717637808771">关闭所有窗口时删除数据。在数据处理方面，与您正在查看的网站相同</translation>
+ <translation id="2066700471214517561">波束成形麦克风，让 Chromebook 使用者的声音更清晰。</translation>
+@@ -2288,7 +2288,7 @@
+ <translation id="2642111877055905627">足球</translation>
+ <translation id="2642206811783203764">始终允许在 <ph name="SITE_NAME" /> 上运行</translation>
+ <translation id="2643064289437760082">您可随时通过删除浏览数据来删除广告衡量数据</translation>
+-<translation id="2643379881528582459">如果 Chromium 发现您的密码在公开数据泄露事件中外泄，可能会在您登录时建议更改密码</translation>
++<translation id="2643379881528582459">如果 AI-FREE 发现您的密码在公开数据泄露事件中外泄，可能会在您登录时建议更改密码</translation>
+ <translation id="2643698698624765890">您可以通过点击“窗口”菜单中的“扩展程序”，管理您的扩展程序。</translation>
+ <translation id="2643967675101729581">结束日期：</translation>
+ <translation id="2645047101481282803">您的设备由 <ph name="PROFILE_NAME" /> 管理</translation>
+@@ -3002,7 +3002,7 @@
+ <translation id="3152545926232662879">已忽略：</translation>
+ <translation id="3152596030350326139">水平显示标签页</translation>
+ <translation id="3154754096046236400">个人使用场景</translation>
+-<translation id="3155163173539279776">重新启动 Chromium</translation>
++<translation id="3155163173539279776">重新启动 AI-FREE</translation>
+ <translation id="3155394504825881014">将标签页分组转换为书签文件夹</translation>
+ <translation id="3156511682997763015">快进 10 秒</translation>
+ <translation id="3157330780336267229">如需分享或加入标签页分组，您需要开启同步功能</translation>
+@@ -4636,7 +4636,7 @@
+ <translation id="4332976768901252016">设置“家长控制”功能</translation>
+ <translation id="4334768748331667190">系统不会再向您显示<ph name="MODULE_NAME" /></translation>
+ <translation id="4335835283689002019">“安全浏览”功能已关闭</translation>
+-<translation id="4336967529148557673">您需要先登录，然后 Chromium 才能完成此任务</translation>
++<translation id="4336967529148557673">您需要先登录，然后 AI-FREE 才能完成此任务</translation>
+ <translation id="433776600277609450">添加过滤条件</translation>
+ <translation id="4338363401382232853">分屏窗口建议</translation>
+ <translation id="4339203724549370495">卸载应用</translation>
+@@ -5438,7 +5438,7 @@
+ <translation id="4918762404810341788">复制并打开</translation>
+ <translation id="4918844574251943176">已复制图片</translation>
+ <translation id="4921348630401250116">文字转语音</translation>
+-<translation id="4922104989726031751">若要在您的操作系统中使用密码管理工具，请重新启动 Chromium 并允许使用计算机的密码管理工具。待 Chromium 重新启动后，您的标签页会自动重新打开。</translation>
++<translation id="4922104989726031751">若要在您的操作系统中使用密码管理工具，请重新启动 AI-FREE 并允许使用计算机的密码管理工具。待 AI-FREE 重新启动后，您的标签页会自动重新打开。</translation>
+ <translation id="4923561999941435531">{0,plural, =1{将 1 项内容保存在账号中}other{将 # 项内容保存在账号中}}</translation>
+ <translation id="4923977675318667854">显示标签页分组</translation>
+ <translation id="4924002401726507608">提交反馈</translation>
+@@ -7763,7 +7763,7 @@
+ <translation id="6677527809400770913">已将手势“<ph name="GESTURE" />”分配给“<ph name="ACTION" />”</translation>
+ <translation id="6678604587151240716">海中巨浪翻滚，远处背景是一片陆地。天空暗沉，地平线上隐约透出橙色光芒。</translation>
+ <translation id="6678717876183468697">查询网址</translation>
+-<translation id="6678974601734442817">Chromium 需要您协助更改密码</translation>
++<translation id="6678974601734442817">AI-FREE 需要您协助更改密码</translation>
+ <translation id="6679947539429331601">隐藏 12 小时</translation>
+ <translation id="6680442031740878064">可用空间：<ph name="AVAILABLE_SPACE" /></translation>
+ <translation id="6680650203439190394">语速</translation>
+diff --git a/chrome/app/settings_chromium_strings.grdp b/chrome/app/settings_chromium_strings.grdp
+index e3e87a2c..82dcf55a 100644
+--- a/chrome/app/settings_chromium_strings.grdp
++++ b/chrome/app/settings_chromium_strings.grdp
+@@ -19,10 +19,10 @@
+     </then>
+     <else>
+       <message name="IDS_SETTINGS_ABOUT_PROGRAM" desc="Menu title for the About Chromium page.">
+-        About Chromium
++        About AI-FREE
+       </message>
+       <message name="IDS_SETTINGS_GET_HELP_USING_CHROME" desc="Text of the button which takes the user to the Chrome help page.">
+-        Get help with Chromium
++        Get help with AI-FREE
+       </message>
+     </else>
+   </if>
+diff --git a/chrome/browser/resources/settings/settings_menu/settings_menu.html b/chrome/browser/resources/settings/settings_menu/settings_menu.html
+index a635753b..ef329e18 100644
+--- a/chrome/browser/resources/settings/settings_menu/settings_menu.html
++++ b/chrome/browser/resources/settings/settings_menu/settings_menu.html
+@@ -23,6 +23,14 @@
+         width: var(--cr-icon-size);
+       }
+ 
++      .ai-free-product-icon {
++        flex-shrink: 0;
++        height: var(--cr-icon-size);
++        margin-inline-end: 20px;
++        object-fit: contain;
++        width: var(--cr-icon-size);
++      }
++
+       .menu-separator {
+         /* Per bettes@, this is different from the other separator lines. */
+         border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+@@ -167,7 +175,8 @@
+         </a>
+         <a role="menuitem" id="about-menu" href="/help"
+             class="cr-nav-menu-item">
+-          <cr-icon icon="cr:chrome-product"></cr-icon>
++          <img class="ai-free-product-icon"
++              src="chrome://theme/current-channel-logo@1x" alt="">
+           $i18n{aboutPageTitle}
+           <cr-ripple></cr-ripple>
+         </a>
+diff --git a/components/components_chromium_strings.grd b/components/components_chromium_strings.grd
+index 4864368f..a993b9f9 100644
+--- a/components/components_chromium_strings.grd
++++ b/components/components_chromium_strings.grd
+@@ -272,7 +272,7 @@
+ 
+       <!-- Version UI -->
+       <message name="IDS_SHORT_PRODUCT_LOGO_ALT_TEXT" desc="Alt text for the Chromium logo image.">
+-        Chromium logo
++        AI-FREE logo
+       </message>
+ 
+       <message name="IDS_VERSION_UI_LICENSE" desc="The label below the copyright message, containing the URLs.">
+diff --git a/components/policy/resources/policy_templates_zh-CN.xtb b/components/policy/resources/policy_templates_zh-CN.xtb
+index 5103332d..2c416a24 100644
+--- a/components/policy/resources/policy_templates_zh-CN.xtb
++++ b/components/policy/resources/policy_templates_zh-CN.xtb
+@@ -1139,7 +1139,7 @@ Chrome 政策的优先级高于此政策，例如：如果某个扩展程序已
+ 
+        如果您选择了任何其他用于设置代理政策的模式，请勿设置此政策。
+ 
+-      注意：如需查看更详细的示例，请访问 Chromium 项目 ( https://www.chromium.org/developers/design-documents/network-settings#TOC-Command-line-options-for-proxy-sett )。</translation>
++      注意：如需查看更详细的示例，请访问 AI-FREE 项目 ( https://www.chromium.org/developers/design-documents/network-settings#TOC-Command-line-options-for-proxy-sett )。</translation>
+ <translation id="1767673020408652620">在处于零状态的搜索框内启用应用推荐</translation>
+ <translation id="1768225118528727376">向这些网站授予窗口管理权限</translation>
+ <translation id="1770071413238151235">12 小时制</translation>
+@@ -1347,7 +1347,7 @@ Chrome 政策的优先级高于此政策，例如：如果某个扩展程序已
+      </translation>
+ <translation id="1919802376548418720">使用 KDC 政策委派凭据。</translation>
+ <translation id="1920046221095339924">允许在设备上使用受管理自助服务终端</translation>
+-<translation id="1920772397574801429">通过设置此政策，您可以指定支持 <ph name="HTTP_NEGOTIATE" /> 身份验证（例如 Kerberos 身份验证）的 Android 身份验证应用提供的账号所属的类型。您应该可以从身份验证应用的供应商处获得此信息。如需更多详细信息，请访问 https://goo.gl/hajyfN 查看 Chromium 项目
++<translation id="1920772397574801429">通过设置此政策，您可以指定支持 <ph name="HTTP_NEGOTIATE" /> 身份验证（例如 Kerberos 身份验证）的 Android 身份验证应用提供的账号所属的类型。您应该可以从身份验证应用的供应商处获得此信息。如需更多详细信息，请访问 https://goo.gl/hajyfN 查看 AI-FREE 项目
+ 
+       如果您不设置此政策，Android 设备上将停用 <ph name="HTTP_NEGOTIATE" /> 身份验证。</translation>
+ <translation id="1923704782248889851">允许输入语音</translation>
+@@ -3244,7 +3244,7 @@ PAC 样式的字符串：
+ 
+   * <ph name="PROXY_MODE_ENUM_PAC_SCRIPT" /> - 系统会使用 <ph name="PROXY_BYPASS_LIST_PROXY_PAC_URL" />、<ph name="PROXY_PAC_MANDATORY_PROXY_SETTINGS_FIELD" /> 和 <ph name="PROXY_BYPASS_LIST_PROXY_SETTINGS_FIELD" /> 字段。
+ 
+-注意：如需查看更详细的示例，请访问 Chromium 项目 (https://www.chromium.org/developers/design-documents/network-settings/#command-line-options-for-proxy-settings)。</translation>
++注意：如需查看更详细的示例，请访问 AI-FREE 项目 (https://www.chromium.org/developers/design-documents/network-settings/#command-line-options-for-proxy-settings)。</translation>
+ <translation id="3047732214002457234">控制 Chrome 清理功能向 Google 报告数据的方式</translation>
+ <translation id="3047864383610708617">停用粘滞键</translation>
+ <translation id="3048744057455266684">如果设置了此政策，且多功能框建议的搜索网址在查询字符串或片段标识符中包含此参数，则该建议将显示搜索字词和搜索服务提供商，而不是原始的搜索网址。
+@@ -3456,7 +3456,7 @@ ClearCrossSiteCrossBrowsingContextGroupWindowName 变体可控制是否为顶层
+ 
+ 如果此政策已停用，系统将会使用旧行为。
+ 
+-如果此政策未设置，系统则会像其余 Chromium 用户一样使用新行为。</translation>
++如果此政策未设置，系统则会像其余 AI-FREE 用户一样使用新行为。</translation>
+ <translation id="3219421230122020860">可使用无痕模式</translation>
+ <translation id="3220624000494482595">如果自助服务终端应用是一款 Android 应用，它将无法控制 <ph name="PRODUCT_OS_NAME" />版本，即使此政策设为 <ph name="TRUE" /> 也是如此。</translation>
+ <translation id="3222088741899353813">在登录屏幕上，鼠标左键是主按键</translation>
+@@ -6352,7 +6352,7 @@ JavaScript 优化政策的例外情况仅在网站级别 (eTLD+1) 上强制执
+ <translation id="5151163911478747031">在 NTP 页脚中停用扩展程序来源信息</translation>
+ <translation id="5151850599880109339">在平衡模式下启用 HTTPS-Only 模式</translation>
+ <translation id="5152393033264257734">允许使用 DNS 拦截检查功能和“您是不是要前往 http://intranetsite/？”信息栏。</translation>
+-<translation id="5152787786897382519">Chromium 和 Google Chrome 均有一些政策组，其中的政策以相互依赖的方式来控制某项功能。这些集合由以下政策组表示。如果相关政策有多个来源，系统仅会应用来源优先级最高的值。同一组中来源优先级较低的值会被忽略。<ph name="POLICY_PRIORITY_DOC_URL" /> 中定义了优先级顺序。</translation>
++<translation id="5152787786897382519">AI-FREE 和 Google Chrome 均有一些政策组，其中的政策以相互依赖的方式来控制某项功能。这些集合由以下政策组表示。如果相关政策有多个来源，系统仅会应用来源优先级最高的值。同一组中来源优先级较低的值会被忽略。<ph name="POLICY_PRIORITY_DOC_URL" /> 中定义了优先级顺序。</translation>
+ <translation id="5153187201534281749">在工具栏中显示浏览器实验性功能图标</translation>
+ <translation id="5159674159887919923">不在 ChromeOS Flex 上发送其他硬件数据</translation>
+ <translation id="5162571264806471078">为受管资料启用安全信号云报告功能</translation>
+@@ -8618,7 +8618,7 @@ Related Website Set 中的所有网站都必须是采用 HTTPS 协议的可注
+ 
+       如果您未设置此政策，用户便可自行选择代理设置。
+ 
+-      注意：如需查看详细示例，请访问 Chromium 项目 ( https://www.chromium.org/developers/design-documents/network-settings#TOC-Command-line-options-for-proxy-sett )。</translation>
++      注意：如需查看详细示例，请访问 AI-FREE 项目 ( https://www.chromium.org/developers/design-documents/network-settings#TOC-Command-line-options-for-proxy-sett )。</translation>
+ <translation id="6559643481486165125">不提示重新验证身份</translation>
+ <translation id="656130159911161669">ChromeOS 更新会忽略自助服务终端应用清单中定义的版本</translation>
+ <translation id="6561396069801924653">在系统任务栏菜单中显示无障碍选项</translation>
+@@ -9269,7 +9269,7 @@ Related Website Set 中的所有网站都必须是采用 HTTPS 协议的可注
+ 
+        如果您选择了任何其他用于设置代理政策的模式，请勿设置此政策。
+ 
+-      注意：如需查看详细示例，请访问 Chromium 项目 ( https://www.chromium.org/developers/design-documents/network-settings#TOC-Command-line-options-for-proxy-sett )。</translation>
++      注意：如需查看详细示例，请访问 AI-FREE 项目 ( https://www.chromium.org/developers/design-documents/network-settings#TOC-Command-line-options-for-proxy-sett )。</translation>
+ <translation id="7001463504545085491">通过设置此政策，您可以强制启用最低级别的 <ph name="YOUTUBE_PRODUCT_NAME" /> 受限模式，并禁止用户选择限制条件更加宽松的模式。如果此政策设为：
+ 
+       *“严格”- <ph name="YOUTUBE_PRODUCT_NAME" />“严格”受限模式将始终处于启用状态。
+@@ -10418,7 +10418,7 @@ Gemini 只能在部分国家/地区启用，并且仅支持部分语言。设置
+ 
+        如果您选择了任何其他用于设置代理政策的模式，请勿设置此政策。
+ 
+-      注意：如需查看详细示例，请访问 Chromium 项目 ( https://www.chromium.org/developers/design-documents/network-settings#TOC-Command-line-options-for-proxy-sett )。</translation>
++      注意：如需查看详细示例，请访问 AI-FREE 项目 ( https://www.chromium.org/developers/design-documents/network-settings#TOC-Command-line-options-for-proxy-sett )。</translation>
+ <translation id="7717938661004793600">配置 <ph name="PRODUCT_OS_NAME" />辅助功能。</translation>
+ <translation id="7718127720248642697">此政策默认处于已启用状态。它可让控制已注册的设备，使其报告存储设备的硬件统计信息和标识符。
+ 
+@@ -11219,7 +11219,7 @@ Gemini 只能在部分国家/地区启用，并且仅支持部分语言。设置
+ 如果此政策未设置，其行为将由 <ph name="GEN_AI_DEFAULT_SETTINGS_POLICY_NAME" /> 政策决定。
+ 
+ 如需详细了解生成式 AI 功能的数据处理机制，请访问 https://support.google.com/chrome/a?p=generative_ai_settings。</translation>
+-<translation id="8259375588339409826">Chromium 和 Google Chrome 支持同一组政策。请注意，本文档中可能包含未发布的政策（即它们的“支持的环境”条目是指尚未发布的 <ph name="PRODUCT_NAME" /> 版本），这些政策可能会被随时更改或撤消，恕不另行通知；对于这些政策，我们也不会提供任何类型的保证（包括安全性和隐私权方面的保证）。
++<translation id="8259375588339409826">AI-FREE 和 Google Chrome 支持同一组政策。请注意，本文档中可能包含未发布的政策（即它们的“支持的环境”条目是指尚未发布的 <ph name="PRODUCT_NAME" /> 版本），这些政策可能会被随时更改或撤消，恕不另行通知；对于这些政策，我们也不会提供任何类型的保证（包括安全性和隐私权方面的保证）。
+ 
+ 这些政策仅适用于配置您单位内部所用的 <ph name="PRODUCT_NAME" /> 实例。在您单位外部（例如在某款公开发布的程序中）使用这些政策的软件将被视为恶意软件，并且很可能会被 Google 和防病毒软件供应商标记为恶意软件。
+ 
+@@ -12261,7 +12261,7 @@ Gemini 只能在部分国家/地区启用，并且仅支持部分语言。设置
+ <translation id="8948062138228904066">身份验证服务器许可名单</translation>
+ <translation id="8951145747995737852">控制存储空间配额 API 是否返回静态值</translation>
+ <translation id="8951350807133946005">设置磁盘缓存目录</translation>
+-<translation id="8952611478149810182">我们正在 Chromium 中更改针对已停用的表单控件分派事件的行为，以便更好地兼容其他浏览器并提升开发者体验。
++<translation id="8952611478149810182">我们正在 AI-FREE 中更改针对已停用的表单控件分派事件的行为，以便更好地兼容其他浏览器并提升开发者体验。
+ 
+ 这项变更会针对已停用的表单控件元素分派除 click、mouseup 和 mousedown 之外的 MouseEvent。例如，新事件将包括 mousemove、mouseenter 和 mouseleave。
+ 
+@@ -12273,7 +12273,7 @@ Gemini 只能在部分国家/地区启用，并且仅支持部分语言。设置
+ 
+ 如果此政策已停用，系统将会使用旧行为。
+ 
+-如果此政策未设置，系统则会像其余 Chromium 用户一样使用新行为。</translation>
++如果此政策未设置，系统则会像其余 AI-FREE 用户一样使用新行为。</translation>
+ <translation id="8955719471735800169">返回页首</translation>
+ <translation id="8956312248048980644">默认允许使用以源为键的代理集群。</translation>
+ <translation id="8963464192296208229">F11 设置使用包含 Alt 辅助键的快捷键</translation>
+diff --git a/components/strings/components_chromium_strings_zh-CN.xtb b/components/strings/components_chromium_strings_zh-CN.xtb
+index 694d4cfd..ccc72e76 100644
+--- a/components/strings/components_chromium_strings_zh-CN.xtb
++++ b/components/strings/components_chromium_strings_zh-CN.xtb
+@@ -2,26 +2,26 @@
+ <!DOCTYPE translationbundle>
+ <translationbundle lang="zh-CN">
+ <translation id="130631256467250065">您所做的更改会在下次重新启动设备时生效。</translation>
+-<translation id="1965068424387304464">Chromium 提示：保存密码</translation>
+-<translation id="261308610302996111">依次前往 Chromium 菜单 &gt;“<ph name="SETTINGS_TITLE" />”&gt;“<ph name="SYSTEM_TITLE" />”&gt;“<ph name="PROXIES_TITLE" />”，确保您的配置设置为“不使用代理”或“直接”。</translation>
+-<translation id="275588974610408078">Chromium 未提供崩溃报告。</translation>
+-<translation id="3064346599913645280">您正在查看安全的 Chromium 网页</translation>
+-<translation id="3255926992597692024">Chromium 正在尝试修改用于填入付款方式的设置。</translation>
+-<translation id="358997566136285270">Chromium 徽标</translation>
+-<translation id="3837584850181228767">Chromium 提示：增强型安全浏览</translation>
+-<translation id="4050599136622776556">Chromium 正在尝试修改付款方式。</translation>
++<translation id="1965068424387304464">AI-FREE 提示：保存密码</translation>
++<translation id="261308610302996111">依次前往 AI-FREE 菜单 &gt;“<ph name="SETTINGS_TITLE" />”&gt;“<ph name="SYSTEM_TITLE" />”&gt;“<ph name="PROXIES_TITLE" />”，确保您的配置设置为“不使用代理”或“直接”。</translation>
++<translation id="275588974610408078">AI-FREE 未提供崩溃报告。</translation>
++<translation id="3064346599913645280">您正在查看安全的 AI-FREE 网页</translation>
++<translation id="3255926992597692024">AI-FREE 正在尝试修改用于填入付款方式的设置。</translation>
++<translation id="6520427763490962779">AI-FREE 徽标</translation>
++<translation id="3837584850181228767">AI-FREE 提示：增强型安全浏览</translation>
++<translation id="4050599136622776556">AI-FREE 正在尝试修改付款方式。</translation>
+ <translation id="4365115785552740256">Chromium 的诞生离不开 <ph name="BEGIN_LINK_CHROMIUM" />Chromium<ph name="END_LINK_CHROMIUM" /> 开放源代码项目以及其他<ph name="BEGIN_LINK_OSS" />开放源代码软件<ph name="END_LINK_OSS" />。</translation>
+-<translation id="4622039161600275920">此页面已被 Chromium 屏蔽</translation>
+-<translation id="48558539577516920">在防火墙或防病毒设置部分设为允许 Chromium 访问网络。</translation>
++<translation id="4622039161600275920">此页面已被 AI-FREE 屏蔽</translation>
++<translation id="48558539577516920">在防火墙或防病毒设置部分设为允许 AI-FREE 访问网络。</translation>
+ <translation id="4949828774841497663">依次前往“应用”&gt;“系统设置”&gt;“网络”，选择有效的网络，点击“详情…”按钮，然后取消选择所有已选的代理。</translation>
+-<translation id="6480456350195404966">依次前往 Chromium 菜单 &gt;“<ph name="SETTINGS_TITLE" />”&gt;“<ph name="SYSTEM_TITLE" />”&gt;“<ph name="PROXIES_TITLE" />”&gt;“网络和 Internet”&gt;“代理”，然后取消选择“自动检测设置”。</translation>
+-<translation id="648062525172759633">这些页面供 Chromium 开发者使用，可能不会积极维护或测试。如需启用这些页面，请前往 <ph name="BEGIN_LINK" />chrome://chrome-urls<ph name="LINK_END" />，点击启用调试页面的按钮，然后再次前往此页面。</translation>
+-<translation id="6549378540556750549">Chromium 的诞生也离不开其他<ph name="BEGIN_LINK_OSS" />开源软件<ph name="END_LINK_OSS" />。</translation>
+-<translation id="6613594504749178791">您所做的更改会在下次重新启动 Chromium 时生效。</translation>
+-<translation id="691026815377248078">Chromium 需获得蓝牙使用权限才能继续配对。<ph name="IDS_BLUETOOTH_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH_LINK" /></translation>
++<translation id="6480456350195404966">依次前往 AI-FREE 菜单 &gt;“<ph name="SETTINGS_TITLE" />”&gt;“<ph name="SYSTEM_TITLE" />”&gt;“<ph name="PROXIES_TITLE" />”&gt;“网络和 Internet”&gt;“代理”，然后取消选择“自动检测设置”。</translation>
++<translation id="648062525172759633">这些页面供 AI-FREE 开发者使用，可能不会积极维护或测试。如需启用这些页面，请前往 <ph name="BEGIN_LINK" />chrome://chrome-urls<ph name="LINK_END" />，点击启用调试页面的按钮，然后再次前往此页面。</translation>
++<translation id="6549378540556750549">AI-FREE 的诞生也离不开其他<ph name="BEGIN_LINK_OSS" />开源软件<ph name="END_LINK_OSS" />。</translation>
++<translation id="6613594504749178791">您所做的更改会在下次重新启动 AI-FREE 时生效。</translation>
++<translation id="691026815377248078">AI-FREE 需获得蓝牙使用权限才能继续配对。<ph name="IDS_BLUETOOTH_DEVICE_CHOOSER_AUTHORIZE_BLUETOOTH_LINK" /></translation>
+ <translation id="7681937895330411637">Chromium 的诞生离不开 <ph name="BEGIN_LINK_CHROMIUM" />Chromium<ph name="END_LINK_CHROMIUM" /> 开源项目。</translation>
+-<translation id="7861509383340276692">前往 Chromium 菜单 &gt;“<ph name="SETTINGS_TITLE" />”&gt;“<ph name="ADVANCED_TITLE" />”部分，然后取消选中“<ph name="NO_PREFETCH_DESCRIPTION" />”。如果这无法解决该问题，我们建议您重新选中此选项，以便改善性能。</translation>
++<translation id="7861509383340276692">前往 AI-FREE 菜单 &gt;“<ph name="SETTINGS_TITLE" />”&gt;“<ph name="ADVANCED_TITLE" />”部分，然后取消选中“<ph name="NO_PREFETCH_DESCRIPTION" />”。如果这无法解决该问题，我们建议您重新选中此选项，以便改善性能。</translation>
+ <translation id="8597726643333341451">您正在查看一个安全的 Chrome for Testing 网页</translation>
+-<translation id="8684913864886094367">Chromium 未正确关闭。</translation>
+-<translation id="9183331186620388872">Chromium 提示：使用智能镜头搜索</translation>
+-</translationbundle>
+\ No newline at end of file
++<translation id="8684913864886094367">AI-FREE 未正确关闭。</translation>
++<translation id="9183331186620388872">AI-FREE 提示：使用智能镜头搜索</translation>
++</translationbundle>
+diff --git a/components/strings/components_strings_zh-CN.xtb b/components/strings/components_strings_zh-CN.xtb
+index 5689ba37..03dea6ae 100644
+--- a/components/strings/components_strings_zh-CN.xtb
++++ b/components/strings/components_strings_zh-CN.xtb
+@@ -11,7 +11,7 @@
+ <translation id="1014509239502131234">正在撤消结果</translation>
+ <translation id="1015730422737071372">提供其他详细信息</translation>
+ <translation id="1019413721762100891">已关闭</translation>
+-<translation id="1021753677514347426">此问题是由您或他人在您设备上安装的某个证书导致的。该证书已知被用于监控和拦截网络，因此不受 Chromium 信任。尽管某些情况下的监控确实是合理的（例如监控学校网络或公司网络），但 Chromium 想确保您知道自己正被监控，即使您无法改变这一事实。监控可能会发生在已联网的任何浏览器或应用中。</translation>
++<translation id="1021753677514347426">此问题是由您或他人在您设备上安装的某个证书导致的。该证书已知被用于监控和拦截网络，因此不受 AI-FREE 信任。尽管某些情况下的监控确实是合理的（例如监控学校网络或公司网络），但 AI-FREE 想确保您知道自己正被监控，即使您无法改变这一事实。监控可能会发生在已联网的任何浏览器或应用中。</translation>
+ <translation id="1024111578869940408">攻击者有时会对网址做些令人难以察觉的更改来仿冒网站。</translation>
+ <translation id="1024913885641459127">商品评价与比价</translation>
+ <translation id="1025174656774447058">要在此会话串中自动分享已打开的标签页吗？</translation>
+@@ -234,7 +234,7 @@
+ <translation id="1355301061807280185">工作机会</translation>
+ <translation id="1357195169723583938">最近使用过这部设备的用户和使用时间</translation>
+ <translation id="1358187717814494928">创建工作表</translation>
+-<translation id="1358223345833465883">您在 Chromium 中使用的搜索引擎</translation>
++<translation id="1358223345833465883">您在 AI-FREE 中使用的搜索引擎</translation>
+ <translation id="1359836962251219822">厨房与餐厅</translation>
+ <translation id="1360955481084547712">若要私密地浏览网页，请打开一个新的无痕式窗口</translation>
+ <translation id="1361528602584216624">每笔 Pix 交易的限额为 R$ <ph name="TRANSACTION_LIMIT" /></translation>
+@@ -424,7 +424,7 @@
+ <translation id="1647550855876293003"><ph name="RESULT_MODIFIED_DATE" /> - <ph name="RESULT_OWNER" /></translation>
+ <translation id="1650602712345345441">管理您的 Google 设置</translation>
+ <translation id="1652415888492971589">JIS B8</translation>
+-<translation id="1652862280638399816">若要将密码管理工具与 macOS 钥匙串搭配使用，请重新启动 Chromium 并允许访问钥匙串。您的标签页会在重新启动后重新打开。</translation>
++<translation id="1652862280638399816">若要将密码管理工具与 macOS 钥匙串搭配使用，请重新启动 AI-FREE 并允许访问钥匙串。您的标签页会在重新启动后重新打开。</translation>
+ <translation id="1652887625750064647">AI 最佳匹配</translation>
+ <translation id="1653465303147789530">使用<ph name="PAYMENT_METHOD" />付款，无需切换应用</translation>
+ <translation id="1655159794885649984">禁止在此网站上拖动内容</translation>
+@@ -600,7 +600,7 @@
+ <translation id="194174710521904357">您已暂时允许此网站使用第三方 Cookie，这样浏览保护会降低，但网站功能更可能正常运行。</translation>
+ <translation id="1942498996464084801">图书与文学</translation>
+ <translation id="1943994668912612445">设计</translation>
+-<translation id="1945968466830820669">您可能会无法再访问所属组织的账号，或被他人盗用身份信息。Chromium 建议您立即更改密码。</translation>
++<translation id="1945968466830820669">您可能会无法再访问所属组织的账号，或被他人盗用身份信息。AI-FREE 建议您立即更改密码。</translation>
+ <translation id="1946849748901605102">12 x 15 英寸</translation>
+ <translation id="1947454675006758438">钉装（右上角）</translation>
+ <translation id="1953729392594614704">屏蔽“<ph name="TOPIC" />”会同时屏蔽所有相关的主题，即使该主题处于活跃状态也是如此</translation>
+@@ -871,7 +871,7 @@
+ <translation id="2348836501965732644">您可以在“设置”中管理您的信息或关闭这些建议</translation>
+ <translation id="2349957959687031096">“打开无痕式标签页”按钮，激活它即可打开新的无痕式标签页进行私密浏览</translation>
+ <translation id="2350796302381711542">允许<ph name="HANDLER_HOSTNAME" />打开所有<ph name="PROTOCOL" />链接（而非<ph name="REPLACED_HANDLER_TITLE" />）？</translation>
+-<translation id="2351718832234620840">此服务器无法证明其所在网域是 <ph name="DOMAIN" />，因为它使用的安全证书不受 Chromium 或您系统的网站流量加密配置所信任。出现此问题的原因可能是配置有误，或是有攻击者拦截您的连接。</translation>
++<translation id="2351718832234620840">此服务器无法证明其所在网域是 <ph name="DOMAIN" />，因为它使用的安全证书不受 AI-FREE 或您系统的网站流量加密配置所信任。出现此问题的原因可能是配置有误，或是有攻击者拦截您的连接。</translation>
+ <translation id="2353297238722298836">已允许使用摄像头和麦克风</translation>
+ <translation id="2354001756790975382">其他书签</translation>
+ <translation id="2355395290879513365">攻击者可能能够看到您正在此网站上浏览的图片，并通过编辑这些图片让您受骗。</translation>
+@@ -1040,7 +1040,7 @@
+ <translation id="2595719060046994702">此设备和账号不由某个公司或其他组织管理。</translation>
+ <translation id="2596415276201385844">要建立安全连接，您的时钟设置必须正确。这是因为，网站用于证明身份的证书仅在特定时间段有效。由于您设备的时钟不正确，因此 Chrome 无法验证这些证书。</translation>
+ <translation id="2597378329261239068">本文档设置了密码保护，请输入密码。</translation>
+-<translation id="2600083925285092409">如果将此卡保存到 Google Pay 中，那么在 Chromium 中购物时可以自动填充此卡的信息</translation>
++<translation id="2600083925285092409">如果将此卡保存到 Google Pay 中，那么在 AI-FREE 中购物时可以自动填充此卡的信息</translation>
+ <translation id="2602283642570832995">此操作可能违反了 <ph name="DOMAIN" /> 的政策</translation>
+ <translation id="2605979593348332811">姓名拼音</translation>
+ <translation id="2606760465469169465">自动验证</translation>
+@@ -1130,7 +1130,7 @@
+ <translation id="2728127805433021124">服务器的证书是使用弱签名算法进行签名的。</translation>
+ <translation id="272937284275742856">正在安全验证支付信息…</translation>
+ <translation id="2730326759066348565"><ph name="BEGIN_LINK" />运行网络连接诊断<ph name="END_LINK" /></translation>
+-<translation id="2731220418440848219">详细了解 Chromium 中的搜索引擎</translation>
++<translation id="2731220418440848219">详细了解 AI-FREE 中的搜索引擎</translation>
+ <translation id="2731382536835015353">44 x 68 英寸</translation>
+ <translation id="2734797989819862638">请勿复制</translation>
+ <translation id="273785062888389088">暖通空调与环境控制</translation>
+@@ -1149,7 +1149,7 @@
+ <translation id="277133753123645258">送货方式</translation>
+ <translation id="277499241957683684">缺少设备记录</translation>
+ <translation id="2775884851269838147">最先打印的页面</translation>
+-<translation id="277828055419948999">Chromium 可自动填充标准自动填充功能可能会遗漏的复杂字段</translation>
++<translation id="277828055419948999">AI-FREE 可自动填充标准自动填充功能可能会遗漏的复杂字段</translation>
+ <translation id="2781185443919227679">海滩与岛屿</translation>
+ <translation id="2781692009645368755">Google Pay</translation>
+ <translation id="2781799097551205934">正在准备结账</translation>
+@@ -1382,7 +1382,7 @@
+ <translation id="3154506275960390542">此页包含一个可能无法安全提交的表单。他人可能会在传输过程中查看您所发送的数据；攻击者也可能会修改这些数据，从而改变服务器收到的内容。</translation>
+ <translation id="3154987252551138431">使用“附近分享”功能时出了点问题</translation>
+ <translation id="315504272643575312">您的账号由 <ph name="MANAGER" /> 管理。</translation>
+-<translation id="3155163173539279776">重新启动 Chromium</translation>
++<translation id="3155163173539279776">重新启动 AI-FREE</translation>
+ <translation id="3156511682997763015">快进 10 秒</translation>
+ <translation id="3157931365184549694">恢复</translation>
+ <translation id="3158539265159265653">光碟</translation>
+@@ -1448,7 +1448,7 @@
+ <translation id="3249102948665905108">文件已上传到“<ph name="CLOUD_PROVIDER" />”，但出现错误</translation>
+ <translation id="3252772880526154546">建筑</translation>
+ <translation id="3254301855501243548">18 x 22 英寸</translation>
+-<translation id="3255926992597692024">Chromium 正在尝试修改用于填入付款方式的设置。</translation>
++<translation id="3255926992597692024">AI-FREE 正在尝试修改用于填入付款方式的设置。</translation>
+ <translation id="3259648571731540213"><ph name="CREATE_GOOGLE_CALENDAR_EVENT_FOCUSED_FRIENDLY_MATCH_TEXT" />，依次按 Tab 键和 Enter 键即可在 Google 日历中快速创建新活动</translation>
+ <translation id="3261488570342242926">详细了解虚拟卡</translation>
+ <translation id="3262698603497362968">购买选项</translation>
+@@ -1462,7 +1462,7 @@
+ <translation id="3272091146646336650">Super B</translation>
+ <translation id="3272112314896217187">输入 <ph name="NUMBER_OF_DIGITS" /> 位数的验证码</translation>
+ <translation id="3272643614306383237">小于 1 MB。当您下次访问时，某些网站的加载速度可能会更慢。</translation>
+-<translation id="3273738040255912340">您的管理员可以远程更改您的个人资料和浏览器设置，通过报告分析浏览器的相关信息，以及执行其他必要的任务。此设备上的活动可能也在接受 Chromium 外部的管理。<ph name="BEGIN_LINK" />了解详情<ph name="END_LINK" /></translation>
++<translation id="3273738040255912340">您的管理员可以远程更改您的个人资料和浏览器设置，通过报告分析浏览器的相关信息，以及执行其他必要的任务。此设备上的活动可能也在接受 AI-FREE 外部的管理。<ph name="BEGIN_LINK" />了解详情<ph name="END_LINK" /></translation>
+ <translation id="3273757719652748628">保存 IBAN 的底部动作条已全屏打开。</translation>
+ <translation id="3281350579597955952">{0,plural, =1{管理员政策不建议在<ph name="DESTINATION_NAME" />中打开这个文件}other{管理员政策不建议在<ph name="DESTINATION_NAME" />中打开这些文件}}</translation>
+ <translation id="3282085321714087552">贵组织 <ph name="ENROLLMENT_DOMAIN" /> 已将某些信息（例如设置或政策）发送给下列网站。</translation>
+@@ -1543,7 +1543,7 @@
+ <translation id="3422794267539320056">点按恐龙或按空格键即可开玩</translation>
+ <translation id="3423742043356668186">系统指定</translation>
+ <translation id="3427342743765426898">恢复修改(&amp;R)</translation>
+-<translation id="342781501876943858">如果您在其他网站上重复使用了您的密码，Chromium 建议您重置该密码。</translation>
++<translation id="342781501876943858">如果您在其他网站上重复使用了您的密码，AI-FREE 建议您重置该密码。</translation>
+ <translation id="3428151540071562330">一个或多个 DnsOverHttpsTemplates 服务器模板 URI 无效，因此不会被使用。</translation>
+ <translation id="3432601291244612633">关闭页面</translation>
+ <translation id="3433111389595862568">协作与会议软件</translation>
+@@ -1756,7 +1756,7 @@
+ <translation id="374325029554577103">健身技术产品</translation>
+ <translation id="3744111561329211289">后台同步</translation>
+ <translation id="3744212718085287312">下次使用虚拟卡以提高安全性？</translation>
+-<translation id="3744899669254331632">您目前无法访问 <ph name="SITE" />，因为此网站发送了 Chromium 无法处理的杂乱凭据。网络错误和攻击通常是暂时的，因此，此网页稍后可能会恢复正常。</translation>
++<translation id="3744899669254331632">您目前无法访问 <ph name="SITE" />，因为此网站发送了 AI-FREE 无法处理的杂乱凭据。网络错误和攻击通常是暂时的，因此，此网页稍后可能会恢复正常。</translation>
+ <translation id="3745599309295009257">系统会将您撰写的文字以及您书写时所在网页的内容和网址发送给 Google，然后由人工审核者进行审核，用来改进此功能。避免输入个人信息（如医疗或财务详细信息）或在包含私密信息或敏感信息的网站上使用此工具。</translation>
+ <translation id="3748009735914587286">金属（高光）</translation>
+ <translation id="3748647055058832337">此商家不可用</translation>
+@@ -1941,7 +1941,7 @@
+ <translation id="4047351652147966654">18 x 24 英寸</translation>
+ <translation id="404831776305217138">ID 为“<ph name="EXTENSION_ID" />”的扩展程序的更新网址无效或使用的架构不受支持。受支持的架构包括：<ph name="HTTP_SCHEME" />、<ph name="HTTPS_SCHEME" /> 和 <ph name="FILE_SCHEME" />。</translation>
+ <translation id="4050392779074832022">您将能在各种 Google 产品中使用它</translation>
+-<translation id="4050599136622776556">Chromium 正在尝试修改付款方式。</translation>
++<translation id="4050599136622776556">AI-FREE 正在尝试修改付款方式。</translation>
+ <translation id="4051369790469504434">使用已保存的支付方式自动填充</translation>
+ <translation id="4052683751389375539">修改，在新窗口中打开</translation>
+ <translation id="4056223980640387499">棕褐色调</translation>
+@@ -2265,7 +2265,7 @@
+ <translation id="4528888973346221791">工作资料信息（例如用户名）</translation>
+ <translation id="4530347922939905757">短信</translation>
+ <translation id="4531477351494678589">虚拟卡号：</translation>
+-<translation id="4534145890176164066">Chromium 可以更好地理解表单，并更快地为您自动填充表单</translation>
++<translation id="4534145890176164066">AI-FREE 可以更好地理解表单，并更快地为您自动填充表单</translation>
+ <translation id="4535523368173457420">这些搜索引擎在您所在地区非常热门，按随机顺序显示</translation>
+ <translation id="4535602490975885745">无法将照片保存到 OneDrive</translation>
+ <translation id="4539931187424170595">{NUM_YEARS,plural, =1{创建时间：1 年前}other{创建时间：{NUM_YEARS} 年前}}</translation>
+@@ -2372,7 +2372,7 @@
+ <translation id="4732860731866514038">正在下载<ph name="LANGUAGE" />语言包…<ph name="PERCENT" />%</translation>
+ <translation id="4733082559415072992"><ph name="URL" /> 想使用您设备的位置信息</translation>
+ <translation id="473414950835101501">使用摄像头</translation>
+-<translation id="4736825316280949806">重新启动 Chromium</translation>
++<translation id="4736825316280949806">重新启动 AI-FREE</translation>
+ <translation id="4736934858538408121">虚拟卡</translation>
+ <translation id="473775607612524610">更新</translation>
+ <translation id="4738601419177586157"><ph name="TEXT" />搜索建议</translation>
+@@ -2390,7 +2390,7 @@
+ <translation id="4754461935447132332">不安全的网站不得使用</translation>
+ <translation id="4756501505996488486">PRC 16K</translation>
+ <translation id="4757740693289347881">代码无效</translation>
+-<translation id="4757993714154412917">您刚刚在一个诈骗网站中输入了密码。为保护您的账号安全，Chromium 建议检查您已保存的密码。</translation>
++<translation id="4757993714154412917">您刚刚在一个诈骗网站中输入了密码。为保护您的账号安全，AI-FREE 建议检查您已保存的密码。</translation>
+ <translation id="4758311279753947758">添加联系信息</translation>
+ <translation id="4761326898079498987">查看更多详情</translation>
+ <translation id="4761869838909035636">运行 Chrome 安全检查</translation>
+@@ -2496,7 +2496,7 @@
+ <translation id="4918221908152712722">安装<ph name="APP_NAME" />（不需要下载）</translation>
+ <translation id="4920457992177678649">民宿与短期住宿</translation>
+ <translation id="4920710383559189047">套筒</translation>
+-<translation id="4922104989726031751">若要在您的操作系统中使用密码管理工具，请重新启动 Chromium 并允许使用计算机的密码管理工具。待 Chromium 重新启动后，您的标签页会自动重新打开。</translation>
++<translation id="4922104989726031751">若要在您的操作系统中使用密码管理工具，请重新启动 AI-FREE 并允许使用计算机的密码管理工具。待 AI-FREE 重新启动后，您的标签页会自动重新打开。</translation>
+ <translation id="4923459931733593730">付款</translation>
+ <translation id="4926049483395192435">必须指定。</translation>
+ <translation id="4926159001844873046"><ph name="SITE" /> 显示</translation>
+@@ -2600,7 +2600,7 @@
+ <translation id="5089810972385038852">州/省/直辖市/自治区</translation>
+ <translation id="5093232627742069661">Z 型折</translation>
+ <translation id="5093417502834168387">登录时遇到问题？请试试其他方式</translation>
+-<translation id="5094747076828555589">此服务器无法证明它是<ph name="DOMAIN" />；Chromium不信任其安全证书。出现此问题的原因可能是配置有误或您的连接被拦截了。</translation>
++<translation id="5094747076828555589">此服务器无法证明它是<ph name="DOMAIN" />；AI-FREE不信任其安全证书。出现此问题的原因可能是配置有误或您的连接被拦截了。</translation>
+ <translation id="5096066272198024688">正在保存您的信息…</translation>
+ <translation id="5097099694988056070">设备统计信息（例如 CPU/RAM 使用情况）</translation>
+ <translation id="5097468150760963273">27 x 39 英寸</translation>
+@@ -2746,7 +2746,7 @@
+ <translation id="5316812925700871227">逆时针旋转</translation>
+ <translation id="5317780077021120954">保存</translation>
+ <translation id="5319366980180850702">文学经典</translation>
+-<translation id="531996107159483074"><ph name="BEGIN_BOLD" />默认搜索引擎让您可在网络中搜索信息，并支持某些 Chromium 功能<ph name="END_BOLD" />，例如通过地址栏和网页上的图片进行搜索。如果您所用的搜索引擎不支持某项功能，您可能无法使用该功能。</translation>
++<translation id="531996107159483074"><ph name="BEGIN_BOLD" />默认搜索引擎让您可在网络中搜索信息，并支持某些 AI-FREE 功能<ph name="END_BOLD" />，例如通过地址栏和网页上的图片进行搜索。如果您所用的搜索引擎不支持某项功能，您可能无法使用该功能。</translation>
+ <translation id="5323043727018853753">允许嵌入内容</translation>
+ <translation id="5323105697514565458"><ph name="FRIENDLY_MATCH_TEXT" />，第 <ph name="MATCH_POSITION" /> 个（共 <ph name="NUM_MATCHES" /> 个）</translation>
+ <translation id="5323501626199324454">在 Google 账号中管理</translation>
+@@ -2820,7 +2820,7 @@
+ <translation id="5431318178759467895">彩色</translation>
+ <translation id="5433756542371550806">命令行变体</translation>
+ <translation id="5434065355175441495">PKCS #1 RSA 加密</translation>
+-<translation id="5434798570900738152">Chromium <ph name="BEGIN_EMPHASIS" />不会保存<ph name="END_EMPHASIS" />：
++<translation id="5434798570900738152">AI-FREE <ph name="BEGIN_EMPHASIS" />不会保存<ph name="END_EMPHASIS" />：
+           <ph name="BEGIN_LIST" />
+             <ph name="LIST_ITEM" />您的浏览记录
+             <ph name="LIST_ITEM" />Cookie 和网站数据
+@@ -3259,7 +3259,7 @@
+ <translation id="6107864469867367783"><ph name="USER_DISPLAY_NAME" />更改了分组名称</translation>
+ <translation id="6107924765192360631">只需先输入几个字词或撰写一份初稿，即可获得写作建议。</translation>
+ <translation id="6108580855199168381">证书详情</translation>
+-<translation id="6108702513636120202">您在 Chromium 中使用的搜索引擎</translation>
++<translation id="6108702513636120202">您在 AI-FREE 中使用的搜索引擎</translation>
+ <translation id="6108849843016142864">爬行动物与两栖动物</translation>
+ <translation id="611018310643025551">您的搜索内容、最佳匹配结果和相应网页内容将发送给 Google，并且可能会由人工审核员查看，以改进此功能。</translation>
+ <translation id="6111759749003439722">可以请求访问此设备上的其他应用和服务</translation>
+@@ -3324,7 +3324,7 @@
+ <translation id="6215936431492593050">金属（磨光）</translation>
+ <translation id="6217950634729714357">厨房和餐厅家具</translation>
+ <translation id="6218305986815100395">无法启用虚拟卡</translation>
+-<translation id="6218753634732582820">要从 Chromium 中移除地址吗？</translation>
++<translation id="6218753634732582820">要从 AI-FREE 中移除地址吗？</translation>
+ <translation id="622039917539443112">平行折</translation>
+ <translation id="6221286101741304627">若要退出全屏模式，请按 |<ph name="ACCELERATOR" />|</translation>
+ <translation id="6221311046884916259">要将这张卡的信息保存到您的 Google 账号中吗？</translation>
+@@ -3415,7 +3415,7 @@
+ <translation id="6353505687280762741">{COUNT,plural, =0{无}=1{1 个密码（用于 <ph name="DOMAIN_LIST" />，已同步）}=2{2 个密码（用于 <ph name="DOMAIN_LIST" />，已同步）}other{# 个密码（用于 <ph name="DOMAIN_LIST" />，已同步）}}</translation>
+ <translation id="6354918092619878358">SECG 椭圆曲线 secp256r1（又称 ANSI X9.62 prime256v1 或 NIST P-256）</translation>
+ <translation id="6355224247005550277"><ph name="CROSS_DEVICE_TAB_FOCUSED_FRIENDLY_MATCH_TEXT" />，依次按 Tab 键和 Enter 键即可查看来自其他设备的更多标签页</translation>
+-<translation id="6355392890578844978">此浏览器并未由某个公司或其他组织管理。此设备上的活动可能在接受 Chromium 外部的管理。<ph name="BEGIN_LINK" />了解详情<ph name="END_LINK" /></translation>
++<translation id="6355392890578844978">此浏览器并未由某个公司或其他组织管理。此设备上的活动可能在接受 AI-FREE 外部的管理。<ph name="BEGIN_LINK" />了解详情<ph name="END_LINK" /></translation>
+ <translation id="6357546827188504216">“<ph name="GROUP_TITLE_1" />”和“<ph name="GROUP_TITLE_2" />”标签页分组已不可用</translation>
+ <translation id="6358088212770985041">修改付款方式</translation>
+ <translation id="6358450015545214790">这分别意味着什么？</translation>
+@@ -3463,7 +3463,7 @@
+ <translation id="6411107829285739505">A4x8</translation>
+ <translation id="6412543105195503444">家长批准对话框</translation>
+ <translation id="6414010576370319452">皮肤和指甲护理</translation>
+-<translation id="6415778972515849510">Chromium 可以帮助您保护您的 Google 账号和更改密码。</translation>
++<translation id="6415778972515849510">AI-FREE 可以帮助您保护您的 Google 账号和更改密码。</translation>
+ <translation id="6416877227920300343">EDP</translation>
+ <translation id="641811520997304166">薪资管理服务</translation>
+ <translation id="6418199314628742460">请确保将所有关键业务数据或个人数据均存储在外部。</translation>
+@@ -3614,7 +3614,7 @@
+ <translation id="6668389483194953109">发现纸张尺寸名称为“custom”，但“custom_size”属性为空或无效。</translation>
+ <translation id="6670729408462528018">图库</translation>
+ <translation id="6671169470640320959">汽车贷款</translation>
+-<translation id="6671697161687535275">要从 Chromium 中移除表单填写建议吗？</translation>
++<translation id="6671697161687535275">要从 AI-FREE 中移除表单填写建议吗？</translation>
+ <translation id="6675846980676550611">不允许使用 AR</translation>
+ <translation id="6677351035258626477">快餐</translation>
+ <translation id="6677738644213083042">切换到这个标签页</translation>
+@@ -4109,7 +4109,7 @@
+ <translation id="7426745633088095666">分享的标签页</translation>
+ <translation id="7427079287360774240">外语学习</translation>
+ <translation id="7429429656042611765">Executive</translation>
+-<translation id="7432774160230062882">验证您的身份，以便 Chromium 能填写您的付款信息。</translation>
++<translation id="7432774160230062882">验证您的身份，以便 AI-FREE 能填写您的付款信息。</translation>
+ <translation id="7437289804838430631">添加联系信息</translation>
+ <translation id="7441627299479586546">策略主题有误</translation>
+ <translation id="7441864845853794192">美食和特色食品</translation>
+@@ -4256,7 +4256,7 @@
+ <translation id="7631527008834753063">娱乐竞赛类电视节目</translation>
+ <translation id="7633909222644580952">性能数据和崩溃报告</translation>
+ <translation id="7634963626477752453">已保存到“<ph name="FOLDER_NAME" />”文件夹中</translation>
+-<translation id="7637571805876720304">要从 Chromium 中移除信用卡吗？</translation>
++<translation id="7637571805876720304">要从 AI-FREE 中移除信用卡吗？</translation>
+ <translation id="7637586430889951925">{COUNT,plural, =0{无}=1{您的账号中保存了 1 个密码（关联的网域：<ph name="DOMAIN_LIST" />）}other{您的账号中保存了 # 个密码（关联的网域：<ph name="DOMAIN_LIST" />）}}</translation>
+ <translation id="7638605456503525968">串行端口</translation>
+ <translation id="7646681339175747202">您刚才使用的密码遭遇了数据泄露。Google 密码管理工具建议您立即更改密码。</translation>
+@@ -4422,7 +4422,7 @@
+ <translation id="7892865709991296481">支付设置</translation>
+ <translation id="7894280532028510793">如果拼写无误，请<ph name="BEGIN_LINK" />尝试运行网络诊断<ph name="END_LINK" />。</translation>
+ <translation id="7901831439558593470">7 x 9 英寸信封</translation>
+-<translation id="7905064834449738336">当您使用某个密码时，如果 Chromium 发现它已被在线发布，就会向您发出警告。当 Chromium 进行这项检查时，您的密码和用户名都会被加密，所以绝不会被任何人员/任何一方（包括 Google）读取。</translation>
++<translation id="7905064834449738336">当您使用某个密码时，如果 AI-FREE 发现它已被在线发布，就会向您发出警告。当 AI-FREE 进行这项检查时，您的密码和用户名都会被加密，所以绝不会被任何人员/任何一方（包括 Google）读取。</translation>
+ <translation id="7906177144646315659">{NUM_HOURS,plural, =1{创建时间：1 小时前}other{创建时间：{NUM_HOURS} 小时前}}</translation>
+ <translation id="7908648876066812348">正在开启虚拟卡</translation>
+ <translation id="7909498058929404306"><ph name="RUN_CHROME_SAFETY_CHECK_FOCUSED_FRIENDLY_MATCH_TEXT" />，依次按 Tab 键和 Enter 键即可前往“设置”中的 Chrome 安全检查页面</translation>
+@@ -4487,7 +4487,7 @@
+ <translation id="799384093520583425">您的组织已禁止在此页面上使用开发者工具</translation>
+ <translation id="7995512525968007366">未指定</translation>
+ <translation id="7997855386298213183">分享的标签页</translation>
+-<translation id="8001912761979890298">此服务器无法证明其所在网域是 <ph name="DOMAIN" />，因为它使用的安全证书不受 Chromium 或您系统的网站流量加密配置所信任。出现此问题的原因可能是配置有误，或是有攻击者拦截您的连接。<ph name="BEGIN_VIEW_CERTIFICATE_LINK" />查看证书<ph name="END_VIEW_CERTIFICATE_LINK" /></translation>
++<translation id="8001912761979890298">此服务器无法证明其所在网域是 <ph name="DOMAIN" />，因为它使用的安全证书不受 AI-FREE 或您系统的网站流量加密配置所信任。出现此问题的原因可能是配置有误，或是有攻击者拦截您的连接。<ph name="BEGIN_VIEW_CERTIFICATE_LINK" />查看证书<ph name="END_VIEW_CERTIFICATE_LINK" /></translation>
+ <translation id="800218591365569300">请尝试关闭其他标签页或程序以释放内存。</translation>
+ <translation id="8002230960325005199">在新标签页中查看相关网站</translation>
+ <translation id="8003046808285812021">“<ph name="SEARCH_TERMS" />”</translation>
+@@ -4525,7 +4525,7 @@
+ <translation id="8063875539456488183">保存并跟踪价格</translation>
+ <translation id="8065767681506419412">此政策指定了当前平台不支持的数据类型：<ph name="TYPE_LIST" />。</translation>
+ <translation id="8066225060526005217">通过 Cookie 设置管理</translation>
+-<translation id="8067872629359326442">您刚刚在一个诈骗网站中输入了密码。Chromium 可以为您提供帮助。若要更改密码并让 Google 知晓您的账号可能处于危险状态，请点击“保护账号”。</translation>
++<translation id="8067872629359326442">您刚刚在一个诈骗网站中输入了密码。AI-FREE 可以为您提供帮助。若要更改密码并让 Google 知晓您的账号可能处于危险状态，请点击“保护账号”。</translation>
+ <translation id="8070439594494267500">应用图标</translation>
+ <translation id="8070495475341517754">观光旅游</translation>
+ <translation id="8073647227500388356">自动驾驶汽车</translation>
+@@ -4684,7 +4684,7 @@
+ <translation id="8319269383395457801">住宅销售</translation>
+ <translation id="8319414634934645341">扩展密钥用法</translation>
+ <translation id="831997045666694187">晚上</translation>
+-<translation id="8321448084834652864">您可以随时在 Chromium 的设置中更改搜索引擎。</translation>
++<translation id="8321448084834652864">您可以随时在 AI-FREE 的设置中更改搜索引擎。</translation>
+ <translation id="8321476692217554900">通知</translation>
+ <translation id="8322402665880479974">床和床头板</translation>
+ <translation id="8323505966575306467">对您的密码增强保护</translation>
+@@ -4841,7 +4841,7 @@
+ <translation id="8559762987265718583">您设备的日期和时间（<ph name="DATE_AND_TIME" />）不正确，因此无法与 <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> 建立私密连接。</translation>
+ <translation id="8564182942834072828">单独的文档/非逐份打印的副本</translation>
+ <translation id="8564466070529550495">暂时无法使用虚拟卡，请稍后再试。</translation>
+-<translation id="8564985650692024650">如果您在其他网站上重复使用了您的 <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> 密码，Chromium 建议您重置该密码。</translation>
++<translation id="8564985650692024650">如果您在其他网站上重复使用了您的 <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> 密码，AI-FREE 建议您重置该密码。</translation>
+ <translation id="8570895683659698018">爱好与休闲</translation>
+ <translation id="8574570240981266561">已删除该项</translation>
+ <translation id="8574841453995331336">冰箱和冷柜</translation>
+@@ -4932,7 +4932,7 @@
+ <translation id="8736059027199600831">30 x 40 英寸</translation>
+ <translation id="8737134861345396036"><ph name="LAUNCH_INCOGNITO_FOCUSED_FRIENDLY_MATCH_TEXT" />，依次按 Tab 键和 Enter 键即可打开一个新的无痕式窗口以私密浏览网页</translation>
+ <translation id="8737685506611670901">打开<ph name="PROTOCOL" />链接而非“<ph name="REPLACED_HANDLER_TITLE" />”</translation>
+-<translation id="8738058698779197622">要建立安全连接，您的时钟设置必须正确。这是因为，网站用于证明身份的证书仅在特定时间段有效。由于您设备的时钟不正确，因此 Chromium 无法验证这些证书。</translation>
++<translation id="8738058698779197622">要建立安全连接，您的时钟设置必须正确。这是因为，网站用于证明身份的证书仅在特定时间段有效。由于您设备的时钟不正确，因此 AI-FREE 无法验证这些证书。</translation>
+ <translation id="8740359287975076522">无法找到 <ph name="HOST_NAME" /> 的 &lt;abbr id="dnsDefinition"&gt;DNS 地址&lt;/abbr&gt;。正在诊断该问题。</translation>
+ <translation id="874918643257405732">为此标签页添加书签</translation>
+ <translation id="8751426954251315517">请稍后重试</translation>
+@@ -4964,7 +4964,7 @@
+ <translation id="8790007591277257123">恢复删除(&amp;R)</translation>
+ <translation id="8790668801880409584">保存并填充旅行信息</translation>
+ <translation id="8792272652220298572">塑料（平滑）</translation>
+-<translation id="8792621596287649091">您可能会无法再访问自己的 <ph name="ORG_NAME" /> 账号，或者身份信息遭到盗用。Chromium 建议您立即更改密码。</translation>
++<translation id="8792621596287649091">您可能会无法再访问自己的 <ph name="ORG_NAME" /> 账号，或者身份信息遭到盗用。AI-FREE 建议您立即更改密码。</translation>
+ <translation id="8792626944327216835">麦克风</translation>
+ <translation id="8793655568873652685"><ph name="ENROLLMENT_DOMAIN" /> 在您的浏览器中启用了 Chrome 企业版接口。这些接口可以访问您的部分数据。</translation>
+ <translation id="8796062699363039080"><ph name="OPERATING_SYSTEM" /> 设置</translation>
+@@ -5152,7 +5152,7 @@
+ <translation id="9096425087209440047"><ph name="SET_CHROME_AS_DEFAULT_BROWSER_FOCUSED_FRIENDLY_MATCH_TEXT" />，依次按 Tab 键和 Enter 键即可在 iOS 设置中将 Chrome 设置为系统的默认浏览器</translation>
+ <translation id="9101450247048146228">使用和移动摄像头 (<ph name="CAMERAS_COUNT" />)</translation>
+ <translation id="9101630580131696064">纸匣 1</translation>
+-<translation id="9103872766612412690"><ph name="SITE" /> 通常会使用加密技术来保护您的信息。Chromium 此次尝试连接到 <ph name="SITE" /> 时，此网站发回了异常的错误凭据。这可能是因为有攻击者在试图冒充 <ph name="SITE" />，或 Wi-Fi 登录屏幕中断了此次连接。请放心，您的信息仍然是安全的，因为 Chromium 尚未进行任何数据交换便停止了连接。</translation>
++<translation id="9103872766612412690"><ph name="SITE" /> 通常会使用加密技术来保护您的信息。AI-FREE 此次尝试连接到 <ph name="SITE" /> 时，此网站发回了异常的错误凭据。这可能是因为有攻击者在试图冒充 <ph name="SITE" />，或 Wi-Fi 登录屏幕中断了此次连接。请放心，您的信息仍然是安全的，因为 AI-FREE 尚未进行任何数据交换便停止了连接。</translation>
+ <translation id="9107199998619088551"><ph name="MANAGER" />负责管理您的资料</translation>
+ <translation id="9107467864910557787">浏览器由 <ph name="MANAGER" /> 管理</translation>
+ <translation id="91108059142052966">管理员政策禁止在屏幕显示机密内容时与<ph name="APPLICATION_TITLE" />共享屏幕</translation>
+@@ -5242,14 +5242,14 @@
+ <translation id="931598121743515856">购买交易金额必须超过 <ph name="CHECKOUT_AMOUNT_MINIMUM" /></translation>
+ <translation id="933712198907837967">Diners Club</translation>
+ <translation id="934634059306213385">要允许“<ph name="APP_NAME" />”应用设置 Wi-Fi 网络吗？</translation>
+-<translation id="936602727769022409">您可能会无法再访问自己的 Google 账号。Chromium 建议您立即更改密码。系统会要求您登录。</translation>
++<translation id="936602727769022409">您可能会无法再访问自己的 Google 账号。AI-FREE 建议您立即更改密码。系统会要求您登录。</translation>
+ <translation id="937804173274050966"><ph name="BEGIN_BOLD" />会使用哪些数据<ph name="END_BOLD" />：为确定您的广告主题，系统会使用您近期的浏览记录，即您在此设备上使用 Chrome 访问过的网站的列表。</translation>
+ <translation id="937885410143139026">数据已发送到管理控制台</translation>
+ <translation id="939736085109172342">新建文件夹</translation>
+ <translation id="940524522703752213">系统将在 <ph name="MINUTES" /> 分钟后开始将文件上传到<ph name="CLOUD_PROVIDER" /></translation>
+ <translation id="943185096918807504">最高购买金额：<ph name="CHECKOUT_AMOUNT_MAXIMUM" /></translation>
+ <translation id="944578681290094302">在结账时显示凭您的卡可以享受哪些奖励和福利。<ph name="CARD_BENEFIT_HELP_LINK_BEGIN" />了解凭卡可享受的福利<ph name="CARD_BENEFIT_HELP_LINK_END" /></translation>
+-<translation id="945673208656386843">如果将此卡保存到该设备上，那么在 Chromium 中购物时可以自动填充此卡的信息</translation>
++<translation id="945673208656386843">如果将此卡保存到该设备上，那么在 AI-FREE 中购物时可以自动填充此卡的信息</translation>
+ <translation id="947370374845726940"><ph name="CREATE_GOOGLE_SITE_FOCUSED_FRIENDLY_MATCH_TEXT" />，依次按 Tab 键和 Enter 键即可在 Google 协作平台中快速创建新网站</translation>
+ <translation id="949026252328034572"><ph name="MEMBER_COUNT" /> 位成员加入了“<ph name="GROUP_NAME" />”标签页分组</translation>
+ <translation id="949314938206378263">你已请求访问此网站。你的家长可在 Family Link 内回复。</translation>
+@@ -5264,7 +5264,7 @@
+ <translation id="961856697154696964">删除浏览数据</translation>
+ <translation id="961930410699694996">这次可以使用位置信息</translation>
+ <translation id="962484866189421427">此内容可能会尝试安装欺骗性应用，而这些应用能够冒充其他内容或收集可用于对您进行跟踪的数据。<ph name="BEGIN_LINK" />仍然显示<ph name="END_LINK" /></translation>
+-<translation id="963734905955638680">根据您所在地区的法律，Chromium 要求您选择默认搜索引擎。这些搜索引擎在您所在的地区非常热门，是按随机顺序显示的。</translation>
++<translation id="963734905955638680">根据您所在地区的法律，AI-FREE 要求您选择默认搜索引擎。这些搜索引擎在您所在的地区非常热门，是按随机顺序显示的。</translation>
+ <translation id="963837307749850257">所有用户</translation>
+ <translation id="964050462028070434">管理密码和通行密钥…</translation>
+ <translation id="964681140808832181">是的，我要取消</translation>
+@@ -5275,7 +5275,7 @@
+ <translation id="975560348586398090">{COUNT,plural, =0{无}=1{1 项内容}other{# 项内容}}</translation>
+ <translation id="976522784004777030">5 x 8 英寸</translation>
+ <translation id="977502174772294970">婚礼</translation>
+-<translation id="978750072783101994">将此卡保存到 Google 钱包后，在 Chromium 中购物时即可自动填充相关信息。</translation>
++<translation id="978750072783101994">将此卡保存到 Google 钱包后，在 AI-FREE 中购物时即可自动填充相关信息。</translation>
+ <translation id="979107176848483472">您的浏览器和个人资料由 <ph name="DOMAIN" /> 管理</translation>
+ <translation id="979189555234810423">展览与会议</translation>
+ <translation id="981121421437150478">离线</translation>
+diff --git a/components/strings/privacy_sandbox_strings_zh-CN.xtb b/components/strings/privacy_sandbox_strings_zh-CN.xtb
+index 27593c66..cd1fd02a 100644
+--- a/components/strings/privacy_sandbox_strings_zh-CN.xtb
++++ b/components/strings/privacy_sandbox_strings_zh-CN.xtb
+@@ -1,9 +1,9 @@
+ <?xml version="1.0" ?>
+ <!DOCTYPE translationbundle>
+ <translationbundle lang="zh-CN">
+-<translation id="1055273091707420432">Chromium 会自动删除保留时长超过 4 周的广告主题</translation>
++<translation id="1055273091707420432">AI-FREE 会自动删除保留时长超过 4 周的广告主题</translation>
+ <translation id="1184166532603925201">在无痕模式下，Chrome 会阻止网站使用第三方 Cookie</translation>
+-<translation id="132963621759063786">Chromium 会在 30 天后删除您与网站分享的所有活动数据。如果您再次访问某个网站，该网站可能会重新出现在列表中。详细了解如何<ph name="BEGIN_LINK1" />在 Chromium 中管理广告隐私权设置<ph name="LINK_END1" />。</translation>
++<translation id="132963621759063786">AI-FREE 会在 30 天后删除您与网站分享的所有活动数据。如果您再次访问某个网站，该网站可能会重新出现在列表中。详细了解如何<ph name="BEGIN_LINK1" />在 AI-FREE 中管理广告隐私权设置<ph name="LINK_END1" />。</translation>
+ <translation id="1559726735555610004">Google 要求公司公开声明，他们不会跨网站使用此类数据跟踪您。某些网站可能会根据您的活动记录为您提供个性化体验，而不仅仅是展示个性化广告。这些网站还可能会将活动记录与网站中关于您的其他信息整合到一起。公司有责任告知您他们会如何使用您的数据。如需详细了解 Google 如何保护您的数据，请参阅我们的<ph name="BEGIN_LINK" />《隐私权政策》<ph name="END_LINK" />。</translation>
+ <translation id="1569440020357229235">在无痕模式下，网站无法使用第三方 Cookie。如果某个依赖这些 Cookie 的网站无法正常运行，您可<ph name="BEGIN_LINK" />尝试授予该网站对第三方 Cookie 的临时访问权限<ph name="END_LINK" />。</translation>
+ <translation id="1780659583673667574">例如，如果您访问某个网站来查找晚餐食谱，该网站可能会判定您对烹饪感兴趣。之后，另一个网站可能会根据第一个网站的建议，向您展示杂货配送服务相关的广告。</translation>
+@@ -16,11 +16,11 @@
+ <translation id="2496115946829713659">网站可以使用第三方 Cookie 为您提供个性化内容和广告，以及了解您在其他网站上的操作</translation>
+ <translation id="2506926923133667307">详细了解如何管理广告隐私权</translation>
+ <translation id="259163387153470272">网站及其广告合作伙伴可以根据您的活动记录（例如您在访问网站时的具体行为）为您展示个性化广告</translation>
+-<translation id="2937236926373704734">您可根据自己的需要屏蔽网站。Chromium 还会从列表中自动删除保留时长超过 30 天的网站。</translation>
++<translation id="2937236926373704734">您可根据自己的需要屏蔽网站。AI-FREE 还会从列表中自动删除保留时长超过 30 天的网站。</translation>
+ <translation id="3045333309254072201">在无痕模式下，网站无法使用第三方 Cookie。如果某个依赖这些 Cookie 的网站无法正常运行，您可<ph name="START_LINK" />尝试授予该网站对第三方 Cookie 的临时访问权限<ph name="END_LINK" />。</translation>
+ <translation id="3046081401397887494">您是否会看到个性化广告取决于多种因素，包括此设置、<ph name="BEGIN_LINK1" />网站推荐广告<ph name="LINK_END1" />、您的 <ph name="BEGIN_LINK2" />Cookie 设置<ph name="LINK_END2" />，以及您正查看的网站是否会展示个性化广告。</translation>
+ <translation id="3425311689852411591">依赖第三方 Cookie 的网站应该会按预期运行</translation>
+-<translation id="3442071090395342573">Chromium 会在 30 天后删除您与网站分享的所有活动数据。如果您再次访问某个网站，该网站可能会重新出现在列表中。详细了解如何<ph name="BEGIN_LINK" />在 Chromium 中管理广告隐私权设置<ph name="END_LINK" />。</translation>
++<translation id="3442071090395342573">AI-FREE 会在 30 天后删除您与网站分享的所有活动数据。如果您再次访问某个网站，该网站可能会重新出现在列表中。详细了解如何<ph name="BEGIN_LINK" />在 AI-FREE 中管理广告隐私权设置<ph name="END_LINK" />。</translation>
+ <translation id="3624583033347146597">选择第三方 Cookie 偏好设置</translation>
+ <translation id="3645682729607284687">Chrome 会根据您近期的浏览记录来记录您感兴趣的主题，例如体育、服饰等主题</translation>
+ <translation id="3749724428455457489">详细了解网站推荐广告</translation>
+@@ -36,8 +36,8 @@
+ <translation id="4412992751769744546">允许第三方 Cookie</translation>
+ <translation id="4456330419644848501">您是否会看到个性化广告取决于多种因素，包括此设置、<ph name="BEGIN_LINK_1" />网站推荐广告<ph name="END_LINK_1" />、您的 <ph name="BEGIN_LINK_2" />Cookie 设置<ph name="END_LINK_2" />，以及您正查看的网站是否会展示个性化广告。</translation>
+ <translation id="4502954140581098658">您是否会看到个性化广告取决于多种因素，包括此设置、<ph name="BEGIN_LINK_1" />广告主题<ph name="END_LINK_1" />、您的 <ph name="BEGIN_LINK_2" />Cookie 设置<ph name="END_LINK_2" />，以及您正查看的网站是否会展示个性化广告。</translation>
+-<translation id="453692855554576066">您可以在 Chromium 设置中查看您的广告主题，并屏蔽不想与网站分享的主题</translation>
+-<translation id="4616029578858572059">Chromium 会根据您近期的浏览记录来记录您感兴趣的主题，例如体育、服饰等主题</translation>
++<translation id="453692855554576066">您可以在 AI-FREE 设置中查看您的广告主题，并屏蔽不想与网站分享的主题</translation>
++<translation id="4616029578858572059">AI-FREE 会根据您近期的浏览记录来记录您感兴趣的主题，例如体育、服饰等主题</translation>
+ <translation id="4692439979815346597">您可以在 Chrome 设置中查看您的广告主题，并屏蔽不想与网站分享的主题</translation>
+ <translation id="4711259472133554310">您可以在“设置”中创建例外情况，始终允许特定网站使用第三方 Cookie</translation>
+ <translation id="5055880590417889642">网站可以使用您的活动记录等多种信息来建议广告。关闭网站推荐广告功能后，网站仍可以向您展示广告，但这些广告可能不够个性化。详细了解</translation>
+@@ -49,7 +49,7 @@
+ <translation id="6196640612572343990">阻止第三方 Cookie</translation>
+ <translation id="6282129116202535093">网站推荐广告既有助于保护您的浏览记录和身份信息，又能让网站向您展示相关广告。其他网站可以根据您的活动记录，在您继续浏览时建议相关广告。您可在设置中查看这些网站的列表，并酌情屏蔽其中一些网站。</translation>
+ <translation id="6308169245546905162">网站可以使用第三方 Cookie 了解您在其他网站上的操作</translation>
+-<translation id="6494210367693221285">您当前的 Chromium 设置已更新，允许网站访问第三方 Cookie。您随时可以更改此设置。</translation>
++<translation id="6494210367693221285">您当前的 AI-FREE 设置已更新，允许网站访问第三方 Cookie。您随时可以更改此设置。</translation>
+ <translation id="6710025070089118043">网站无法使用第三方 Cookie 为您提供个性化内容和广告，也无法了解您在其他网站上的操作，除非您授予相关网站对第三方 Cookie 的访问权限</translation>
+ <translation id="6774168155917940386">Google 要求公司公开声明，他们不会跨网站使用此类数据跟踪您。某些网站可能会根据您的活动记录为您提供个性化体验，而不仅仅是展示个性化广告。这些网站还可能会将活动记录与网站中关于您的其他信息整合到一起。公司有责任告知您他们会如何使用您的数据。详情请参阅<ph name="BEGIN_LINK" />《隐私权政策》<ph name="END_LINK" />。</translation>
+ <translation id="6789193059040353742">您是否会看到个性化广告取决于多种因素，包括此设置、<ph name="BEGIN_LINK1" />广告主题<ph name="LINK_END1" />、您的 <ph name="BEGIN_LINK2" />Cookie 设置<ph name="LINK_END2" />，以及您正查看的网站是否会展示个性化广告。</translation>
+@@ -65,7 +65,7 @@
+ <translation id="8428213095426709021">设置</translation>
+ <translation id="859369389161884405">在新标签页中打开《隐私权政策》</translation>
+ <translation id="8712637175834984815">知道了</translation>
+-<translation id="9039924186462989565">在无痕模式下，Chromium 会阻止网站使用第三方 Cookie</translation>
++<translation id="9039924186462989565">在无痕模式下，AI-FREE 会阻止网站使用第三方 Cookie</translation>
+ <translation id="9162335340010958530">网站无法使用第三方 Cookie 为您提供个性化内容和广告，也无法了解您在其他网站上的操作，除非您允许相关网站访问第三方 Cookie</translation>
+ <translation id="9168357768716791362">Google 要求公司公开声明，他们不会跨网站使用此类数据跟踪您。某些网站可能会根据您的活动记录为您提供个性化体验，而不仅仅是展示个性化广告。这些网站还可能会将广告主题存储超过 4 周，并将其与网站已知有关您的其他信息整合到一起公司有责任告知您他们会如何使用您的数据。详情请参阅<ph name="BEGIN_LINK" />《隐私权政策》<ph name="END_LINK" />。</translation>
+ <translation id="989939163029143304">网站及其广告合作伙伴可以根据广告主题为您提供个性化内容。与第三方 Cookie 相比，广告主题有助于限制网站在您浏览时可以了解您的哪些信息</translation>
+diff --git a/chrome/app/chromium_strings.grd b/chrome/app/chromium_strings.grd
+--- a/chrome/app/chromium_strings.grd
++++ b/chrome/app/chromium_strings.grd
+@@ -1079,7 +1079,7 @@
+           </then>
+           <else>
+             <message name="IDS_ABOUT" desc="In Title Case: The text label of the About Chrome menu item">
+-              About &amp;Chromium
++              About &amp;AI-FREE
+             </message>
+           </else>
+         </if>
+@@ -1096,7 +1096,7 @@
+           </then>
+           <else>
+             <message name="IDS_ABOUT" desc="The text label of the About Chrome menu item">
+-              About &amp;Chromium
++              About &amp;AI-FREE
+             </message>
+           </else>
+         </if>
+@@ -1106,7 +1106,7 @@
+       </if>
+       <if expr="is_chromeos">
+         <message name="IDS_ABOUT" desc="The text label of the About Chrome menu item">
+-          About &amp;Chromium
++          About &amp;AI-FREE
+         </message>
+         <message name="IDS_RELAUNCH_TO_UPDATE" desc="The text label of the relaunch to update ChromeOS menu item">
+           Relaunch to update &amp;ChromiumOS

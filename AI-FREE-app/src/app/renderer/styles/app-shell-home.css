@@ -1,0 +1,33 @@
+#browser-empty-state {
+  position: absolute;
+  inset: 0 30% 0 0;
+  display: block;
+  overflow: auto;
+  box-sizing: border-box;
+  pointer-events: auto;
+  transition: right 0.18s ease;
+}
+
+#browser-empty-state[hidden] {
+  display: none;
+}
+
+#browser-empty-state > #ai-free-settings-panel {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  min-height: 100%;
+  height: auto;
+  overflow: visible;
+  box-sizing: border-box;
+}
+
+html.sidebar-collapsed #browser-empty-state {
+  right: 0;
+}
+
+@media (max-width: 760px) {
+  #browser-empty-state {
+    right: 0;
+  }
+}

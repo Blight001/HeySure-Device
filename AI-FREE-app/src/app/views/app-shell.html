@@ -1,0 +1,367 @@
+
+<!DOCTYPE html>
+<html class="browser-settings-page">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' http: https:; object-src 'none'; base-uri 'self'">
+  <title>AI-FREE</title>
+  <link rel="stylesheet" href="../sidebar/client/styles/control-panel.css" />
+  <link rel="stylesheet" href="../sidebar/client/app/side/styles/side.css" />
+  <link rel="stylesheet" href="../renderer/styles/app-shell.css" />
+  <link rel="stylesheet" href="../renderer/styles/app-shell-home.css" />
+  <link rel="stylesheet" href="../renderer/styles/app-shell-automation.css" />
+  <link rel="stylesheet" href="../renderer/styles/app-shell-automation-canvas.css" />
+</head>
+<body>
+  <div id="app-container">
+    <div id="tab-bar">
+      <div class="tabs" id="tabs-container">
+        <!-- Tabs will be dynamically inserted here -->
+        <button id="new-browser-window-btn" type="button" title="新建浏览器窗口" aria-label="新建浏览器窗口">
+          <svg class="new-window-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 6.75v10.5M6.75 12h10.5"></path>
+          </svg>
+        </button>
+      </div>
+      <div id="update-widget" class="shell-update-widget" role="status" aria-live="polite" aria-label="软件更新进度" title="准备更新" hidden>
+        <div id="update-widget-ring" class="shell-update-ring" style="--update-progress: 0%;" aria-hidden="true">
+          <span class="shell-update-ring-fill"></span>
+          <span id="update-widget-percent" class="shell-update-percent">0%</span>
+        </div>
+      </div>
+      <button id="theme-toggle-btn" class="shell-theme-toggle-btn" type="button" aria-pressed="false" aria-label="切换主题" title="切换到白色模式">
+        <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="4.2"></circle>
+          <path d="M12 1.8v3.1M12 19.1v3.1M4.6 4.6l2.2 2.2M17.2 17.2l2.2 2.2M1.8 12h3.1M19.1 12h3.1M4.6 19.4l2.2-2.2M17.2 6.8l2.2-2.2"></path>
+        </svg>
+        <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20.4 14.2A8.5 8.5 0 0 1 9.8 3.6a9 9 0 1 0 10.6 10.6Z"></path>
+          <path d="M18.8 5.2l.5 1.4 1.4.5-1.4.5-.5 1.4-.5-1.4-1.4-.5 1.4-.5.5-1.4Z"></path>
+        </svg>
+      </button>
+      <div id="add-tab-btn" title="单击切换侧栏，双击打开网页控制台" role="button" aria-label="切换侧栏">
+        <svg class="settings-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 8.25A3.75 3.75 0 1 0 12 15.75 3.75 3.75 0 0 0 12 8.25Z"></path>
+          <path d="M19.1 13.1c.05-.36.08-.72.08-1.1s-.03-.74-.08-1.1l2-1.56-1.9-3.28-2.35.95a8.4 8.4 0 0 0-1.9-1.1L14.6 3.4h-3.8l-.36 2.51a8.4 8.4 0 0 0-1.9 1.1L6.2 6.06 4.3 9.34l2 1.56c-.05.36-.08.72-.08 1.1s.03.74.08 1.1l-2 1.56 1.9 3.28 2.35-.95a8.4 8.4 0 0 0 1.9 1.1l.36 2.51h3.8l.36-2.51a8.4 8.4 0 0 0 1.9-1.1l2.35.95 1.9-3.28-2-1.56Z"></path>
+        </svg>
+      </div>
+    </div>
+    <div id="content-area">
+      <main id="browser-empty-state" aria-label="AI-FREE 首页">
+
+      <section id="ai-free-settings-panel" class="ai-free-settings-panel panel active" aria-label="AI-FREE 参数配置">
+        <header class="browser-settings-home" aria-label="AI-FREE 首页">
+          <img class="browser-settings-home-logo" data-app-logo alt="AI-FREE">
+          <div class="browser-settings-home-actions">
+            <button id="browser-settings-create-browser" class="browser-settings-home-button browser-settings-create-browser" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+              <span>新建浏览器</span>
+            </button>
+            <button id="browser-settings-tutorial" class="browser-settings-home-button browser-settings-tutorial" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h10.5A3.5 3.5 0 0 1 19 8v11.5H8.5A3.5 3.5 0 0 1 5 16V4.5Z"></path><path d="M8.5 16H19M9 8h6M9 11h5"></path></svg>
+              <span>使用教程</span>
+            </button>
+          </div>
+        </header>
+        <form id="ai-free-settings-form" class="settings-container vb-form" autocomplete="off">
+          <section class="settings-network-tools" aria-label="浏览器记录与网络魔法">
+
+            <section class="browser-history-inline" aria-labelledby="browser-history-title">
+              <div class="browser-history-heading">
+                <h2 id="browser-history-title">浏览器记录</h2>
+                <div class="browser-history-heading-actions">
+                  <span id="browser-profile-audit" class="browser-profile-audit" hidden></span>
+                  <button id="open-default-browser-settings" class="browser-default-settings-btn" type="button">浏览器默认环境配置</button>
+                  <button id="refresh-browser-history" class="browser-history-refresh" type="button" title="刷新浏览器记录" aria-label="刷新浏览器记录">↻</button>
+                </div>
+              </div>
+              <div id="browser-history-list" class="browser-history-list" aria-live="polite">
+                <div class="browser-history-empty">正在读取浏览器记录…</div>
+              </div>
+            </section>
+
+            <div class="settings-network-tools-subtitle settings-network-tools-proxy-title">内置代理</div>
+            <div class="vpn-node-selector-shell">
+              <div class="vpn-node-selector-row">
+                <button id="VPN-switch" class="main-button btn-large-purple VPN-btn" type="button" disabled>关闭网络魔法</button>
+                <button id="vpn-node-selector-toggle-btn" class="vpn-node-selector-btn vpn-node-selector-btn-toggle" type="button" aria-expanded="false" aria-controls="vpn-node-selector-panel" disabled>
+                  <span class="vpn-node-selector-toggle-text">切换节点</span>
+                  <svg class="vpn-node-selector-toggle-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+                </button>
+              </div>
+              <div id="vpn-node-selector-panel" class="vpn-node-selector-panel" hidden>
+                <div class="vpn-node-selector-panel-head">
+                  <span id="vpn-node-selector-group" class="vpn-node-selector-panel-subtitle">节点选择</span>
+                  <button id="vpn-node-retest-all-btn" class="vpn-node-retest-all" type="button" disabled>重新测速</button>
+                </div>
+                <div id="vpn-node-selector-grid" class="vpn-node-selector-grid"></div>
+              </div>
+            </div>
+
+            <section class="automation-workbench-launcher" aria-label="原生 Chromium 控制">
+              <button id="automation-workbench-open" class="automation-workbench-open" type="button" aria-haspopup="dialog" aria-controls="automation-workbench-dialog" aria-expanded="false">
+                <span>
+                  <span class="automation-kicker">原生 Chromium 控制</span>
+                  <strong>AI 自动化工作台</strong>
+                  <small>管理并运行自动化卡片</small>
+                </span>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"></path></svg>
+              </button>
+            </section>
+
+            <button id="start-clash-mini-btn" class="main-button btn-large-teal" type="button" data-loading-text="启动中..." hidden>启动 Clash Mini</button>
+
+          </section>
+
+          <section id="browser-settings-dialog" class="browser-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="browser-settings-dialog-title" hidden>
+            <button class="browser-settings-dialog-backdrop" type="button" data-browser-settings-close aria-label="关闭浏览器参数配置"></button>
+            <div class="browser-settings-dialog-panel">
+              <header class="browser-settings-dialog-header">
+                <h2 id="browser-settings-dialog-title">浏览器参数配置</h2>
+                <button id="browser-settings-dialog-close" class="browser-settings-dialog-close" type="button" data-browser-settings-close aria-label="关闭">&times;</button>
+              </header>
+              <div class="browser-settings-dialog-body">
+          <section id="browser-record-edit-fields" class="browser-record-edit-fields" aria-labelledby="browser-record-edit-title" hidden>
+            <h3 id="browser-record-edit-title">记录信息</h3>
+            <label class="browser-record-name-field" for="browser-record-name">
+              <span>浏览器名称</span>
+              <input id="browser-record-name" type="text" maxlength="80" placeholder="请输入浏览器名称">
+            </label>
+          </section>
+          <div class="vb-stage-group">
+          <section class="vb-stage" aria-labelledby="basic-settings-title">
+            <h2 id="basic-settings-title">基础设置</h2>
+            <div class="vb-row"><span class="vb-label">操作系统</span><div class="segmented" data-field="os"><button type="button" data-value="win7">Win 7</button><button type="button" data-value="win8">Win 8</button><button type="button" data-value="win10">Win 10</button><button type="button" data-value="win11">Win 11</button></div></div>
+            <div class="vb-row"><label class="vb-label" for="browser-version">浏览器版本</label><select id="browser-version"><option value="">自动匹配</option></select></div>
+            <div class="vb-row"><label class="vb-label" for="kernel-version">内核版本</label><select id="kernel-version"><option value="auto">自动匹配</option></select></div>
+            <div class="vb-row vb-row-top"><span class="vb-label">代理设置</span><div class="vb-grow"><div class="segmented" data-field="proxy.mode"><button type="button" data-value="default">默认</button><button type="button" data-value="none">不使用代理</button><button type="button" data-value="custom">自定义</button></div><div id="custom-proxy-fields" class="vb-subform">
+              <div class="vb-inline"><select id="proxy-protocol"><option value="http">HTTP</option><option value="https">HTTPS</option><option value="socks4">SOCKS4</option><option value="socks5">SOCKS5</option></select><input id="proxy-host" type="text" placeholder="代理主机"><input id="proxy-port" class="short-input" type="number" min="1" max="65535" placeholder="端口"></div>
+              <div class="vb-inline"><input id="proxy-username" type="text" placeholder="代理账号"><input id="proxy-password" type="password" placeholder="代理密码"><button id="test-ai-free-proxy" class="mini-action" type="button">检测</button></div>
+              <div class="vb-inline"><input id="proxy-api-url" type="url" placeholder="API 链接"><button id="extract-ai-free-proxy" class="mini-action" type="button">提取代理</button></div>
+            </div></div></div>
+            <div class="vb-row vb-row-top"><label class="vb-label" for="browser-cookies">Cookie</label><textarea id="browser-cookies" class="code-area" rows="6" placeholder='[{"name":"token","value":"...","domain":"example.com"}]'></textarea></div>
+            <div class="vb-row"><span class="vb-label">启动主页</span><div class="vb-grow"><div class="segmented" data-field="homepage.mode"><button type="button" data-value="default">默认</button><button type="button" data-value="custom">自定义</button></div><input id="homepage-url" class="conditional-input" type="url" placeholder="https://example.com"></div></div>
+          </section>
+
+          <details class="vb-stage vb-stage-advanced">
+            <summary>高级设置</summary>
+            <div class="vb-row vb-row-top"><span class="vb-label">User Agent</span><div class="vb-grow"><div class="vb-inline"><div class="segmented" data-field="ua.mode"><button type="button" data-value="default">默认</button><button type="button" data-value="custom">自定义</button></div><button id="randomize-user-agent" class="mini-action" type="button">随机</button></div><textarea id="browser-user-agent" rows="3" placeholder="默认跟随所选系统与浏览器版本"></textarea></div></div>
+            <div class="vb-row vb-row-top"><span class="vb-label">Sec-CH-UA</span><div class="vb-grow"><div class="segmented" data-field="secChUa.mode"><button type="button" data-value="default">默认</button><button type="button" data-value="custom">自定义</button></div><textarea id="sec-ch-ua-brands" rows="3" placeholder='[{"brand":"Chromium","version":"147"}]'></textarea></div></div>
+            <div class="vb-row"><span class="vb-label">语言</span><div class="vb-grow"><input id="browser-locale" class="conditional-input" type="text" placeholder="留空跟随系统，例如 zh-CN"></div></div>
+            <div class="vb-row"><span class="vb-label">时区</span><div class="vb-grow"><label class="toggle-line"><input id="timezone-by-ip" type="checkbox"><span></span>基于 IP 自动匹配</label><input id="browser-timezone" class="conditional-input" type="text" placeholder="Asia/Shanghai"></div></div>
+            <div class="vb-row"><span class="vb-label">WebRTC</span><div class="segmented" data-field="webrtc.mode"><button type="button" data-value="replace">替换</button><button type="button" data-value="allow">允许</button><button type="button" data-value="block">禁止</button></div></div>
+            <div class="vb-row vb-row-top"><span class="vb-label">地理位置</span><div class="vb-grow"><div class="segmented" data-field="geolocation.permission"><button type="button" data-value="ask">询问</button><button type="button" data-value="allow">允许</button><button type="button" data-value="block">禁止</button></div><label class="toggle-line"><input id="geolocation-by-ip" type="checkbox"><span></span>基于 IP 自动匹配</label><div id="custom-geolocation" class="vb-inline"><input id="geo-longitude" type="number" step="any" placeholder="经度"><input id="geo-latitude" type="number" step="any" placeholder="纬度"><input id="geo-accuracy" type="number" min="1" placeholder="精度"></div></div></div>
+            <div class="vb-row"><span class="vb-label">分辨率</span><div class="vb-grow"><div class="segmented" data-field="resolution.mode"><button type="button" data-value="follow">跟随电脑</button><button type="button" data-value="custom">自定义</button></div><div id="custom-resolution" class="vb-inline"><input id="resolution-width" type="number" min="800" placeholder="宽"><span>×</span><input id="resolution-height" type="number" min="600" placeholder="高"></div></div></div>
+            <div class="vb-row"><span class="vb-label">字体</span><div class="segmented" data-field="fonts.mode"><button type="button" data-value="system">系统默认</button><button type="button" data-value="random">随机匹配</button></div></div>
+            <div class="vb-row"><span class="vb-label">Canvas</span><div class="segmented" data-field="canvas.mode"><button type="button" data-value="default">默认</button><button type="button" data-value="noise">随机</button></div></div>
+            <div class="vb-row"><span class="vb-label">WebGL 图像</span><div class="segmented" data-field="webglImage.mode"><button type="button" data-value="default">默认</button><button type="button" data-value="noise">随机</button></div></div>
+            <div class="vb-row"><span class="vb-label">WebGL 元数据</span><div class="segmented" data-field="webglMetadata.mode"><button type="button" data-value="default">默认</button><button type="button" data-value="custom">自定义</button></div></div>
+            <div id="webgl-metadata-fields"><div class="vb-row"><label class="vb-label" for="browser-webgl-vendor">WebGL 厂商</label><select id="browser-webgl-vendor"><option>Google Inc. (Intel)</option><option>Google Inc. (NVIDIA)</option><option>Google Inc. (AMD)</option></select></div><div class="vb-row"><label class="vb-label" for="browser-webgl-renderer">WebGL 渲染</label><input id="browser-webgl-renderer" type="text"></div></div>
+            <div class="vb-row"><span class="vb-label">WebGPU</span><div class="segmented" data-field="webgpu.mode"><button type="button" data-value="default">默认</button><button type="button" data-value="webgl">基于 WebGL</button></div></div>
+            <div class="vb-row"><span class="vb-label">AudioContext</span><div class="segmented" data-field="audioContext.mode"><button type="button" data-value="default">默认</button><button type="button" data-value="noise">随机</button></div></div>
+            <div class="vb-row"><span class="vb-label">ClientRects</span><div class="segmented" data-field="clientRects.mode"><button type="button" data-value="default">默认</button><button type="button" data-value="noise">随机</button></div></div>
+            <div class="vb-row"><span class="vb-label">Speech Voices</span><div class="segmented" data-field="speechVoices.mode"><button type="button" data-value="default">默认</button><button type="button" data-value="noise">随机</button></div></div>
+            <div class="vb-row"><label class="vb-label" for="browser-cpu">CPU</label><select id="browser-cpu" class="tiny-select"><option>2</option><option>4</option><option>6</option><option>8</option><option>12</option><option>16</option><option>32</option></select><span class="unit">核</span></div>
+            <div class="vb-row"><label class="vb-label" for="browser-memory">内存</label><select id="browser-memory" class="tiny-select"><option>2</option><option>4</option><option>8</option><option>16</option><option>32</option><option>64</option></select><span class="unit">GB</span></div>
+            <div class="vb-row"><span class="vb-label">设备名称</span><div class="vb-grow vb-inline"><div class="segmented" data-field="deviceName.mode"><button type="button" data-value="default">默认</button><button type="button" data-value="custom">自定义</button></div><input id="device-name" type="text"><button class="link-action" type="button" data-random-target="device-name">换一换</button><span class="kernel-badge">内核项</span></div></div>
+            <div class="vb-row"><span class="vb-label">MAC 地址</span><div class="vb-grow vb-inline"><div class="segmented" data-field="macAddress.mode"><button type="button" data-value="default">默认</button><button type="button" data-value="custom">自定义</button></div><input id="mac-address" type="text"><button class="link-action" type="button" data-random-target="mac-address">换一换</button><span class="kernel-badge">内核项</span></div></div>
+            <div class="vb-row"><span class="vb-label">Do Not Track</span><label class="switch"><input id="do-not-track" type="checkbox"><span></span></label></div>
+            <div class="vb-row"><span class="vb-label">SSL</span><div class="segmented" data-field="sslEnabled"><button type="button" data-value="true">开启</button><button type="button" data-value="false">关闭</button></div><span class="kernel-badge">内核项</span></div>
+            <div class="vb-row"><span class="vb-label">端口扫描保护</span><div class="segmented" data-field="portScanProtection.enabled"><button type="button" data-value="true">开启</button><button type="button" data-value="false">关闭</button></div></div>
+            <div class="vb-row"><label class="vb-label" for="port-scan-allow-list">扫描白名单</label><input id="port-scan-allow-list" type="text" placeholder="输入端口号，多个用英文逗号隔开"></div>
+            <div class="vb-row"><span class="vb-label">硬件加速</span><label class="switch"><input id="hardware-acceleration" type="checkbox"><span></span></label><span class="kernel-badge">重启生效</span></div>
+            <div class="vb-row vb-row-top"><span class="vb-label">启动参数</span><div class="vb-grow"><div class="segmented" data-field="launchArgs.mode"><button type="button" data-value="default">默认</button><button type="button" data-value="custom">自定义</button></div><textarea id="launch-args" rows="3" placeholder="每行一个 --switch=value"></textarea><span class="kernel-badge">仅 Chromium 内核</span></div></div>
+          </details>
+          </div>
+
+              </div>
+              <footer class="browser-settings-dialog-footer">
+
+          <div class="settings-apply-options">
+            <label><input id="apply-settings-to-active" type="checkbox" checked> 同时应用到当前环境</label>
+            <label><input id="restart-chromium-settings" type="checkbox"> Chromium 环境保存后立即重启</label>
+          </div>
+          <div class="settings-actions">
+            <button id="delete-browser-record" class="settings-danger-btn" type="button" hidden>删除浏览器</button>
+            <button id="randomize-ai-free-settings" class="settings-secondary-btn" type="button">随机指纹</button>
+            <button id="reset-ai-free-settings" class="settings-secondary-btn" type="button">恢复默认</button>
+            <button id="save-ai-free-settings" class="settings-primary-btn" type="submit">保存参数</button>
+          </div>
+          <div id="ai-free-settings-status" class="settings-status" role="status" aria-live="polite"></div>
+              </footer>
+            </div>
+          </section>
+        </form>
+        <dialog id="automation-workbench-dialog" class="automation-workbench-dialog" aria-labelledby="automation-workbench-title">
+        <section id="automation-workbench" class="automation-workbench">
+          <button id="automation-workbench-close" class="automation-workbench-close" type="button" aria-label="关闭 AI 自动化工作台">×</button>
+          <header class="automation-workbench-header">
+            <div>
+              <p class="automation-kicker">原生 Chromium 控制</p>
+              <h2 id="automation-workbench-title">AI 自动化工作台</h2>
+              <p>卡片由软件保存和执行，不依赖浏览器插件或页面注入。</p>
+            </div>
+            <div class="automation-browser-picker">
+              <label for="automation-browser-select">运行浏览器</label>
+              <div>
+                <select id="automation-browser-select" aria-label="运行浏览器"></select>
+                <button id="automation-refresh" type="button">刷新</button>
+              </div>
+            </div>
+          </header>
+          <div class="automation-workbench-grid">
+            <aside class="automation-library" aria-label="自动化卡片库">
+              <div class="automation-section-heading">
+                <h3>自动化卡片</h3>
+                <button id="automation-new" type="button">新建</button>
+              </div>
+              <div id="automation-card-list" class="automation-card-list"></div>
+              <div class="automation-library-actions">
+                <button id="automation-import" type="button">导入 JSON</button>
+                <button id="automation-export" type="button">导出</button>
+                <input id="automation-import-file" type="file" accept="application/json,.json" hidden>
+              </div>
+            </aside>
+            <form id="automation-editor" class="automation-editor" novalidate>
+              <section class="automation-canvas-section" aria-labelledby="automation-canvas-title">
+                <header class="automation-canvas-header">
+                  <div><strong id="automation-canvas-title">流程画布</strong><small>拖动节点与端点，编辑原生自动化流程</small></div>
+                  <div class="automation-canvas-controls">
+                    <button id="automation-canvas-layout" type="button">自动排版</button>
+                    <button id="automation-canvas-zoom-out" type="button" aria-label="缩小画布">−</button>
+                    <button id="automation-canvas-zoom-reset" type="button">100%</button>
+                    <button id="automation-canvas-zoom-in" type="button" aria-label="放大画布">＋</button>
+                  </div>
+                </header>
+                <div id="automation-canvas-palette" class="automation-canvas-palette" aria-label="步骤组件">
+                  <button type="button" data-canvas-add="navigate">访问网页</button>
+                  <button type="button" data-canvas-add="click">点击元素</button>
+                  <button type="button" data-canvas-add="type">输入内容</button>
+                  <button type="button" data-canvas-add="wait">等待条件</button>
+                  <button type="button" data-canvas-add="condition">判断分支</button>
+                  <button type="button" data-canvas-add="get_credits">获取积分</button>
+                  <button type="button" data-canvas-add="save_cookies">保存会话</button>
+                  <button type="button" data-canvas-add="screenshot">截图</button>
+                </div>
+                <div class="automation-canvas-shell">
+                  <div id="automation-flow-canvas" class="automation-flow-canvas" tabindex="0" aria-label="自动化流程画布">
+                    <div id="automation-flow-viewport" class="automation-flow-viewport">
+                      <svg id="automation-flow-svg" class="automation-flow-svg" aria-hidden="true"></svg>
+                      <div id="automation-flow-nodes" class="automation-flow-nodes"></div>
+                    </div>
+                    <p id="automation-flow-empty" class="automation-flow-empty">暂无节点，请从上方添加步骤。</p>
+                  </div>
+                  <aside id="automation-node-inspector" class="automation-node-inspector" aria-label="节点设置">
+                    <div id="automation-node-fields" hidden>
+                      <div class="automation-node-heading">
+                        <strong id="automation-node-title">节点设置</strong>
+                        <div>
+                          <button type="button" data-node-command="up">上移</button>
+                          <button type="button" data-node-command="down">下移</button>
+                          <button type="button" data-node-command="delete" class="automation-danger">删除</button>
+                        </div>
+                      </div>
+                      <label>名称<input data-node-field="name" type="text"></label>
+                      <label>类型<select data-node-field="type"></select></label>
+                      <label>选择器<input data-node-field="selector" type="text" placeholder="#submit / 文本"></label>
+                      <label>URL / 匹配文本<input data-node-field="url" type="text"></label>
+                      <label>输入文本<input data-node-field="text" type="text"></label>
+                      <label>变量名<input data-node-field="variable" type="text"></label>
+                      <label>判断方式<select data-node-field="condition_mode"></select></label>
+                      <label>超时（毫秒）<input data-node-field="timeout" type="number" min="0" step="100"></label>
+                      <label>节点 JSON<textarea data-node-field="raw" rows="6" spellcheck="false"></textarea></label>
+                    </div>
+                  </aside>
+                </div>
+                <p class="automation-canvas-hint">拖动节点调整位置；从右侧端点拖到目标节点左侧端点建立连线。判断节点提供 true / false 两个分支。点击连线后按 Delete 可移除。</p>
+              </section>
+              <dialog id="automation-basic-info-dialog" class="automation-basic-info-dialog" aria-labelledby="automation-basic-info-title">
+                <header class="automation-basic-info-header">
+                  <div>
+                    <h3 id="automation-basic-info-title">基础信息</h3>
+                    <p>编辑卡片资料、步骤源码与运行输入。</p>
+                  </div>
+                  <button id="automation-basic-info-close" type="button" aria-label="关闭基础信息">×</button>
+                </header>
+                <div class="automation-basic-info-body">
+                  <div class="automation-fields">
+                    <label>卡片名称<input id="automation-card-name" name="name" maxlength="160"></label>
+                    <label>目标网站<input id="automation-card-website" name="website" type="url" placeholder="https://example.com"></label>
+                  </div>
+                  <label>说明<textarea id="automation-card-description" name="description" rows="2"></textarea></label>
+                  <label class="automation-json-field">
+                    <span>步骤 JSON <small>保留 flow、变量和全部扩展字段</small></span>
+                    <textarea id="automation-card-steps" name="steps" rows="12" spellcheck="false"></textarea>
+                  </label>
+                  <label class="automation-json-field">
+                    <span>运行输入 JSON <small>替换步骤中的 {变量名}</small></span>
+                    <textarea id="automation-run-inputs" name="inputs" rows="5" spellcheck="false">{}</textarea>
+                  </label>
+                </div>
+                <footer class="automation-basic-info-actions">
+                  <button id="automation-basic-info-done" class="automation-primary" type="button">完成</button>
+                </footer>
+              </dialog>
+              <div class="automation-editor-actions">
+                <button id="automation-basic-info-open" type="button" aria-haspopup="dialog" aria-controls="automation-basic-info-dialog" aria-expanded="false">基础信息</button>
+                <button id="automation-save" type="submit">保存卡片</button>
+                <button id="automation-run" class="automation-primary" type="button">运行</button>
+                <button id="automation-save-session" type="button">保存当前会话</button>
+                <button id="automation-delete" class="automation-danger" type="button">删除</button>
+              </div>
+              <pre id="automation-status" class="automation-status" aria-live="polite">正在加载原生自动化工作台…</pre>
+            </form>
+          </div>
+        </section>
+        </dialog>
+      </section>
+      </main>
+    </div>
+  </div>
+  <script src="../sidebar/client/scripts/logo-assets.js"></script>
+  <script src="../renderer/controllers/shared/controller-utils.js"></script>
+  <script src="../shared/version-utils.js"></script>
+  <script src="../shared/message-utils.js"></script>
+  <script src="../shared/server-message-utils.js"></script>
+  <script src="../shared/text-preview-utils.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/tabs.js"></script>
+  <script src="../sidebar/client/app/side/controllers/shared/message-modal.js"></script>
+  <script src="../sidebar/client/app/side/controllers/shared/message-modal-server.js"></script>
+  <script src="../sidebar/client/app/side/controllers/shared/message-modal-dialogs.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/shared.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/connection-sync.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/account-auth.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/account-auth-vip-plans.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/account-auth-usage.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/account-auth-actions.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/account-auth-bindings.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/window-close-preference.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/entry-links.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/region.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/vpn.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/vpn-config.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/vpn-selector.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/vpn-lifecycle.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/license.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/license-controls.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/announcements.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/browser-settings-history-view.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/browser-settings-validation.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/browser-settings-form.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/browser-settings-bindings.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/browser-settings.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/init-core.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/init-bindings.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/init-runtime.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/modules/bootstrap.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/index.js"></script>
+  <script src="../sidebar/client/app/side/controllers/pages/side-panel/dream-opener.js"></script>
+  <script src="../renderer/controllers/pages/app-shell/shell-automation-canvas.js"></script>
+  <script src="../renderer/controllers/pages/app-shell/shell-automation-workbench.js"></script>
+  <script src="../renderer/controllers/pages/app-shell/shell-home.js"></script>
+  <script src="../renderer/controllers/pages/app-shell/tabs-shell-ui.js"></script>
+  <script src="../renderer/controllers/pages/app-shell/tabs-tooltip.js"></script>
+  <script src="../renderer/controllers/pages/app-shell/tabs-renderer.js"></script>
+  <script src="../renderer/controllers/pages/app-shell/tabs.js"></script>
+</body>
+</html>

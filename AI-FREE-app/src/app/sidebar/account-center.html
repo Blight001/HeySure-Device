@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html class="account-center-page">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http: https:; font-src 'self' data:; connect-src 'self' http: https:; frame-src http: https:; child-src http: https:; object-src 'none'; base-uri 'self'">
+  <title>个人中心</title>
+  <script>
+    (function initThemeClass() {
+      try {
+        const savedTheme = localStorage.getItem('ai-free.control-panel.theme');
+        if (savedTheme === 'light') {
+          document.documentElement.classList.add('theme-light');
+        } else if (savedTheme === 'gold') {
+          document.documentElement.classList.add('theme-gold');
+        }
+      } catch (_) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="./client/styles/control-panel.css" />
+  <link rel="stylesheet" href="./client/app/side/styles/side.css" />
+  <link rel="stylesheet" href="../renderer/styles/app-shell-automation.css" />
+  <link rel="stylesheet" href="../renderer/styles/app-shell-automation-canvas.css" />
+</head>
+<body>
+  <div class="control-shell">
+    <nav class="tab-nav" aria-label="侧边栏栏目">
+      <a class="tab-button" href="./ai-control.html" data-tab="ai-control-panel" aria-controls="ai-control-panel">
+        <span class="tab-button-icon" aria-hidden="true">✦</span>
+        <span>AI 控制</span>
+      </a>
+      <a class="tab-button active" href="./account-center.html" data-tab="account-center-panel" aria-controls="account-center-panel" aria-current="page">
+        <span class="tab-button-icon" aria-hidden="true">●</span>
+        <span>个人中心</span>
+      </a>
+    </nav>
+    <div class="main-wrapper">
+
+      <section id="account-center-panel" class="account-center-panel panel active" aria-label="个人中心">
+        <div class="container">
+          <div class="account-profile-shell">
+            <section id="sidebar-account-session" class="account-profile-card" aria-label="账号资料卡" data-authenticated="false">
+              <div class="account-profile-cover" aria-hidden="true">
+                <span>AI-FREE</span>
+              </div>
+              <div class="account-profile-main">
+                <button id="account-profile-avatar" class="account-profile-avatar" type="button" aria-label="账号菜单" aria-haspopup="menu" aria-expanded="false">
+                  <img data-app-logo alt="AI-FREE Logo">
+                  <span id="account-profile-presence" class="account-profile-presence"></span>
+                </button>
+                <div id="account-profile-menu" class="account-profile-menu" role="menu" hidden>
+                  <button id="account-logout-btn" type="button" role="menuitem">退出账号</button>
+                </div>
+                <div class="account-profile-identity">
+                  <input type="hidden" id="account-username-display" value="">
+                  <h2 id="account-profile-name">未登录</h2>
+                </div>
+                <button id="account-vip-card" class="account-vip-card" type="button" data-active="false" hidden>
+                  <span class="account-vip-lock" aria-hidden="true">🔒</span>
+                  <span class="account-vip-copy">
+                    <strong id="account-vip-title">开通 VIP</strong>
+                    <small id="account-vip-description">无限浏览器窗口 · 自定义模型</small>
+                  </span>
+                  <span class="account-vip-action">立即开通</span>
+                </button>
+                <section id="account-usage-details" class="account-usage-details" aria-label="账号使用详情" hidden>
+                  <!-- 网络流量：标题 → 剩余主指标 → 进度 → 额度明细 → 上下行 -->
+                  <article class="account-usage-card account-traffic-usage" data-status="pending">
+                    <header class="account-usage-heading">
+                      <span class="account-usage-title">
+                        <span class="account-usage-icon account-usage-icon-traffic" aria-hidden="true"></span>
+                        网络流量
+                      </span>
+                      <strong id="account-traffic-status" class="account-usage-badge" data-status="pending">待同步</strong>
+                    </header>
+
+                    <div class="account-usage-hero">
+                      <div class="account-usage-hero-main">
+                        <span class="account-usage-hero-label">剩余</span>
+                        <strong id="account-traffic-remaining" class="account-usage-hero-value">--</strong>
+                      </div>
+                      <div class="account-usage-hero-side">
+                        <span class="account-usage-hero-side-label">已用</span>
+                        <strong id="account-traffic-percent" class="account-usage-hero-percent">--</strong>
+                      </div>
+                    </div>
+
+                    <div class="account-usage-progress" aria-hidden="true">
+                      <div id="account-traffic-progress" class="account-usage-progress-bar" style="width: 0%"></div>
+                    </div>
+
+                    <div class="account-usage-stats">
+                      <div class="account-usage-stat">
+                        <span class="account-usage-stat-label">总额度</span>
+                        <strong id="account-traffic-total" class="account-usage-stat-value">--</strong>
+                      </div>
+                      <div class="account-usage-stat">
+                        <span class="account-usage-stat-label">已使用</span>
+                        <strong id="account-traffic-used" class="account-usage-stat-value">--</strong>
+                      </div>
+                    </div>
+
+                    <footer class="account-usage-io">
+                      <div class="account-usage-io-item account-usage-io-up">
+                        <span class="account-usage-io-label">上传</span>
+                        <strong id="account-traffic-upload">--</strong>
+                      </div>
+                      <div class="account-usage-io-item account-usage-io-down">
+                        <span class="account-usage-io-label">下载</span>
+                        <strong id="account-traffic-download">--</strong>
+                      </div>
+                    </footer>
+                  </article>
+
+                  <!-- AI 额度：标题 → 剩余主指标 → 进度 → 额度明细 -->
+                  <article class="account-usage-card account-ai-usage" data-status="pending">
+                    <header class="account-usage-heading">
+                      <span class="account-usage-title">
+                        <span class="account-usage-icon account-usage-icon-ai" aria-hidden="true"></span>
+                        AI 使用详情
+                      </span>
+                      <strong id="account-ai-status" class="account-usage-badge" data-status="pending">待同步</strong>
+                    </header>
+
+                    <div class="account-usage-hero">
+                      <div class="account-usage-hero-main">
+                        <span class="account-usage-hero-label">剩余</span>
+                        <strong id="account-ai-remaining" class="account-usage-hero-value">--</strong>
+                      </div>
+                      <div class="account-usage-hero-side">
+                        <span class="account-usage-hero-side-label">已用</span>
+                        <strong id="account-ai-percent" class="account-usage-hero-percent">--</strong>
+                      </div>
+                    </div>
+
+                    <div class="account-usage-progress" aria-hidden="true">
+                      <div id="account-ai-progress" class="account-usage-progress-bar" style="width: 0%"></div>
+                    </div>
+
+                    <div class="account-usage-stats">
+                      <div class="account-usage-stat">
+                        <span class="account-usage-stat-label">总额度</span>
+                        <strong id="account-ai-total" class="account-usage-stat-value">--</strong>
+                      </div>
+                      <div class="account-usage-stat">
+                        <span class="account-usage-stat-label">已使用</span>
+                        <strong id="account-ai-used" class="account-usage-stat-value">--</strong>
+                      </div>
+                    </div>
+                  </article>
+                </section>
+              </div>
+
+              <section id="sidebar-account-auth" class="sidebar-account-auth" aria-label="账号登录或注册" hidden>
+                <div class="sidebar-auth-dialog">
+                  <div class="sidebar-auth-form">
+                    <div class="sidebar-auth-field">
+                      <label for="sidebar-auth-username">用户名</label>
+                      <input id="sidebar-auth-username" type="text" maxlength="32" placeholder="请输入用户名" autocomplete="username" spellcheck="false" autocorrect="off" autocapitalize="none">
+                    </div>
+                    <div class="sidebar-auth-field">
+                      <label for="sidebar-auth-password">密码</label>
+                      <input id="sidebar-auth-password" type="password" maxlength="128" placeholder="请输入密码（至少 6 位）" autocomplete="current-password">
+                    </div>
+                    <div id="sidebar-auth-confirm-group" class="sidebar-auth-field" hidden>
+                      <label for="sidebar-auth-password-confirm">确认密码</label>
+                      <input id="sidebar-auth-password-confirm" type="password" maxlength="128" placeholder="请再次输入密码" autocomplete="new-password">
+                    </div>
+                    <button id="sidebar-auth-submit" class="sidebar-auth-submit" type="button" data-loading-text="登录中...">登录</button>
+                    <button id="sidebar-device-login" class="sidebar-auth-device-login" type="button">忘记账号密码？使用本机设备号登录</button>
+                    <div class="sidebar-auth-mode-row">
+                      <button id="sidebar-auth-mode-switch" class="sidebar-auth-mode-switch" type="button">
+                        <span id="sidebar-auth-mode-label">去注册</span>
+                        <span class="sidebar-auth-mode-arrow" aria-hidden="true">→</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div id="sidebar-auth-status" class="sidebar-auth-status" role="status" aria-live="polite"></div>
+                </div>
+              </section>
+
+              <div class="sidebar-quota-redeem" aria-label="统一额度兑换">
+                <label class="sidebar-quota-redeem-label" for="unified-gift-code">兑换码</label>
+                <div class="sidebar-quota-redeem-row">
+                  <input id="unified-gift-code" maxlength="64" autocomplete="off" placeholder="输入兑换码（自动识别）" disabled />
+                  <button id="unified-redeem-gift" type="button" disabled>兑换</button>
+                </div>
+              </div>
+
+              <section class="account-wool-resource" aria-labelledby="wool-resource-title">
+                <div id="wool-resource-title" class="account-wool-resource-title" hidden>羊毛资源</div>
+                <div id="wool-platform-buttons" class="wool-platform-buttons" hidden></div>
+              </section>
+
+              <section class="account-app-preferences" aria-labelledby="account-app-preferences-title">
+                <div class="account-app-preferences-heading">
+                  <strong id="account-app-preferences-title">软件关闭方式</strong>
+                  <p id="window-close-behavior-status" class="account-app-preferences-status" role="status" aria-live="polite"></p>
+                </div>
+                <fieldset id="window-close-behavior" class="account-close-behavior-options">
+                  <legend>关闭主窗口时</legend>
+                  <label>
+                    <input type="radio" name="window-close-behavior" value="ask">
+                    <span>询问</span>
+                  </label>
+                  <label>
+                    <input type="radio" name="window-close-behavior" value="hide">
+                    <span>后台</span>
+                  </label>
+                  <label>
+                    <input type="radio" name="window-close-behavior" value="quit">
+                    <span>退出</span>
+                  </label>
+                </fieldset>
+              </section>
+
+              <!-- 公告保留在账号资料卡中。 -->
+              <div class="announcement-bar" id="announcement-bar">
+                <div class="announcement-header">
+                  <div class="announcement-title-wrap">
+                    <span id="announcement-icon" class="announcement-icon">📢</span>
+                    <span id="announcement-title" class="announcement-title">公告</span>
+                  </div>
+                </div>
+                <div class="announcement-content" id="announcement-content">
+                  <p>欢迎使用 AI-FREE，最新功能已上线！</p>
+                </div>
+              </div>
+
+            </section>
+
+            <div hidden aria-hidden="true">
+              <input type="text" id="device-id" value="" readonly>
+              <input type="password" id="session-token" value="" tabindex="-1" autocomplete="off">
+            </div>
+          </div>
+
+        </div>
+        <footer class="footer personal-footer">
+          <div class="footer-left">
+            <a id="tutorial-link" target="_blank" rel="noopener noreferrer">使用教程</a>
+          </div>
+          <div class="footer-right">
+            <span id="app-version">v2.5.1</span>
+          </div>
+        </footer>
+      </section>
+
+      <section id="vip-benefits-dialog" class="vip-benefits-dialog" role="dialog" aria-modal="true" aria-labelledby="vip-benefits-title" hidden>
+        <button class="vip-benefits-backdrop" type="button" data-vip-benefits-close aria-label="关闭 VIP 套餐"></button>
+        <div class="vip-benefits-panel">
+          <header class="vip-benefits-header">
+            <div>
+              <span class="vip-benefits-kicker">AI-FREE MEMBERSHIP</span>
+              <h2 id="vip-benefits-title">普通用户与会员权益</h2>
+              <p>选择适合你的周期，通过 VIP 礼品码完成开通。</p>
+            </div>
+            <button class="vip-benefits-close" type="button" data-vip-benefits-close aria-label="关闭">&times;</button>
+          </header>
+
+          <div id="vip-permission-table" class="vip-permission-table" aria-label="普通用户与会员权限对比" hidden>
+            <div id="vip-permission-head" class="vip-permission-row vip-permission-head"><strong>功能</strong><strong>普通</strong><strong>标准会员</strong><strong>高级会员</strong></div>
+            <div id="vip-permission-rows">
+              <div class="vip-permission-row"><span>独立浏览器</span><span>最多 5 个</span><strong>不限数量</strong><strong>不限数量</strong></div>
+              <div class="vip-permission-row"><span>自定义模型</span><span>不可使用</span><strong>允许使用</strong><strong>允许使用</strong></div>
+              <div class="vip-permission-row"><span>土豪金主题</span><span>不可使用</span><strong>专属主题</strong><strong>专属主题</strong></div>
+              <div class="vip-permission-row"><span>每周 AI 额度</span><span>无赠送</span><strong>100 点</strong><strong>500 点</strong></div>
+              <div class="vip-permission-row"><span>每周魔法流量</span><span>无赠送</span><strong>10 GB</strong><strong>50 GB</strong></div>
+            </div>
+          </div>
+
+          <div id="vip-tier-tabs" class="vip-tier-tabs" role="tablist" aria-label="会员等级" hidden>
+            <button type="button" data-vip-tier="vip" class="is-active">VIP</button>
+            <button type="button" data-vip-tier="svip">SVIP</button>
+          </div>
+          <div id="vip-plan-list" class="vip-plan-list" aria-live="polite" hidden></div>
+
+          <div id="vip-plan-status" class="vip-plan-status" role="status">价格由服务器实时下发</div>
+          <footer class="vip-benefits-actions">
+            <button id="vip-gold-theme-action" class="vip-gold-theme-action" type="button">👑 启用土豪金主题</button>
+            <button id="vip-use-gift-code" class="vip-use-gift-code" type="button">使用 VIP 礼品码开通</button>
+          </footer>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+
+  <script src="./client/scripts/logo-assets.js"></script>
+  <script src="./client/scripts/control-panel.js"></script>
+
+  <script src="./client/app/side/controllers/pages/side-panel/tabs.js"></script>
+  <script src="../shared/quota-display.js"></script>
+  <script src="./client/app/side/controllers/pages/ai-control.js"></script>
+  <script src="./client/app/side/controllers/pages/ai-control/ai-control-selection.js"></script>
+  <script src="./client/app/side/controllers/pages/ai-control/ai-control-server-device.js"></script>
+  <script src="./client/app/side/controllers/pages/ai-control/ai-control-prompt-diagnostics.js"></script>
+  <script src="./client/app/side/controllers/pages/ai-control/ai-control-selectors.js"></script>
+  <script src="./client/app/side/controllers/pages/ai-control/ai-control-card-selector.js"></script>
+  <script src="./client/app/side/controllers/pages/ai-control/ai-control-history-list.js"></script>
+  <script src="./client/app/side/controllers/pages/ai-control/ai-control-history-session.js"></script>
+  <script src="./client/app/side/controllers/pages/ai-control/ai-control-markdown.js"></script>
+  <script src="./client/app/side/controllers/pages/ai-control/ai-control-tool-display.js"></script>
+  <script src="./client/app/side/controllers/pages/ai-control/ai-control-messages.js"></script>
+  <script src="./client/app/side/controllers/pages/ai-control/ai-control-data-loaders.js"></script>
+  <script src="./client/app/side/controllers/pages/ai-control/ai-control-composer.js"></script>
+  <script src="./client/app/side/controllers/pages/ai-control/ai-control-bootstrap.js"></script>
+
+  <!-- 共享控制器工具 -->
+  <script src="../renderer/controllers/shared/controller-utils.js"></script>
+  <script src="../shared/version-utils.js"></script>
+  <script src="../shared/message-utils.js"></script>
+  <script src="../shared/server-message-utils.js"></script>
+  <script src="../shared/text-preview-utils.js"></script>
+
+  <!-- 消息弹窗模块 -->
+  <script src="./client/app/side/controllers/shared/message-modal.js"></script>
+  <script src="./client/app/side/controllers/shared/message-modal-server.js"></script>
+  <script src="./client/app/side/controllers/shared/message-modal-dialogs.js"></script>
+
+  <script src="./client/app/side/controllers/pages/side-panel/modules/shared.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/connection-sync.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/account-auth.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/account-auth-vip-plans.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/account-auth-usage.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/account-auth-actions.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/account-auth-bindings.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/window-close-preference.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/entry-links.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/region.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/vpn.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/vpn-config.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/vpn-selector.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/vpn-lifecycle.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/license.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/license-controls.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/announcements.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/browser-settings-history-view.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/browser-settings-validation.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/browser-settings-form.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/browser-settings-bindings.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/browser-settings.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/init-core.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/init-bindings.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/init-runtime.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/modules/bootstrap.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/index.js"></script>
+  <script src="./client/app/side/controllers/pages/side-panel/dream-opener.js"></script>
+  <script src="../renderer/controllers/pages/app-shell/shell-automation-canvas.js"></script>
+  <script src="../renderer/controllers/pages/app-shell/shell-automation-workbench.js"></script>
+</body>
+</html>

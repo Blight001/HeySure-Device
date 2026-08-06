@@ -1,0 +1,779 @@
+:root {
+  color-scheme: dark;
+  --shell-bg: #0f1115;
+  --shell-panel: #151a24;
+  --shell-border: #2a3242;
+  --shell-text: #e6e8ee;
+  --shell-muted: #9aa3b2;
+  --shell-accent: #4da3ff;
+  --shell-accent-hover: #2f7fe6;
+  --shell-danger: #d9534f;
+  --shell-scrollbar: #3a4150;
+  --shell-back-text: #d9c28a;
+  --shell-back-border: rgba(217, 194, 138, 0.22);
+  --shell-back-border-hover: rgba(217, 194, 138, 0.30);
+  --shell-back-hover: rgba(217, 194, 138, 0.08);
+  --shell-tab-bg: rgba(77, 163, 255, 0.14);
+  --shell-tab-border: rgba(77, 163, 255, 0.24);
+  --shell-tab-text: #8bbcff;
+  --shell-tab-active-bg: rgba(77, 163, 255, 0.24);
+  --shell-tab-active-border: rgba(77, 163, 255, 0.45);
+  --shell-tab-active-text: #d8eaff;
+  --shell-tab-drop-glow: rgba(77, 163, 255, 0.55);
+  --shell-tab-height: 30px;
+  --shell-tab-gap: 4px;
+}
+
+html.theme-light {
+  color-scheme: light;
+  --shell-bg: #f3f7fc;
+  --shell-panel: #ffffff;
+  --shell-border: rgba(84, 120, 165, 0.18);
+  --shell-text: #1f3044;
+  --shell-muted: #6a7c91;
+  --shell-accent: #2f7fe6;
+  --shell-accent-hover: #256cc7;
+  --shell-danger: #c43d3d;
+  --shell-scrollbar: rgba(117, 154, 211, 0.72);
+  --shell-back-text: #8a641f;
+  --shell-back-border: rgba(138, 100, 31, 0.22);
+  --shell-back-border-hover: rgba(138, 100, 31, 0.34);
+  --shell-back-hover: rgba(138, 100, 31, 0.08);
+  --shell-tab-bg: rgba(47, 127, 230, 0.09);
+  --shell-tab-border: rgba(47, 127, 230, 0.18);
+  --shell-tab-text: #2f6fc7;
+  --shell-tab-active-bg: rgba(47, 127, 230, 0.16);
+  --shell-tab-active-border: rgba(47, 127, 230, 0.36);
+  --shell-tab-active-text: #1d5a9e;
+  --shell-tab-drop-glow: rgba(47, 127, 230, 0.28);
+}
+
+html.theme-gold {
+  color-scheme: dark;
+  --shell-bg: #0c0b09;
+  --shell-panel: #14120d;
+  --shell-border: rgba(212, 183, 118, .18);
+  --shell-text: #ece5d3;
+  --shell-muted: #a2977d;
+  --shell-accent: #d4b776;
+  --shell-accent-hover: #e3cb92;
+  --shell-danger: #d96a5a;
+  --shell-scrollbar: #4a4232;
+  --shell-back-text: #d8c48d;
+  --shell-back-border: rgba(212, 183, 118, .20);
+  --shell-back-border-hover: rgba(226, 200, 138, .38);
+  --shell-back-hover: rgba(212, 183, 118, .08);
+  --shell-tab-bg: rgba(212, 183, 118, .08);
+  --shell-tab-border: rgba(212, 183, 118, .18);
+  --shell-tab-text: #d8c48d;
+  --shell-tab-active-bg: rgba(212, 183, 118, .16);
+  --shell-tab-active-border: rgba(226, 200, 138, .35);
+  --shell-tab-active-text: #f0dfae;
+  --shell-tab-drop-glow: rgba(212, 183, 118, .40);
+}
+
+body, html {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  font-family: Arial;
+  box-sizing: border-box;
+  background-color: var(--shell-bg);
+  color: var(--shell-text);
+}
+
+#app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+#tab-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--shell-tab-gap);
+  background-color: var(--shell-panel);
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--shell-border);
+  flex-shrink: 0;
+}
+
+.shell-action-btn {
+  flex: 0 0 auto;
+  height: var(--shell-tab-height);
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  box-sizing: border-box;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: calc(var(--shell-tab-height) - 2px);
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+
+.shell-action-btn:hover {
+  transform: translateY(-1px);
+}
+
+.shell-action-back {
+  background: transparent;
+  color: var(--shell-back-text);
+  border-color: var(--shell-back-border);
+}
+
+.shell-action-back:hover {
+  background: var(--shell-back-hover);
+  border-color: var(--shell-back-border-hover);
+}
+
+#add-tab-btn,
+#new-browser-window-btn {
+  width: var(--shell-tab-height);
+  height: var(--shell-tab-height);
+  font-size: 20px;
+  cursor: pointer;
+  text-align: center;
+  line-height: var(--shell-tab-height);
+  border-radius: 5px;
+  background-color: var(--shell-accent);
+  color: white;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+.shell-theme-toggle-btn {
+  appearance: none;
+  flex: 0 0 var(--shell-tab-height);
+  width: var(--shell-tab-height);
+  height: var(--shell-tab-height);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid rgba(77, 163, 255, 0.34);
+  border-radius: 50%;
+  color: #eaf3ff;
+  background: rgba(77, 163, 255, 0.16);
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: transform 0.16s ease, color 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+}
+
+.shell-theme-toggle-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(95, 171, 255, 0.72);
+  background: rgba(77, 163, 255, 0.28);
+}
+
+.shell-theme-toggle-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(79, 151, 255, 0.22);
+}
+
+.shell-theme-toggle-btn .theme-icon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.shell-theme-toggle-btn .theme-icon-moon {
+  display: none;
+  fill: currentColor;
+  stroke: none;
+}
+
+html.theme-light .shell-theme-toggle-btn {
+  color: #2968b8;
+  border-color: rgba(47, 127, 230, 0.26);
+  background: rgba(47, 127, 230, 0.1);
+}
+
+html.theme-light .shell-theme-toggle-btn .theme-icon-sun {
+  display: none;
+}
+
+html.theme-light .shell-theme-toggle-btn .theme-icon-moon {
+  display: block;
+}
+
+.shell-update-widget {
+  flex: 0 0 var(--shell-tab-height);
+  width: var(--shell-tab-height);
+  height: var(--shell-tab-height);
+}
+
+.shell-update-widget[hidden] {
+  display: none !important;
+}
+
+.shell-update-ring {
+  --update-progress: 0%;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.shell-update-ring::before {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 180deg, var(--shell-accent) 0 var(--update-progress), rgba(77, 163, 255, 0.14) var(--update-progress) 100%);
+  content: '';
+}
+
+.shell-update-ring-fill {
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--shell-panel);
+  box-shadow: inset 0 0 0 1px var(--shell-border);
+}
+
+.shell-update-percent {
+  position: relative;
+  z-index: 1;
+  color: var(--shell-accent);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+#new-browser-window-btn {
+  flex: 0 0 var(--shell-tab-height);
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  line-height: normal;
+  color: #fff;
+  background: rgba(98, 123, 158, 0.28);
+  box-shadow: 0 4px 12px rgba(3, 11, 24, 0.18);
+  backdrop-filter: blur(12px) saturate(110%);
+  -webkit-backdrop-filter: blur(12px) saturate(110%);
+  font-family: inherit;
+  font-weight: 400;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+#new-browser-window-btn .new-window-icon {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.16s ease;
+}
+
+#new-browser-window-btn:hover:not(:disabled) .new-window-icon {
+  transform: scale(1.06);
+}
+
+html.theme-light #new-browser-window-btn {
+  border-color: rgba(255, 255, 255, 0.48);
+  color: #fff;
+  background: rgba(47, 112, 203, 0.64);
+  box-shadow: 0 4px 12px rgba(47, 112, 203, 0.18);
+}
+
+#new-browser-window-btn:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+#new-browser-window-btn.gesture-armed {
+  touch-action: none;
+}
+
+#new-browser-window-btn.gesture-active {
+  border-color: rgba(255, 255, 255, 0.58);
+  background: var(--shell-accent-hover);
+  box-shadow: 0 0 0 3px rgba(77, 163, 255, 0.2), 0 8px 20px rgba(3, 11, 24, 0.32);
+  transform: translateY(2px);
+}
+
+#add-tab-btn:hover,
+#new-browser-window-btn:hover:not(:disabled) {
+  background-color: var(--shell-accent-hover);
+}
+
+#new-browser-window-btn:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(112, 143, 184, 0.38);
+  box-shadow: 0 6px 16px rgba(3, 11, 24, 0.24);
+  transform: translateY(-1px);
+}
+
+html.theme-light #new-browser-window-btn:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.62);
+  background: rgba(47, 112, 203, 0.76);
+  box-shadow: 0 6px 16px rgba(47, 112, 203, 0.24);
+}
+
+#add-tab-btn {
+  display: grid;
+  place-items: center;
+  line-height: normal;
+}
+
+#add-tab-btn .settings-icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.55;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.2s ease;
+}
+
+#add-tab-btn:hover .settings-icon {
+  transform: rotate(20deg);
+}
+
+#content-area {
+  position: relative;
+  flex-grow: 1;
+  background: var(--shell-bg);
+}
+
+.tabs {
+  display: flex;
+  flex-grow: 1;
+  align-items: stretch;
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-width: 0;
+  gap: var(--shell-tab-gap);
+  scrollbar-width: thin;
+  scrollbar-color: var(--shell-scrollbar) var(--shell-panel);
+}
+
+.tabs::-webkit-scrollbar {
+  height: 4px;
+}
+
+.tabs::-webkit-scrollbar-track {
+  background: var(--shell-panel);
+}
+
+.tabs::-webkit-scrollbar-thumb {
+  background-color: var(--shell-scrollbar);
+  border-radius: 2px;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  height: var(--shell-tab-height);
+  padding: 0 12px 0 14px;
+  background-color: var(--shell-tab-bg);
+  border: 1px solid var(--shell-tab-border);
+  border-radius: 5px 5px 0 0;
+  margin-right: 0;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  flex: 0 0 var(--tab-width, 160px);
+  width: var(--tab-width, 160px);
+  min-width: var(--tab-width, 160px);
+  max-width: var(--tab-width, 160px);
+  color: var(--shell-tab-text);
+  transition: width 0.25s ease, max-width 0.25s ease, min-width 0.25s ease, flex-basis 0.25s ease, padding 0.25s ease, background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  box-sizing: border-box;
+}
+
+.tab-title {
+  position: relative;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-grow: 1;
+  min-width: 0;
+  /* 显式基准字号：标题原本继承浏览器默认 16px，选中放大需要明确起点。 */
+  font-size: 16px;
+  transition: font-size 0.22s ease;
+}
+
+.tab-title-editor {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 22px;
+  box-sizing: border-box;
+  border: 1px solid var(--shell-accent);
+  border-radius: 4px;
+  padding: 1px 5px;
+  outline: none;
+  color: var(--shell-text);
+  background: var(--shell-bg);
+  font: inherit;
+}
+
+.tab.active {
+  background-color: var(--shell-tab-active-bg);
+  border-color: var(--shell-tab-active-border);
+  color: var(--shell-tab-active-text);
+}
+
+/* 当前选中标签统一用放大加粗的标题字体标识（普通/魔法/AI 状态都适用），
+   字号随 .tab-title 的 transition 平滑变大变小。 */
+.tab.active .tab-title {
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.tab.ai-browser-connected {
+  overflow: hidden;
+  border-color: rgba(64, 158, 255, 0.98);
+  background: linear-gradient(105deg, rgba(15, 82, 168, .42), rgba(24, 127, 222, .22));
+  box-shadow: inset 0 0 13px rgba(51, 158, 255, .28), 0 0 9px rgba(64, 158, 255, .34);
+  color: #e1f3ff;
+}
+
+.tab.ai-browser-connected .tab-title,
+.tab.ai-browser-connected .tab-close,
+.tab.ai-browser-connected .tab-runtime-badge {
+  position: relative;
+  z-index: 1;
+}
+
+.ai-browser-particle-layer {
+  display: none;
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.tab.ai-browser-connected .ai-browser-particle-layer {
+  display: block;
+}
+
+.ai-browser-particle-layer > i {
+  position: absolute;
+  top: var(--particle-top);
+  left: calc(100% + 14px);
+  width: var(--particle-size);
+  height: var(--particle-size);
+  border-radius: var(--particle-radius);
+  background: rgba(116, 207, 255, var(--particle-opacity));
+  box-shadow: 0 0 5px rgba(78, 183, 255, .72), inset 0 0 2px rgba(224, 247, 255, .75);
+  animation: aiBrowserParticleTravel var(--particle-duration) linear var(--particle-delay) infinite;
+  will-change: left, transform, opacity;
+}
+
+.ai-browser-particle-layer > i:nth-child(3n) {
+  background: rgba(42, 151, 255, var(--particle-opacity));
+}
+
+.ai-browser-particle-layer > i:nth-child(4n + 1) {
+  border: 1px solid rgba(180, 230, 255, .7);
+  background: rgba(61, 166, 255, calc(var(--particle-opacity) * .62));
+}
+
+.ai-browser-particle-layer > i.ai-text-particle {
+  width: auto;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: rgba(151, 220, 255, var(--particle-opacity));
+  font: 800 var(--particle-font-size)/1 "Segoe UI", sans-serif;
+  font-style: normal;
+  letter-spacing: -.7px;
+  text-shadow: 0 0 4px rgba(66, 175, 255, .7);
+  -webkit-text-stroke: .25px rgba(221, 246, 255, .55);
+}
+
+/* 网络魔法已应用的浏览器标签：紫色流动光效背景。 */
+.tab.network-magic {
+  overflow: hidden;
+  border-color: rgba(168, 85, 247, .95);
+  background: linear-gradient(105deg,
+    rgba(88, 28, 135, .5),
+    rgba(147, 51, 234, .28),
+    rgba(192, 132, 252, .34),
+    rgba(147, 51, 234, .28),
+    rgba(88, 28, 135, .5));
+  background-size: 220% 100%;
+  animation: networkMagicFlow 3.4s ease-in-out infinite;
+  box-shadow: inset 0 0 13px rgba(168, 85, 247, .3), 0 0 9px rgba(168, 85, 247, .36);
+  color: #f3e8ff;
+}
+
+.tab.network-magic .tab-title,
+.tab.network-magic .tab-close,
+.tab.network-magic .tab-runtime-badge {
+  position: relative;
+  z-index: 1;
+}
+
+/* AI 接管 + 网络魔法同时生效：蓝紫流动渐变叠加，蓝色粒子层继续显示。 */
+.tab.ai-browser-connected.network-magic {
+  border-color: rgba(139, 92, 246, .96);
+  background: linear-gradient(105deg,
+    rgba(15, 82, 168, .46),
+    rgba(88, 28, 135, .42),
+    rgba(24, 127, 222, .3),
+    rgba(147, 51, 234, .34),
+    rgba(15, 82, 168, .46));
+  background-size: 220% 100%;
+  animation: networkMagicFlow 3.4s ease-in-out infinite;
+  box-shadow:
+    inset 0 0 13px rgba(120, 140, 255, .3),
+    0 0 8px rgba(64, 158, 255, .3),
+    0 0 12px rgba(168, 85, 247, .3);
+  color: #e9efff;
+}
+
+@keyframes networkMagicFlow {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+html.theme-light .tab.network-magic {
+  border-color: rgba(147, 51, 234, .8);
+  background: linear-gradient(105deg,
+    rgba(192, 132, 252, .32),
+    rgba(216, 180, 254, .16),
+    rgba(233, 213, 255, .3),
+    rgba(216, 180, 254, .16),
+    rgba(192, 132, 252, .32));
+  background-size: 220% 100%;
+  box-shadow: inset 0 0 12px rgba(147, 51, 234, .16), 0 0 8px rgba(147, 51, 234, .22);
+  color: #5b1d96;
+}
+
+html.theme-light .tab.ai-browser-connected.network-magic {
+  border-color: rgba(124, 88, 235, .85);
+  background: linear-gradient(105deg,
+    rgba(74, 161, 248, .26),
+    rgba(192, 132, 252, .3),
+    rgba(95, 183, 255, .14),
+    rgba(216, 180, 254, .26),
+    rgba(74, 161, 248, .26));
+  background-size: 220% 100%;
+  box-shadow:
+    inset 0 0 12px rgba(100, 116, 240, .16),
+    0 0 7px rgba(44, 144, 238, .18),
+    0 0 8px rgba(147, 51, 234, .18);
+  color: #33367f;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab.network-magic,
+  .tab.ai-browser-connected.network-magic {
+    animation: none;
+  }
+
+  .tab-title {
+    transition: none;
+  }
+}
+
+html.theme-light .tab.ai-browser-connected {
+  border-color: rgba(43, 137, 235, .95);
+  background: linear-gradient(105deg, rgba(74, 161, 248, .25), rgba(95, 183, 255, .12));
+  box-shadow: inset 0 0 12px rgba(44, 144, 238, .17), 0 0 8px rgba(44, 144, 238, .22);
+  color: #124f94;
+}
+
+html.theme-light .ai-browser-particle-layer > i.ai-text-particle {
+  color: rgba(24, 112, 205, var(--particle-opacity));
+  text-shadow: 0 0 3px rgba(61, 151, 238, .36);
+}
+
+html.theme-gold .tab.ai-browser-connected {
+  border-color: rgba(212, 183, 118, .85);
+  background: linear-gradient(105deg, rgba(120, 95, 45, .38), rgba(180, 148, 82, .16));
+  box-shadow: inset 0 0 13px rgba(212, 183, 118, .22), 0 0 14px rgba(212, 183, 118, .42);
+  color: #f4ead2;
+}
+
+html.theme-gold .tab.active {
+  box-shadow: 0 0 12px rgba(212, 183, 118, .16);
+}
+
+html.theme-gold .shell-theme-toggle-btn {
+  color: #f4ead2;
+  border-color: rgba(212, 183, 118, .34);
+  background: rgba(212, 183, 118, .14);
+}
+
+html.theme-gold .shell-theme-toggle-btn:hover {
+  border-color: rgba(226, 200, 138, .72);
+  background: rgba(212, 183, 118, .26);
+  box-shadow: 0 0 12px rgba(212, 183, 118, .28);
+}
+
+html.theme-gold .shell-theme-toggle-btn:focus-visible {
+  box-shadow: 0 0 0 3px rgba(212, 183, 118, .22);
+}
+
+html.theme-gold .shell-update-ring::before {
+  background: conic-gradient(from 180deg, var(--shell-accent) 0 var(--update-progress), rgba(212, 183, 118, .14) var(--update-progress) 100%);
+}
+
+html.theme-gold #add-tab-btn {
+  color: #2a2214;
+  box-shadow: 0 0 10px rgba(212, 183, 118, .24);
+}
+
+html.theme-gold #new-browser-window-btn {
+  border-color: rgba(212, 183, 118, .28);
+  background: rgba(150, 124, 70, .28);
+}
+
+html.theme-gold #new-browser-window-btn:hover:not(:disabled) {
+  border-color: rgba(226, 200, 138, .4);
+  background: rgba(170, 142, 84, .38);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .24), 0 0 12px rgba(212, 183, 118, .24);
+}
+
+html.theme-gold #new-browser-window-btn.gesture-active {
+  border-color: rgba(240, 224, 180, .58);
+  box-shadow: 0 0 0 3px rgba(212, 183, 118, .2), 0 8px 20px rgba(0, 0, 0, .32);
+}
+
+html.theme-gold .ai-browser-particle-layer > i {
+  background: rgba(230, 207, 154, var(--particle-opacity));
+  box-shadow: 0 0 5px rgba(212, 183, 118, .66), inset 0 0 2px rgba(250, 240, 214, .75);
+}
+
+html.theme-gold .ai-browser-particle-layer > i:nth-child(3n) {
+  background: rgba(198, 162, 92, var(--particle-opacity));
+}
+
+html.theme-gold .ai-browser-particle-layer > i:nth-child(4n + 1) {
+  border: 1px solid rgba(240, 224, 180, .65);
+  background: rgba(212, 183, 118, calc(var(--particle-opacity) * .62));
+}
+
+html.theme-gold .ai-browser-particle-layer > i.ai-text-particle {
+  color: rgba(232, 209, 156, var(--particle-opacity));
+  text-shadow: 0 0 4px rgba(199, 164, 92, .65);
+  -webkit-text-stroke: .25px rgba(248, 238, 212, .5);
+}
+
+@keyframes aiBrowserParticleTravel {
+  0% {
+    left: calc(100% + 14px);
+    opacity: 0;
+    transform: translateY(0) rotate(0deg) scale(.72);
+  }
+  10% { opacity: 1; }
+  52% { transform: translateY(var(--particle-drift-mid)) rotate(97deg) scale(1); }
+  88% { opacity: .9; }
+  100% {
+    left: -14px;
+    opacity: 0;
+    transform: translateY(var(--particle-drift-end)) rotate(185deg) scale(.78);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-browser-particle-layer { display: none !important; }
+}
+
+.tab-runtime-badge {
+  flex: 0 0 auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border: 1px solid rgba(224, 84, 84, 0.55);
+  border-radius: 9px;
+  background: rgba(224, 84, 84, 0.16);
+  color: var(--shell-danger);
+  font-size: 10px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.tab-runtime-badge.crashed {
+  border-color: rgba(224, 84, 84, 0.55);
+  background: rgba(224, 84, 84, 0.16);
+  color: var(--shell-danger);
+  cursor: pointer;
+}
+
+.tab.dragging {
+  opacity: 0.55;
+}
+
+.tab.drop-before::before,
+.tab.drop-after::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--shell-accent);
+  box-shadow: 0 0 12px var(--shell-tab-drop-glow);
+}
+
+.tab.drop-before::before {
+  left: -2px;
+}
+
+.tab.drop-after::after {
+  right: -2px;
+}
+
+.tab-close {
+  margin-left: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  flex-shrink: 0;
+  line-height: 1;
+  opacity: 0.72;
+  color: var(--shell-muted);
+}
+
+.tab-close:hover {
+  opacity: 1;
+  color: var(--shell-danger);
+}
+
+@keyframes btnCollapse {
+  0% { opacity: 1; transform: rotate(0deg) scale(1); }
+  50% { opacity: 0.5; transform: rotate(90deg) scale(0.5); }
+  100% { opacity: 0; transform: rotate(180deg) scale(0.3); }
+}
+
+@keyframes btnExpand {
+  0% { opacity: 0; transform: rotate(180deg) scale(0.3); }
+  50% { opacity: 0.5; transform: rotate(90deg) scale(0.5); }
+  100% { opacity: 1; transform: rotate(0deg) scale(1); }
+}
+
+#add-tab-btn.collapsing {
+  animation: btnCollapse 0.4s ease-in-out forwards;
+}
+
+#add-tab-btn.expanding {
+  animation: btnExpand 0.15s ease-in-out forwards;
+}

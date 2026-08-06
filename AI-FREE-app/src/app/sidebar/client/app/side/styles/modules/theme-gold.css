@@ -1,0 +1,266 @@
+/* ------------------------------------------------------------------
+   土豪金（黑金）主题覆盖：各模块深色默认里硬编码的蓝色在此统一改为
+   香槟金，并补充金色光晕。仅作用于 html.theme-gold，不影响深/浅主题。
+   基准色：#d4b776（香槟金）/ #e3cb92（亮金）/ rgba(212,183,118,*)（辉光）
+   ------------------------------------------------------------------ */
+
+/* ---- 顶部主题切换按钮（control-panel.css 中为蓝色渐变） ---- */
+html.theme-gold .theme-toggle-btn {
+  color: #241c0e;
+  border-color: rgba(226, 200, 138, .38);
+  background: linear-gradient(180deg, rgba(230, 207, 154, .96), rgba(184, 152, 90, .96));
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .3), 0 0 12px rgba(212, 183, 118, .25);
+}
+
+html.theme-gold .theme-toggle-btn:focus-visible {
+  box-shadow: 0 0 0 3px rgba(212, 183, 118, .25), 0 10px 24px rgba(0, 0, 0, .3);
+}
+
+/* ---- 滚动条 ---- */
+html.theme-gold .main-wrapper,
+html.theme-gold .panel,
+html.theme-gold .side-panel,
+html.theme-gold #browser-empty-state {
+  scrollbar-color: rgba(212, 183, 118, .66) rgba(18, 15, 10, .72);
+}
+
+html.theme-gold .main-wrapper::-webkit-scrollbar-track,
+html.theme-gold .panel::-webkit-scrollbar-track,
+html.theme-gold .side-panel::-webkit-scrollbar-track,
+html.theme-gold #browser-empty-state::-webkit-scrollbar-track {
+  background: rgba(18, 15, 10, .72);
+}
+
+html.theme-gold .main-wrapper::-webkit-scrollbar-thumb,
+html.theme-gold .panel::-webkit-scrollbar-thumb,
+html.theme-gold .side-panel::-webkit-scrollbar-thumb,
+html.theme-gold #browser-empty-state::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(214, 187, 124, .92), rgba(166, 136, 74, .92));
+  border-color: rgba(18, 15, 10, .72);
+}
+
+html.theme-gold .main-wrapper::-webkit-scrollbar-thumb:hover,
+html.theme-gold .panel::-webkit-scrollbar-thumb:hover,
+html.theme-gold .side-panel::-webkit-scrollbar-thumb:hover,
+html.theme-gold #browser-empty-state::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(230, 207, 154, 1), rgba(184, 152, 90, 1));
+}
+
+/* ---- 输入框聚焦（含金色光晕） ---- */
+html.theme-gold .form-group input[type='text']:focus,
+html.theme-gold .form-group select:focus,
+html.theme-gold .sidebar-auth-field input:focus,
+html.theme-gold .settings-field input:focus,
+html.theme-gold .settings-field select:focus,
+html.theme-gold .settings-field textarea:focus,
+html.theme-gold .modal-prompt-input:focus {
+  border-color: rgba(212, 183, 118, .92);
+  box-shadow: 0 0 0 2px rgba(212, 183, 118, .18), 0 0 12px rgba(212, 183, 118, .14);
+}
+
+html.theme-gold .side-panel select {
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(232, 213, 164, .9) 50%),
+    linear-gradient(135deg, rgba(232, 213, 164, .9) 50%, transparent 50%);
+}
+
+html.theme-gold .side-panel select option {
+  background: #1c1811;
+  color: #ece5d3;
+}
+
+/* ---- 更新进度环 ---- */
+html.theme-gold .update-widget-ring::before {
+  background: conic-gradient(from 180deg, #d4b776 0 var(--update-progress, 0%), rgba(212, 183, 118, .14) var(--update-progress, 0%) 100%);
+}
+
+html.theme-gold .update-widget-ring-fill {
+  background: rgba(20, 17, 12, .96);
+  box-shadow: inset 0 0 0 1px rgba(212, 183, 118, .16);
+}
+
+html.theme-gold .update-widget-percent {
+  color: #e3cb92;
+}
+
+/* ---- 账号列表（仅蓝色"已打开"态换金，绿/红状态保留区分度） ---- */
+html.theme-gold .account-item.opened {
+  background-color: rgba(212, 183, 118, .12);
+  border-color: rgba(212, 183, 118, .26);
+}
+
+html.theme-gold .account-item.opened .account-name,
+html.theme-gold .account-item.opened .account-meta {
+  color: #e8d9ae;
+}
+
+/* ---- 右键菜单 / 弹窗（蓝黑底换暖黑底） ---- */
+html.theme-gold .context-menu {
+  background: #17140e;
+}
+
+html.theme-gold .context-menu button:hover {
+  background: rgba(212, 183, 118, .14);
+}
+
+html.theme-gold .account-context-menu {
+  border-color: rgba(212, 183, 118, .24);
+  background: linear-gradient(180deg, rgba(24, 20, 13, .98), rgba(32, 27, 17, .98));
+}
+
+html.theme-gold .account-context-menu .account-context-menu-item {
+  background: rgba(212, 183, 118, .12);
+}
+
+html.theme-gold .account-context-menu .account-context-menu-item:hover:not(:disabled) {
+  background: rgba(212, 183, 118, .2);
+}
+
+html.theme-gold .modal-content {
+  background: #17140e;
+}
+
+html.theme-gold .modal-content.modal-info {
+  border-left-color: #d4b776;
+}
+
+html.theme-gold .modal-content.modal-info .modal-icon {
+  color: #d4b776;
+}
+
+html.theme-gold .modal-actions .btn-gray {
+  background-color: #201b12;
+}
+
+html.theme-gold .modal-actions .btn-gray:hover {
+  background-color: #2a2418;
+}
+
+html.theme-gold .announcement-header {
+  background-color: #1c1810;
+}
+
+/* ---- AI 对话面板 ---- */
+html.theme-gold .ai-select-option-new {
+  background: rgba(212, 183, 118, .1);
+}
+
+html.theme-gold .ai-select-option-new:hover,
+html.theme-gold .ai-select-option-new:focus-visible {
+  background: rgba(212, 183, 118, .2);
+}
+
+html.theme-gold .ai-select-option-new-icon {
+  color: #e3cb92;
+  background: rgba(212, 183, 118, .16);
+}
+
+html.theme-gold .ai-select-option:hover,
+html.theme-gold .ai-select-option:focus-visible {
+  background: rgba(212, 183, 118, .14);
+}
+
+html.theme-gold .ai-select-option[aria-selected="true"] {
+  background: rgba(212, 183, 118, .22);
+}
+
+html.theme-gold .ai-select-option-meta {
+  color: #e3cb92;
+}
+
+html.theme-gold .ai-select-option[aria-selected="true"] .ai-select-option-meta {
+  color: #f2e3b8;
+}
+
+html.theme-gold .ai-select-option-rename:hover {
+  color: #e3cb92;
+  background: rgba(212, 183, 118, .12);
+}
+
+html.theme-gold .ai-browser-gear-select.open .ai-browser-gear-icon {
+  color: #e3cb92;
+}
+
+html.theme-gold .ai-browser-gear-select.has-selection .ai-browser-gear-trigger {
+  border-color: rgba(212, 183, 118, .52);
+  background: rgba(212, 183, 118, .12);
+}
+
+html.theme-gold .ai-browser-gear-select.has-selection .ai-browser-gear-icon {
+  color: #e0c584;
+}
+
+html.theme-gold .ai-browser-card-refresh {
+  background: rgba(212, 183, 118, .12);
+}
+
+html.theme-gold .ai-chat-quota-ring::before {
+  background: conic-gradient(
+    from 180deg,
+    #d4b776 0 var(--quota-progress, 0%),
+    rgba(212, 183, 118, .12) var(--quota-progress, 0%) 100%
+  );
+}
+
+html.theme-gold .ai-chat-quota-ring-fill {
+  background: rgba(20, 17, 12, .96);
+  box-shadow: inset 0 0 0 1px rgba(212, 183, 118, .14);
+}
+
+html.theme-gold .ai-chat-quota-value {
+  color: #e3cb92;
+}
+
+html.theme-gold .ai-chat-tool-icon {
+  color: #e8d59c;
+  background: rgba(212, 183, 118, .11);
+}
+
+html.theme-gold .ai-model-custom-api-action {
+  color: #e0c584;
+}
+
+/* ---- 浏览器窗口历史列表 ---- */
+html.theme-gold .browser-history-item.is-open {
+  border-color: rgba(212, 183, 118, .34);
+  background: rgba(212, 183, 118, .12);
+}
+
+html.theme-gold .browser-history-item.is-open .browser-history-name {
+  color: #e8d9ae;
+}
+
+html.theme-gold .browser-history-item.is-open .browser-history-name::before {
+  background: #d4b776;
+  box-shadow: 0 0 0 2px rgba(212, 183, 118, .18);
+}
+
+html.theme-gold .browser-history-main:focus-visible {
+  outline-color: rgba(212, 183, 118, .62);
+}
+
+html.theme-gold .browser-history-action:focus-visible {
+  outline-color: rgba(212, 183, 118, .68);
+}
+
+html.theme-gold .settings-apply-options input {
+  accent-color: #d4b776;
+}
+
+/* ---- 光晕点缀 ---- */
+html.theme-gold .panel,
+html.theme-gold .info-group {
+  box-shadow: 0 0 18px rgba(212, 183, 118, .06);
+}
+
+html.theme-gold .account-profile-cover {
+  box-shadow: 0 0 22px rgba(212, 183, 118, .16);
+}
+
+html.theme-gold .vip-gold-theme-action {
+  box-shadow: 0 0 12px rgba(212, 183, 118, .18);
+}
+
+html.theme-gold .settings-primary-btn {
+  box-shadow: 0 6px 20px rgba(212, 183, 118, .18);
+}

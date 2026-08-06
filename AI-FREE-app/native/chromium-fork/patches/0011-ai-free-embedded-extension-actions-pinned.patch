@@ -1,0 +1,57 @@
+diff --git a/chrome/browser/ui/toolbar/toolbar_actions_model.cc b/chrome/browser/ui/toolbar/toolbar_actions_model.cc
+index 150788ee..c596ddd2 100644
+--- a/chrome/browser/ui/toolbar/toolbar_actions_model.cc
++++ b/chrome/browser/ui/toolbar/toolbar_actions_model.cc
+@@ -9,6 +9,7 @@
+ #include <string>
+ #include <vector>
+ 
++#include "base/command_line.h"
+ #include "base/functional/bind.h"
+ #include "base/location.h"
+ #include "base/metrics/histogram_base.h"
+@@ -27,6 +28,7 @@
+ #include "chrome/browser/ui/extensions/extension_action_view_model.h"
+ #include "chrome/browser/ui/toolbar/toolbar_action_view_model.h"
+ #include "chrome/browser/ui/toolbar/toolbar_actions_model_factory.h"
++#include "chrome/common/chrome_switches.h"
+ #include "components/prefs/pref_service.h"
+ #include "content/public/browser/web_contents.h"
+ #include "extensions/browser/extension_action_manager.h"
+@@ -44,6 +46,15 @@
+ #include "chrome/browser/ui/web_applications/app_browser_controller.h"
+ #endif
+ 
++namespace {
++
++bool IsAiFreeEmbeddedChildWindow() {
++  return base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
++             switches::kHsEmbedMode) == "child-window";
++}
++
++}  // namespace
++
+ ToolbarActionsModel::ToolbarActionsModel(
+     Profile* profile,
+     extensions::ExtensionPrefs* extension_prefs)
+@@ -589,6 +600,9 @@ void ToolbarActionsModel::IncognitoPopulate() {
+ 
+ void ToolbarActionsModel::SetActionVisibility(const ActionId& action_id,
+                                               bool is_now_visible) {
++  if (IsAiFreeEmbeddedChildWindow()) {
++    return;
++  }
+   DCHECK_NE(is_now_visible, IsActionPinned(action_id));
+   DCHECK(!IsActionForcePinned(action_id));
+   DCHECK(!profile_->IsOffTheRecord())
+@@ -618,6 +632,10 @@ const extensions::Extension* ToolbarActionsModel::GetExtensionById(
+ 
+ std::vector<ToolbarActionsModel::ActionId>
+ ToolbarActionsModel::GetFilteredPinnedActionIds() const {
++  if (IsAiFreeEmbeddedChildWindow()) {
++    return std::vector<ActionId>(action_ids_.begin(), action_ids_.end());
++  }
++
+   // Force-pinned extensions should always be present in the output vector.
+   extensions::ExtensionIdList pinned = extension_prefs_->GetPinnedExtensions();
+ 

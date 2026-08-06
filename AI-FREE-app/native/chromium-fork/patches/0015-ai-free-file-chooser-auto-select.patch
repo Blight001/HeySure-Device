@@ -1,0 +1,283 @@
+diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
+index 311a3dfe..1a0eb158 100644
+--- a/chrome/browser/BUILD.gn
++++ b/chrome/browser/BUILD.gn
+@@ -622,6 +622,8 @@ source_set("core") {
+     "chrome_content_browser_client_navigation_throttles.cc",
+     "chrome_content_browser_client_navigation_throttles.h",
+     "chrome_content_browser_client_receiver_bindings.cc",
++    "ai_free_file_selection.cc",
++    "ai_free_file_selection.h",
+     "chrome_resource_bundle_helper.cc",
+     "chrome_resource_bundle_helper.h",
+     "expired_flags_list.h",
+diff --git a/chrome/browser/ai_free_file_selection.cc b/chrome/browser/ai_free_file_selection.cc
+new file mode 100644
+index 00000000..dad3a4be
+--- /dev/null
++++ b/chrome/browser/ai_free_file_selection.cc
+@@ -0,0 +1,35 @@
++// Copyright 2026 AI-FREE Authors. All rights reserved.
++
++#include "chrome/browser/ai_free_file_selection.h"
++
++AiFreeFileSelection::Request::Request() = default;
++AiFreeFileSelection::Request::Request(Request&&) = default;
++AiFreeFileSelection::Request& AiFreeFileSelection::Request::operator=(Request&&) = default;
++AiFreeFileSelection::Request::~Request() = default;
++AiFreeFileSelection::AiFreeFileSelection(content::WebContents* web_contents)
++    : content::WebContentsUserData<AiFreeFileSelection>(*web_contents) {}
++AiFreeFileSelection::~AiFreeFileSelection() = default;
++
++void AiFreeFileSelection::Queue(Request request) {
++  request_ = std::move(request);
++}
++
++std::optional<AiFreeFileSelection::Request> AiFreeFileSelection::Consume(
++    const url::Origin& current_origin,
++    Mode mode) {
++  if (!request_) return std::nullopt;
++  const bool mode_matches = request_->mode == mode ||
++                            (request_->mode == Mode::kOpen &&
++                             mode == Mode::kOpenMultiple &&
++                             request_->paths.size() == 1);
++  if (base::TimeTicks::Now() >= request_->expires_at ||
++      request_->origin != current_origin || !mode_matches) {
++    request_.reset();
++    return std::nullopt;
++  }
++  std::optional<Request> result = std::move(request_);
++  request_.reset();
++  return result;
++}
++
++WEB_CONTENTS_USER_DATA_KEY_IMPL(AiFreeFileSelection);
+diff --git a/chrome/browser/ai_free_file_selection.h b/chrome/browser/ai_free_file_selection.h
+new file mode 100644
+index 00000000..e448106b
+--- /dev/null
++++ b/chrome/browser/ai_free_file_selection.h
+@@ -0,0 +1,42 @@
++// Copyright 2026 AI-FREE Authors. All rights reserved.
++
++#ifndef CHROME_BROWSER_AI_FREE_FILE_SELECTION_H_
++#define CHROME_BROWSER_AI_FREE_FILE_SELECTION_H_
++
++#include <optional>
++#include <vector>
++
++#include "base/files/file_path.h"
++#include "base/time/time.h"
++#include "content/public/browser/web_contents_user_data.h"
++#include "url/origin.h"
++
++class AiFreeFileSelection
++    : public content::WebContentsUserData<AiFreeFileSelection> {
++ public:
++  enum class Mode { kOpen, kOpenMultiple, kUploadFolder };
++  struct Request {
++    Request();
++    Request(Request&&);
++    Request& operator=(Request&&);
++    ~Request();
++    std::vector<base::FilePath> paths;
++    url::Origin origin;
++    Mode mode = Mode::kOpen;
++    base::TimeTicks expires_at;
++  };
++
++  AiFreeFileSelection(const AiFreeFileSelection&) = delete;
++  AiFreeFileSelection& operator=(const AiFreeFileSelection&) = delete;
++  ~AiFreeFileSelection() override;
++  void Queue(Request request);
++  std::optional<Request> Consume(const url::Origin& current_origin, Mode mode);
++
++ private:
++  explicit AiFreeFileSelection(content::WebContents* web_contents);
++  friend class content::WebContentsUserData<AiFreeFileSelection>;
++  WEB_CONTENTS_USER_DATA_KEY_DECL();
++  std::optional<Request> request_;
++};
++
++#endif  // CHROME_BROWSER_AI_FREE_FILE_SELECTION_H_
+diff --git a/chrome/browser/file_select_helper.cc b/chrome/browser/file_select_helper.cc
+index e80e2a89..5b156a1a 100644
+--- a/chrome/browser/file_select_helper.cc
++++ b/chrome/browser/file_select_helper.cc
+@@ -21,6 +21,7 @@
+ #include "base/task/thread_pool.h"
+ #include "base/threading/hang_watcher.h"
+ #include "build/build_config.h"
++#include "chrome/browser/ai_free_file_selection.h"
+ #include "chrome/browser/browser_process.h"
+ #include "chrome/browser/enterprise/connectors/common.h"
+ #include "chrome/browser/platform_util.h"
+@@ -261,7 +262,8 @@ void FileSelectHelper::OnListDone(int error) {
+         FileChooserFileInfo::NewNativeFile(native_file->Clone()));
+   }
+ 
+-  if (dialog_type_ == ui::SelectFileDialog::SELECT_UPLOAD_FOLDER) {
++  if (dialog_type_ == ui::SelectFileDialog::SELECT_UPLOAD_FOLDER &&
++      !ai_free_auto_selected_) {
+     auto model = CreateConfirmationDialog(
+         entry->display_name_, std::move(chooser_files),
+         base::BindOnce(&FileSelectHelper::PerformContentAnalysisIfNeeded,
+@@ -621,6 +623,48 @@ void FileSelectHelper::RunFileChooser(
+   web_contents_ = WebContents::FromRenderFrameHost(render_frame_host);
+   listener_ = std::move(listener);
+   InitLifecycleObserver(web_contents_);
++  self_ptr_ = this;
++
++  AiFreeFileSelection::Mode automation_mode =
++      AiFreeFileSelection::Mode::kOpen;
++  bool can_auto_select = true;
++  switch (params->mode) {
++    case FileChooserParams::Mode::kOpen:
++      dialog_type_ = ui::SelectFileDialog::SELECT_OPEN_FILE;
++      break;
++    case FileChooserParams::Mode::kOpenMultiple:
++      automation_mode = AiFreeFileSelection::Mode::kOpenMultiple;
++      dialog_type_ = ui::SelectFileDialog::SELECT_OPEN_MULTI_FILE;
++      break;
++    case FileChooserParams::Mode::kUploadFolder:
++      automation_mode = AiFreeFileSelection::Mode::kUploadFolder;
++      dialog_type_ = ui::SelectFileDialog::SELECT_UPLOAD_FOLDER;
++      break;
++    case FileChooserParams::Mode::kSave:
++    case FileChooserParams::Mode::kOpenDirectory:
++      can_auto_select = false;
++      break;
++  }
++  dialog_mode_ = params->mode;
++  AiFreeFileSelection::CreateForWebContents(web_contents_);
++  AiFreeFileSelection* selection =
++      AiFreeFileSelection::FromWebContents(web_contents_);
++  if (can_auto_select) {
++    const url::Origin current_origin =
++        render_frame_host_->GetOutermostMainFrame()->GetLastCommittedOrigin();
++    auto request = selection->Consume(current_origin, automation_mode);
++    if (request) {
++      ai_free_auto_selected_ = true;
++      std::vector<ui::SelectedFileInfo> files;
++      for (const base::FilePath& path : request->paths)
++        files.emplace_back(path);
++      if (files.size() == 1)
++        FileSelected(files.front(), 1);
++      else
++        MultiFilesSelected(files);
++      return;
++    }
++  }
+ 
+ #if !BUILDFLAG(IS_ANDROID)
+   if (PictureInPictureWindowManager::GetInstance()
+@@ -644,7 +688,6 @@ void FileSelectHelper::RunFileChooser(
+   // instance. We keep a reference to ourself to keep the instance alive after
+   // we return to the caller, until the last callback is received from the
+   // file dialog. At that point, we must call RunFileChooserEnd().
+-  self_ptr_ = this;
+ }
+ 
+ void FileSelectHelper::GetFileTypesInThreadPool(FileChooserParamsPtr params) {
+diff --git a/chrome/browser/file_select_helper.h b/chrome/browser/file_select_helper.h
+index 16e77ae3..6df61b80 100644
+--- a/chrome/browser/file_select_helper.h
++++ b/chrome/browser/file_select_helper.h
+@@ -321,6 +321,10 @@ class FileSelectHelper : public base::RefCountedThreadSafe<
+   // The mode of file dialog last shown.
+   blink::mojom::FileChooserParams::Mode dialog_mode_;
+ 
++  // True when the current selection came from the authenticated AI-FREE
++  // Runtime Bridge rather than an operating-system dialog.
++  bool ai_free_auto_selected_ = false;
++
+   // The enumeration root directory for EnumerateDirectory() and
+   // RunFileChooser with kUploadFolder.
+   base::FilePath base_dir_;
+diff --git a/chrome/browser/ui/views/frame/ai_free_runtime_bridge_win.cc b/chrome/browser/ui/views/frame/ai_free_runtime_bridge_win.cc
+index d66e690d..a6d72fac 100644
+--- a/chrome/browser/ui/views/frame/ai_free_runtime_bridge_win.cc
++++ b/chrome/browser/ui/views/frame/ai_free_runtime_bridge_win.cc
+@@ -14,6 +14,7 @@
+ #include <vector>
+ 
+ #include "base/command_line.h"
++#include "base/files/file_path.h"
+ #include "base/functional/bind.h"
+ #include "base/json/json_reader.h"
+ #include "base/json/json_writer.h"
+@@ -33,6 +34,7 @@
+ #include "base/timer/timer.h"
+ #include "base/values.h"
+ #include "base/win/scoped_handle.h"
++#include "chrome/browser/ai_free_file_selection.h"
+ #include "chrome/browser/lifetime/application_lifetime_desktop.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/ui/browser.h"
+@@ -808,6 +810,66 @@ void HandleCommandOnUi(scoped_refptr<BridgeConnection> connection,
+   if (command_name == "dispatch-input") {
+     return HandleDispatchInput(connection, web_contents, command, request);
+   }
++  if (command_name == "select-files") {
++    const std::string* origin_text = command.FindString("origin");
++    const std::string* mode_text = command.FindString("mode");
++    const base::ListValue* path_values = command.FindList("paths");
++    const GURL origin_url(origin_text ? *origin_text : std::string());
++    const url::Origin expected_origin = url::Origin::Create(origin_url);
++    const url::Origin current_origin = web_contents->GetPrimaryMainFrame()
++                                           ->GetLastCommittedOrigin();
++    if (!origin_text || !origin_url.is_valid() || expected_origin.opaque() ||
++        expected_origin != current_origin || !path_values ||
++        path_values->empty() || path_values->size() > 32) {
++      return connection->SendErrorAsync(
++          request, command_name, "FILE_SELECTION_INVALID",
++          "文件选择需要匹配当前页面的 origin 和 1-32 个路径");
++    }
++    AiFreeFileSelection::Mode mode;
++    if (mode_text && *mode_text == "open") {
++      mode = AiFreeFileSelection::Mode::kOpen;
++    } else if (mode_text && *mode_text == "open-multiple") {
++      mode = AiFreeFileSelection::Mode::kOpenMultiple;
++    } else if (mode_text && *mode_text == "upload-folder") {
++      mode = AiFreeFileSelection::Mode::kUploadFolder;
++    } else {
++      return connection->SendErrorAsync(request, command_name,
++                                        "FILE_SELECTION_MODE_INVALID",
++                                        "不支持的文件选择模式");
++    }
++    if (mode != AiFreeFileSelection::Mode::kOpenMultiple &&
++        path_values->size() != 1) {
++      return connection->SendErrorAsync(request, command_name,
++                                        "FILE_SELECTION_COUNT_INVALID",
++                                        "当前模式只允许一个路径");
++    }
++    AiFreeFileSelection::Request pending;
++    pending.origin = expected_origin;
++    pending.mode = mode;
++    for (const base::Value& value : *path_values) {
++      const std::string* path_text = value.GetIfString();
++      base::FilePath path = path_text
++                                ? base::FilePath::FromUTF8Unsafe(*path_text)
++                                : base::FilePath();
++      if (path.empty() || !path.IsAbsolute()) {
++        return connection->SendErrorAsync(request, command_name,
++                                          "FILE_SELECTION_PATH_INVALID",
++                                          "文件路径必须是绝对路径");
++      }
++      pending.paths.push_back(std::move(path));
++    }
++    const int ttl_ms =
++        std::clamp(command.FindInt("ttlMs").value_or(30000), 1000, 120000);
++    pending.expires_at = base::TimeTicks::Now() + base::Milliseconds(ttl_ms);
++    AiFreeFileSelection::CreateForWebContents(web_contents);
++    AiFreeFileSelection::FromWebContents(web_contents)->Queue(
++        std::move(pending));
++    base::DictValue result;
++    result.Set("queued", true);
++    result.Set("count", static_cast<int>(path_values->size()));
++    return connection->SendSuccessAsync(request, command_name,
++                                        std::move(result));
++  }
+   if (command_name == "set-cookies") {
+     return HandleSetCookies(connection, browser, command, request);
+   }

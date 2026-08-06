@@ -1,0 +1,5 @@
+meta={'cFrames': 71, 'cSteps': 71, 'cx': 0, 'cy': 0, 'jif': 3} frames=71
+icons in frame0: 1
+  img0: 32x32 hotspot=(1,1) bpp=32 blob=4264
+extracted: 32x32 hotspot=(1, 1) opaque=40 black_opaque=0 dark_opaque=0
+corner (0,0)=(0, 0, 0, 0) (1,1)=(0, 0, 0, 0)

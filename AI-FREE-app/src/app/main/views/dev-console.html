@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data:; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline';">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>调试控制台</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0f14;
+      --panel: #121722;
+      --panel-2: #171d29;
+      --border: #233041;
+      --text: #d6deea;
+      --muted: #8191a8;
+      --accent: #5cc8ff;
+      --level-info: #d6deea;
+      --level-warn: #ffd36e;
+      --level-error: #ff7b7b;
+      --line: rgba(255,255,255,0.05);
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; background: radial-gradient(circle at top, #121826 0%, #0b0f14 58%); color: var(--text); font-family: Arial; }
+    body { overflow: hidden; }
+    .shell { position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; }
+    .topbar {
+      padding: 12px 14px 10px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(10, 14, 20, 0.9);
+      backdrop-filter: blur(12px);
+    }
+    .topline {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .title { font-size: 15px; font-weight: 700; letter-spacing: 0.02em; }
+    .subtitle { color: var(--muted); font-size: 12px; }
+    .summary { margin-left: auto; color: var(--muted); font-size: 12px; }
+    .tabbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+      max-height: 122px;
+      overflow: auto;
+      padding-bottom: 2px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.14) transparent;
+    }
+    .tabbar::-webkit-scrollbar { height: 8px; width: 8px; }
+    .tab {
+      position: relative;
+      display: inline-flex;
+      flex: 0 1 auto;
+      width: fit-content;
+      min-width: 0;
+      max-width: 100%;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.03);
+      color: var(--text);
+      cursor: pointer;
+      transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+      user-select: none;
+      overflow: hidden;
+    }
+    .tab:hover { transform: translateY(-1px); border-color: rgba(140, 170, 220, 0.55); }
+    .tab .tab-inner {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: normal;
+      word-break: break-word;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .tab .count {
+      min-width: 22px;
+      padding: 0 6px;
+      border-radius: 999px;
+      font-size: 11px;
+      text-align: center;
+      color: #f2f6fb;
+      background: rgba(255,255,255,0.08);
+    }
+    .tab.all { color: var(--accent); }
+    .tab.active { border-color: rgba(92, 200, 255, 0.9); box-shadow: inset 0 0 0 1px rgba(92, 200, 255, 0.12); }
+    .tab::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      opacity: 0;
+      pointer-events: none;
+      background: var(--flash-color, transparent);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--flash-color, rgba(92, 200, 255, 0.25)) 55%, transparent);
+    }
+    .tab.state-info { --flash-color: rgba(68, 214, 138, 0.20); }
+    .tab.state-warn { --flash-color: rgba(255, 211, 110, 0.24); }
+    .tab.state-error { --flash-color: rgba(255, 123, 123, 0.26); }
+    .tab.state-info::after,
+    .tab.state-warn::after,
+    .tab.state-error::after {
+      opacity: 1;
+    }
+    .tab.state-info.active { border-color: rgba(68, 214, 138, 0.9); box-shadow: inset 0 0 0 1px rgba(68, 214, 138, 0.14); }
+    .tab.state-warn.active { border-color: rgba(255, 211, 110, 0.92); box-shadow: inset 0 0 0 1px rgba(255, 211, 110, 0.16); }
+    .tab.state-error.active { border-color: rgba(255, 123, 123, 0.94); box-shadow: inset 0 0 0 1px rgba(255, 123, 123, 0.18); }
+    .tab.source-tab { color: var(--source-color, #8ab4ff); }
+    .tab.source-tab.active { border-color: color-mix(in srgb, var(--source-color, #8ab4ff) 70%, white 30%); }
+    .content {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 12px;
+    }
+    .panel {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      background: linear-gradient(180deg, rgba(23,29,41,0.98), rgba(15,19,27,0.98));
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 18px 50px rgba(0,0,0,0.25);
+    }
+    .panel-head {
+      padding: 12px 14px 10px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .panel-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .panel-count {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .list {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 10px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.2) transparent;
+    }
+    .entry {
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.02);
+      padding: 10px 10px 9px;
+      margin-bottom: 8px;
+      line-height: 1.45;
+    }
+    .meta {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1px 7px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+      color: var(--text);
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge.level-info { color: var(--level-info); border-color: color-mix(in srgb, var(--level-info) 25%, transparent); }
+    .badge.level-warn { color: var(--level-warn); border-color: color-mix(in srgb, var(--level-warn) 25%, transparent); }
+    .badge.level-error { color: var(--level-error); border-color: color-mix(in srgb, var(--level-error) 25%, transparent); }
+    .source-tag { border-color: color-mix(in srgb, var(--source-color, #8ab4ff) 28%, transparent); color: var(--source-color, #8ab4ff); }
+    .text {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 12px;
+      color: #dce4ef;
+    }
+    .empty {
+      color: var(--muted);
+      font-size: 12px;
+      padding: 12px 2px;
+    }
+    .footer {
+      padding: 10px 14px 14px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      z-index: 50;
+      background: rgba(11, 15, 20, 0.95);
+      color: #ffd36e;
+      padding: 24px;
+      white-space: pre-wrap;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    @media (max-width: 780px) {
+      .topline, .footer { flex-wrap: wrap; }
+      .summary { margin-left: 0; width: 100%; }
+      .panel { min-height: 280px; }
+      .content { padding: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar">
+      <div class="topline">
+        <div>
+          <div class="title">调试控制台</div>
+          <div class="subtitle">点击上方标题查看对应日志，开发模式自动打开</div>
+        </div>
+        <div class="summary" id="summary">等待日志...</div>
+      </div>
+      <div class="tabbar" id="tabbar">
+        <div class="tab all active" data-source="all">
+          <div class="tab-inner"><span>全部信息</span><span class="count" id="count-all">0</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title" id="panel-title">全部信息</div>
+          <div class="panel-count" id="panel-count">0 条</div>
+        </div>
+        <div class="list" id="list"></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div>提示：窗口只在开发模式自动打开，不影响正式版。</div>
+      <div id="status">正在连接日志流...</div>
+    </div>
+
+    <div class="overlay" id="overlay"></div>
+  </div>
+
+  <script>
+    (() => {
+      const state = {
+        entries: [],
+        tabs: new Map(),
+        activeSource: 'all',
+        tabbar: document.getElementById('tabbar'),
+        list: document.getElementById('list'),
+        summary: document.getElementById('summary'),
+        status: document.getElementById('status'),
+        panelTitle: document.getElementById('panel-title'),
+        panelCount: document.getElementById('panel-count'),
+        overlay: document.getElementById('overlay'),
+        countAll: document.getElementById('count-all'),
+      };
+
+      const levelLabelMap = {
+        info: '普通',
+        warn: '警告',
+        error: '严重',
+      };
+
+      const levelClassMap = {
+        info: 'level-info',
+        warn: 'level-warn',
+        error: 'level-error',
+      };
+
+      const sourceDisplayMap = {
+        RemoveWM: 'RemoveWM-去水印',
+        AccountStorage: 'AccountStorage-账号保存',
+        Registration: 'Registration-注册器',
+        AccountCleanup: 'AccountCleanup-账号清理',
+      };
+
+      function normalizeLevel(level) {
+        const key = String(level || 'info').toLowerCase();
+        if (key === 'warn' || key === 'warning') return 'warn';
+        if (key === 'error' || key === 'fatal') return 'error';
+        return 'info';
+      }
+
+      function normalizeSource(source) {
+        const text = String(source || '').trim();
+        return text || '其它';
+      }
+
+      function displaySourceName(source) {
+        const current = normalizeSource(source);
+        return sourceDisplayMap[current] || current;
+      }
+
+      function shouldHideSource(source) {
+        return normalizeSource(source) === 'TCP';
+      }
+
+      function hashColor(text) {
+        let hash = 0;
+        for (let i = 0; i < text.length; i += 1) {
+          hash = ((hash << 5) - hash) + text.charCodeAt(i);
+          hash |= 0;
+        }
+        const hue = Math.abs(hash) % 360;
+        return `hsl(${hue} 72% 68%)`;
+      }
+
+      function formatTime(ts) {
+        const value = new Date(ts);
+        if (Number.isNaN(value.getTime())) return '';
+        return value.toLocaleTimeString('zh-CN', { hour12: false });
+      }
+
+      function ensureEmptyState(listEl, count) {
+        if (count > 0 || listEl.querySelector('.empty')) return;
+        const node = document.createElement('div');
+        node.className = 'empty';
+        node.textContent = '暂无日志';
+        listEl.appendChild(node);
+      }
+
+      function createEntryNode(entry) {
+        const wrap = document.createElement('div');
+        wrap.className = 'entry';
+
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+
+        const time = document.createElement('span');
+        time.textContent = formatTime(entry.timestamp) || '--:--:--';
+        meta.appendChild(time);
+
+        const level = document.createElement('span');
+        const levelKey = normalizeLevel(entry.level);
+        level.className = `badge ${levelClassMap[levelKey] || 'level-info'}`;
+        level.textContent = levelLabelMap[levelKey] || '普通';
+        meta.appendChild(level);
+
+        const source = document.createElement('span');
+        source.className = 'badge source-tag';
+        source.style.setProperty('--source-color', hashColor(normalizeSource(entry.source)));
+        source.textContent = displaySourceName(entry.source);
+        meta.appendChild(source);
+
+        wrap.appendChild(meta);
+
+        const text = document.createElement('div');
+        text.className = 'text';
+        text.textContent = String(entry.text || '');
+        wrap.appendChild(text);
+
+        return wrap;
+      }
+
+      function flashTab(tabEl, levelKey) {
+        if (!tabEl) return;
+        tabEl.classList.remove('state-info', 'state-warn', 'state-error');
+        tabEl.classList.add(`state-${levelKey}`);
+      }
+
+      function updateTabCounts() {
+        const visibleEntries = state.entries.filter((item) => !shouldHideSource(item.source));
+        state.countAll.textContent = String(visibleEntries.length);
+        for (const [source, meta] of state.tabs.entries()) {
+          const count = source === 'all'
+            ? visibleEntries.length
+            : visibleEntries.filter((item) => normalizeSource(item.source) === source).length;
+          meta.count.textContent = String(count);
+          if (source !== 'all') {
+            meta.tab.hidden = count === 0;
+          }
+        }
+        state.summary.textContent = `共 ${visibleEntries.length} 条日志`;
+      }
+
+      function renderList(source) {
+        const current = normalizeSource(source);
+        state.activeSource = current;
+        state.list.innerHTML = '';
+
+        const entries = current === 'all'
+          ? state.entries.filter((item) => !shouldHideSource(item.source))
+          : state.entries.filter((item) => !shouldHideSource(item.source) && normalizeSource(item.source) === current);
+
+        if (!entries.length) {
+          ensureEmptyState(state.list, 0);
+        } else {
+          const fragment = document.createDocumentFragment();
+          for (const entry of entries) {
+            fragment.appendChild(createEntryNode(entry));
+          }
+          state.list.appendChild(fragment);
+        }
+
+        state.panelTitle.textContent = current === 'all' ? '全部信息' : displaySourceName(current);
+        state.panelCount.textContent = `${entries.length} 条`;
+
+        for (const meta of state.tabs.values()) {
+          meta.tab.classList.toggle('active', meta.source === current);
+        }
+      }
+
+      function ensureTab(source) {
+        const current = normalizeSource(source);
+        if (shouldHideSource(current)) return null;
+        if (state.tabs.has(current)) return state.tabs.get(current);
+
+        const tab = document.createElement('div');
+        tab.className = current === 'all' ? 'tab all' : 'tab source-tab';
+        tab.dataset.source = current;
+        tab.style.setProperty('--source-color', hashColor(current));
+        tab.innerHTML = `<div class="tab-inner"><span></span><span class="count">0</span></div>`;
+
+        const title = tab.querySelector('span');
+        const count = tab.querySelector('.count');
+        title.textContent = current === 'all' ? '全部信息' : displaySourceName(current);
+
+        tab.addEventListener('click', () => renderList(current));
+        state.tabbar.appendChild(tab);
+
+        const meta = { source: current, tab, title, count };
+        state.tabs.set(current, meta);
+        return meta;
+      }
+
+      function normalizeEntry(entry) {
+        const text = entry && typeof entry.text === 'string' ? entry.text : '';
+        const match = text.match(/^\[([^\]]+)\]/);
+        return {
+          level: normalizeLevel(entry && entry.level),
+          source: normalizeSource(entry && entry.source ? entry.source : (match ? match[1] : '其它')),
+          text,
+          timestamp: entry && entry.timestamp ? entry.timestamp : new Date().toISOString(),
+        };
+      }
+
+      function appendEntry(entry) {
+        const normalized = normalizeEntry(entry);
+        if (shouldHideSource(normalized.source)) {
+          return;
+        }
+        state.entries.push(normalized);
+
+        ensureTab(normalized.source);
+        updateTabCounts();
+        renderList(state.activeSource);
+
+        const activeMeta = state.tabs.get(state.activeSource);
+        const sourceMeta = state.tabs.get(normalized.source);
+        flashTab(state.tabs.get('all')?.tab, normalized.level);
+        flashTab(sourceMeta?.tab, normalized.level);
+        if (activeMeta && activeMeta.source === normalized.source) {
+          flashTab(activeMeta.tab, normalized.level);
+        }
+
+        state.status.textContent = '日志已连接';
+      }
+
+      async function loadHistory() {
+        try {
+          const response = await window.aiFree.diagnostics.getConsoleHistory();
+          const history = Array.isArray(response)
+            ? response
+            : (response && Array.isArray(response.history) ? response.history : []);
+          state.entries = history.map(normalizeEntry);
+          state.entries = state.entries.filter((item) => !shouldHideSource(item.source));
+          const seen = new Set(state.entries.map((item) => normalizeSource(item.source)));
+          for (const source of seen) {
+            ensureTab(source);
+          }
+          updateTabCounts();
+          renderList('all');
+          state.status.textContent = '日志已连接';
+        } catch (error) {
+          state.status.textContent = `历史日志加载失败：${error && error.message ? error.message : error}`;
+        }
+      }
+
+      if (typeof window.aiFree?.diagnostics?.onConsoleLine === 'function') {
+        window.aiFree.diagnostics.onConsoleLine((entry) => {
+          appendEntry(entry);
+        });
+      }
+
+      window.addEventListener('error', (event) => {
+        const message = event && event.error
+          ? (event.error.stack || event.error.message || String(event.error))
+          : (event && event.message ? event.message : '未知前端错误');
+        if (state.overlay) {
+          state.overlay.style.display = 'block';
+          state.overlay.textContent = `调试控制台页面脚本错误:\n${message}`;
+        }
+      });
+
+      ensureTab('all');
+      loadHistory();
+    })();
+  </script>
+</body>
+</html>

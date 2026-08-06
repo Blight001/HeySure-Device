@@ -1,0 +1,127 @@
+diff --git a/chrome/browser/ui/browser_command_controller.cc b/chrome/browser/ui/browser_command_controller.cc
+index f5831f33..192fae30 100644
+--- a/chrome/browser/ui/browser_command_controller.cc
++++ b/chrome/browser/ui/browser_command_controller.cc
+@@ -101,6 +101,7 @@
+ #include "chrome/browser/web_applications/web_app_install_params.h"
+ #include "chrome/browser/web_applications/web_app_utils.h"
+ #include "chrome/common/chrome_features.h"
++#include "chrome/common/chrome_switches.h"
+ #include "chrome/common/content_restriction.h"
+ #include "chrome/common/pref_names.h"
+ #include "chrome/common/url_constants.h"
+@@ -194,6 +195,30 @@ namespace chrome {
+ 
+ namespace {
+ 
++bool IsAiFreeEmbeddedChildWindow() {
++  return base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
++             switches::kHsEmbedMode) == "child-window";
++}
++
++bool IsAiFreeBlockedUserWindowCommand(int command_id) {
++  switch (command_id) {
++    case IDC_CLOSE_WINDOW:
++    case IDC_EXIT:
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_WIN)
++    case IDC_MINIMIZE_WINDOW:
++    case IDC_MAXIMIZE_WINDOW:
++    case IDC_RESTORE_WINDOW:
++#endif
++#if BUILDFLAG(IS_WIN)
++    case IDC_MOVE_WINDOW:
++    case IDC_SIZE_WINDOW:
++#endif
++      return true;
++    default:
++      return false;
++  }
++}
++
+ // Ensures that - if we have not popped up an infobar to prompt the user to e.g.
+ // reload the current page - that the content pane of the browser is refocused.
+ void AppInfoDialogClosedCallback(SessionID session_id,
+@@ -598,6 +623,10 @@ bool BrowserCommandController::SupportsCommand(int id) const {
+ }
+ 
+ bool BrowserCommandController::IsCommandEnabled(int id) const {
++  if (IsAiFreeEmbeddedChildWindow() &&
++      IsAiFreeBlockedUserWindowCommand(id)) {
++    return false;
++  }
+   return command_updater_.IsCommandEnabled(id);
+ }
+ 
+diff --git a/chrome/browser/ui/views/frame/browser_caption_button_container_win.cc b/chrome/browser/ui/views/frame/browser_caption_button_container_win.cc
+index cfe5d2c3..a2a78538 100644
+--- a/chrome/browser/ui/views/frame/browser_caption_button_container_win.cc
++++ b/chrome/browser/ui/views/frame/browser_caption_button_container_win.cc
+@@ -8,12 +8,14 @@
+ 
+ #include <memory>
+ 
++#include "base/command_line.h"
+ #include "base/win/windows_version.h"
+ #include "chrome/browser/ui/frame/window_frame_util.h"
+ #include "chrome/browser/ui/views/frame/browser_frame_view_win.h"
+ #include "chrome/browser/ui/views/frame/browser_view.h"
+ #include "chrome/browser/ui/views/frame/windows_caption_button.h"
+ #include "chrome/browser/win/titlebar_config.h"
++#include "chrome/common/chrome_switches.h"
+ #include "ui/base/l10n/l10n_util.h"
+ #include "ui/base/metadata/metadata_impl_macros.h"
+ #include "ui/strings/grit/ui_strings.h"
+@@ -195,6 +197,15 @@ void BrowserCaptionButtonContainer::OnWidgetBoundsChanged(
+ }
+ 
+ void BrowserCaptionButtonContainer::UpdateButtons() {
++  if (base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
++          switches::kHsEmbedMode) == "child-window") {
++    minimize_button_->SetVisible(false);
++    maximize_button_->SetVisible(false);
++    restore_button_->SetVisible(false);
++    close_button_->SetVisible(false);
++    return;
++  }
++
+   if (!ShouldBrowserCustomDrawTitlebar(frame_view_->GetBrowserView())) {
+     minimize_button_->SetVisible(false);
+     maximize_button_->SetVisible(false);
+diff --git a/chrome/browser/ui/views/frame/browser_view.cc b/chrome/browser/ui/views/frame/browser_view.cc
+index 7d15371e..5a75ba47 100644
+--- a/chrome/browser/ui/views/frame/browser_view.cc
++++ b/chrome/browser/ui/views/frame/browser_view.cc
+@@ -856,10 +856,19 @@ BrowserView::BrowserView(Browser* browser)
+   SetShowIcon(::ShouldShowWindowIcon(
+       browser_.get(), AppUsesWindowControlsOverlay(), AppUsesTabbed()));
+ 
+-  // In forced app mode, all size controls are always disabled. Otherwise, use
++  const bool is_ai_free_embedded_child =
++      base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
++          switches::kHsEmbedMode) == "child-window";
++
++  // In forced app or AI-FREE child-window mode, all size controls are always
++  // disabled. Otherwise, use
+   // `create_params` to enable/disable specific size controls.
+-  if (IsRunningInForcedAppMode()) {
++  if (IsRunningInForcedAppMode() || is_ai_free_embedded_child) {
+     SetHasWindowSizeControls(false);
++    SetCanResize(false);
++    SetCanMinimize(false);
++    SetCanMaximize(false);
++    SetCanFullscreen(false);
+   } else if (GetIsPictureInPictureType()) {
+     // Picture in picture windows must always have a title, can never minimize,
+     // and can never maximize regardless of what the params say.
+@@ -4519,6 +4528,11 @@ views::CloseRequestResult BrowserView::OnWindowCloseRequested() {
+ }
+ 
+ int BrowserView::NonClientHitTest(const gfx::Point& point) {
++  if (base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
++          switches::kHsEmbedMode) == "child-window") {
++    return HTCLIENT;
++  }
++
+ #if BUILDFLAG(IS_MAC)
+   // The top container while in immersive fullscreen on macOS lives in another
+   // Widget (OverlayWidgetMac). This means that BrowserView does not need to

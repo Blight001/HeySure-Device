@@ -1,0 +1,37 @@
+From e399cbedca5aa6288b97d7cfc72a91e35f03ca76 Mon Sep 17 00:00:00 2001
+From: AI-FREE Build <build@ai-free.local>
+Date: Sun, 12 Jul 2026 16:35:34 +0800
+Subject: [PATCH 4/5] Report Browser HWND to AI-FREE runtime bridge
+
+---
+ chrome/browser/ui/views/frame/browser_view.cc | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/chrome/browser/ui/views/frame/browser_view.cc b/chrome/browser/ui/views/frame/browser_view.cc
+index c5b196b..7d15371 100644
+--- a/chrome/browser/ui/views/frame/browser_view.cc
++++ b/chrome/browser/ui/views/frame/browser_view.cc
+@@ -392,6 +392,7 @@
+ #endif
+ 
+ #if BUILDFLAG(IS_WIN)
++#include "chrome/browser/ui/views/frame/ai_free_runtime_bridge_win.h"
+ #include "chrome/browser/taskbar/taskbar_decorator_win.h"
+ #include "chrome/browser/win/jumplist.h"
+ #include "chrome/browser/win/jumplist_factory.h"
+@@ -4840,6 +4841,13 @@ void BrowserView::AddedToWidget() {
+   // it later when all we have is a native view.
+   GetWidget()->SetNativeWindowProperty(kBrowserViewKey, this);
+ 
++#if BUILDFLAG(IS_WIN)
++  // Report the exact top-level Browser HWND. The Electron Native Browser Host
++  // remains the sole owner of style changes and SetParent.
++  MaybeStartAiFreeRuntimeBridge(reinterpret_cast<uintptr_t>(
++      GetNativeWindow()->GetHost()->GetAcceleratedWidget()), browser_);
++#endif
++
+   // Stow a pointer to the browser's profile onto the window handle so that we
+   // can get it later when all we have is a native view.
+   GetWidget()->SetNativeWindowProperty(Profile::kProfileKey,
+-- 
+2.54.0.windows.1

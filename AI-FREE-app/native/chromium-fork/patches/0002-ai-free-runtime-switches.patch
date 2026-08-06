@@ -1,0 +1,61 @@
+From c37431059bea41ef20f5bca57d25ce8691586909 Mon Sep 17 00:00:00 2001
+From: AI-FREE Build <build@ai-free.local>
+Date: Sun, 12 Jul 2026 16:34:59 +0800
+Subject: [PATCH 2/5] Add AI-FREE runtime command-line switches
+
+---
+ chrome/common/chrome_switches.cc | 20 ++++++++++++++++++++
+ chrome/common/chrome_switches.h  |  6 ++++++
+ 2 files changed, 26 insertions(+)
+
+diff --git a/chrome/common/chrome_switches.cc b/chrome/common/chrome_switches.cc
+index e980fae..8020dda 100644
+--- a/chrome/common/chrome_switches.cc
++++ b/chrome/common/chrome_switches.cc
+@@ -362,6 +362,26 @@ const char kHideCrashRestoreBubble[] = "hide-crash-restore-bubble";
+ // http://google.com.
+ const char kHomePage[] = "homepage";
+ 
++// Enables the AI-FREE child-window runtime. Chromium reports its top-level
++// Browser HWND but never calls SetParent; the Electron native host owns that
++// operation.
++const char kHsEmbedMode[] = "hs-embed-mode";
++
++// Hides browser-owned navigation UI for an AI-FREE one-click launch.
++const char kHsHideToolbar[] = "hs-hide-toolbar";
++
++// Decimal BrowserHost HWND supplied by the Electron controller.
++const char kHsEmbedParentHwnd[] = "hs-embed-parent-hwnd";
++
++// Immutable AI-FREE profile identifier for this browser process.
++const char kHsProfileId[] = "hs-profile-id";
++
++// Per-profile Windows Named Pipe used by the authenticated runtime bridge.
++const char kHsRuntimePipe[] = "hs-runtime-pipe";
++
++// One-time launch challenge invalidated after hello is accepted.
++const char kHsRuntimeToken[] = "hs-runtime-token";
++
+ #if !BUILDFLAG(IS_ANDROID)
+ // Causes the browser to simulate a screen lock event shortly after startup.
+ // Optional value specifies the delay in seconds (defaults to 5).
+diff --git a/chrome/common/chrome_switches.h b/chrome/common/chrome_switches.h
+index 6e43201..b98901f 100644
+--- a/chrome/common/chrome_switches.h
++++ b/chrome/common/chrome_switches.h
+@@ -126,6 +126,12 @@ extern const char kRefreshPlatformPolicy[];
+ extern const char kForceWhatsNew[];
+ extern const char kHideCrashRestoreBubble[];
+ extern const char kHomePage[];
++extern const char kHsEmbedMode[];
++extern const char kHsHideToolbar[];
++extern const char kHsEmbedParentHwnd[];
++extern const char kHsProfileId[];
++extern const char kHsRuntimePipe[];
++extern const char kHsRuntimeToken[];
+ #if !BUILDFLAG(IS_ANDROID)
+ extern const char kSimulateLockScreenSmartRestart[];
+ extern const char kImportPasswords[];
+-- 
+2.54.0.windows.1
+

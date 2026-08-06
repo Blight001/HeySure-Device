@@ -1,0 +1,13 @@
+{
+  "name": "@ai-free/browser-host",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Win32 child-window host for the AI-FREE Chromium runtime",
+  "main": "index.js",
+  "gypfile": true,
+  "scripts": {
+    "build": "node-gyp rebuild",
+    "clean": "node-gyp clean",
+    "test": "node --test test/*.test.js"
+  }
+}

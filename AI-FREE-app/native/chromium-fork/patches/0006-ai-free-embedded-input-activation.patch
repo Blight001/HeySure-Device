@@ -1,0 +1,71 @@
+diff --git a/content/browser/renderer_host/legacy_render_widget_host_win.cc b/content/browser/renderer_host/legacy_render_widget_host_win.cc
+index f72a7fcc7b1d1624960fa859168bf09613894323..afcc874fe80f31549a54554825a032c30adcf48f 100644
+--- a/content/browser/renderer_host/legacy_render_widget_host_win.cc
++++ b/content/browser/renderer_host/legacy_render_widget_host_win.cc
+@@ -457,6 +457,16 @@ LRESULT LegacyRenderWidgetHostHWND::OnKeyboardRange(UINT message,
+ LRESULT LegacyRenderWidgetHostHWND::OnMouseRange(UINT message,
+                                                  WPARAM w_param,
+                                                  LPARAM l_param) {
++  if (message == WM_LBUTTONDOWN &&
++      base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
++          "hs-embed-mode") == "child-window") {
++    HWND parent = GetParent();
++    HWND focused = ::GetFocus();
++    if (parent && focused != parent &&
++        (!focused || !::IsChild(parent, focused))) {
++      ::SetFocus(parent);
++    }
++  }
+   if (message == WM_MOUSEMOVE) {
+     if (!mouse_tracking_enabled_) {
+       mouse_tracking_enabled_ = true;
+@@ -557,6 +567,19 @@ LRESULT LegacyRenderWidgetHostHWND::OnMouseLeave(UINT message,
+ LRESULT LegacyRenderWidgetHostHWND::OnMouseActivate(UINT message,
+                                                     WPARAM w_param,
+                                                     LPARAM l_param) {
++  // A reparented AI-FREE Browser HWND cannot be activated as a Win32
++  // top-level window. When the Electron owner regains foreground after a
++  // window switch, restore native focus to Chromium before forwarding the
++  // first content click so that the click itself is not lost.
++  if (base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
++          "hs-embed-mode") == "child-window") {
++    HWND parent = GetParent();
++    HWND focused = ::GetFocus();
++    if (parent && focused != parent &&
++        (!focused || !::IsChild(parent, focused))) {
++      ::SetFocus(parent);
++    }
++  }
+   // Don't pass this to DefWindowProc. That results in the WM_MOUSEACTIVATE
+   // message going all the way to the parent which then messes up state
+   // related to focused views, etc. This is because it treats this as if
+diff --git a/ui/views/win/hwnd_message_handler.cc b/ui/views/win/hwnd_message_handler.cc
+index d87a94460cda9ef38ac8ca8fe93bf9e78d194229..46b713754eef572ac94a27edba483ae140a2e564 100644
+--- a/ui/views/win/hwnd_message_handler.cc
++++ b/ui/views/win/hwnd_message_handler.cc
+@@ -15,6 +15,7 @@
+ #include <utility>
+ 
+ #include "base/auto_reset.h"
++#include "base/command_line.h"
+ #include "base/containers/heap_array.h"
+ #include "base/debug/gdi_debug_util_win.h"
+ #include "base/functional/bind.h"
+@@ -855,6 +856,17 @@ bool HWNDMessageHandler::IsVisible() const {
+ }
+ 
+ bool HWNDMessageHandler::IsActive() const {
++  // AI-FREE reparents the normal Chromium Browser HWND as a WS_CHILD owned by
++  // its native host. Win32 never treats a child HWND as the active top-level
++  // window, so use native focus as the activation signal only in the explicit
++  // AI-FREE child-window mode. Ordinary Chromium windows keep the standard
++  // GetActiveWindow() behavior below.
++  if (::GetParent(hwnd()) &&
++      base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
++          "hs-embed-mode") == "child-window") {
++    HWND focused = ::GetFocus();
++    return focused == hwnd() || (focused && ::IsChild(hwnd(), focused));
++  }
+   return ::GetActiveWindow() == hwnd();
+ }
+ 

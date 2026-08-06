@@ -1,0 +1,322 @@
+:root {
+  --panel-2: #1c2230;
+  --border: #2a3242;
+  --text: #e6e8ee;
+  --muted: #a0a7b4;
+  --accent: #4da3ff;
+
+  /* ---- shared design tokens (radius scale is theme-independent) ---- */
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-pill: 999px;
+
+  /* ---- brand accent system (flat; dark defaults, overridden for light theme) ---- */
+  --brand: #4d9cff;
+  --brand-grad: #3d8bee;          /* flat solid button fill */
+  --brand-grad-hover: #4f97f2;
+  --brand-soft: rgba(77, 163, 255, 0.12);
+  --brand-border: rgba(120, 150, 210, 0.24);
+  --brand-shadow: none;           /* flat: no coloured drop shadow */
+  --teal: #21b0a5;
+  --card-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  --content-max: 560px;           /* cap content width so it never stretches */
+}
+
+/* ------------------------------------------------------------------
+   侧边栏宽度 = 主窗口宽度的 30%（见 app-shell.js）：
+     默认窗口 1280  -> 侧栏 ≈384px（紧凑布局）
+     最大化 1920    -> 侧栏 ≈576px（放大布局）
+   断点 520px 用于区分「默认缩小」与「放大」两套布局。
+   ------------------------------------------------------------------ */
+@media (min-width: 520px) {
+  :root { --content-max: 640px; }
+}
+
+body {
+  background:
+    radial-gradient(120% 90% at 0% 0%, rgba(77, 163, 255, 0.16) 0%, rgba(77, 163, 255, 0) 58%),
+    linear-gradient(180deg, #0d121b 0%, #0a0f16 100%);
+  color: var(--text);
+}
+
+.side-panel {
+  background: rgba(21, 26, 36, 0.26);
+  color: var(--text);
+}
+
+.main-wrapper,
+.panel,
+.side-panel,
+#browser-empty-state {
+  scrollbar-color: rgba(141, 169, 255, 0.82) rgba(12, 16, 25, 0.72);
+}
+
+.main-wrapper::-webkit-scrollbar-track,
+.panel::-webkit-scrollbar-track,
+.side-panel::-webkit-scrollbar-track,
+#browser-empty-state::-webkit-scrollbar-track {
+  background: rgba(12, 16, 25, 0.72);
+}
+
+.main-wrapper::-webkit-scrollbar-thumb,
+.panel::-webkit-scrollbar-thumb,
+.side-panel::-webkit-scrollbar-thumb,
+#browser-empty-state::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(141, 169, 255, 0.96), rgba(104, 136, 236, 0.96));
+  border-color: rgba(12, 16, 25, 0.72);
+}
+
+.main-wrapper::-webkit-scrollbar-thumb:hover,
+.panel::-webkit-scrollbar-thumb:hover,
+.side-panel::-webkit-scrollbar-thumb:hover,
+#browser-empty-state::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(164, 185, 255, 1), rgba(123, 151, 242, 1));
+}
+
+.form-group label {
+  color: var(--muted);
+}
+
+.form-group input[type='text'],
+.form-group select {
+  min-height: 34px;
+  padding: 7px 10px;
+  background: rgba(16, 21, 32, 0.42);
+  border: 1px solid rgba(71, 88, 116, 0.72);
+  border-radius: 10px;
+  color: #e6edf9;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+}
+
+.form-group input[type='text']:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: rgba(77, 163, 255, 0.95);
+  box-shadow: 0 0 0 2px rgba(77, 163, 255, 0.2);
+  background: rgba(18, 25, 38, 0.62);
+}
+
+.form-group input[type='text']::placeholder {
+  color: #7d8594;
+}
+
+.side-panel select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 32px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(168, 197, 241, 0.9) 50%),
+    linear-gradient(135deg, rgba(168, 197, 241, 0.9) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) calc(50% - 2px),
+    calc(100% - 12px) calc(50% - 2px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+
+.side-panel select option {
+  background: #131b28;
+  color: #e6edf9;
+}
+
+.info-group {
+  background-color: var(--panel-2);
+  border-color: var(--border);
+}
+
+.footer,
+.footer a {
+  color: #7d8594;
+}
+
+.update-widget {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.update-widget[hidden] {
+  display: none !important;
+}
+
+.update-widget-label {
+  color: #95a5bd;
+}
+
+.update-widget-text {
+  color: #dbe7fb;
+}
+
+.update-widget-ring::before {
+  background: conic-gradient(from 180deg, #4da3ff 0 var(--update-progress, 0%), rgba(77, 163, 255, 0.12) var(--update-progress, 0%) 100%);
+}
+
+.update-widget-ring-fill {
+  background: rgba(20, 25, 37, 0.96);
+  box-shadow: inset 0 0 0 1px rgba(77, 163, 255, 0.14);
+}
+
+.update-widget-percent {
+  color: #8bc0ff;
+}
+
+.account-item {
+  background-color: var(--panel-2);
+  border-color: var(--border);
+}
+
+.account-item:hover {
+  background-color: #1f2636;
+  border-color: var(--accent);
+}
+
+.account-item.active {
+  background-color: rgba(65, 184, 98, 0.14);
+  border-color: rgba(65, 184, 98, 0.32);
+}
+
+.account-item.opened {
+  background-color: rgba(64, 158, 255, 0.12);
+  border-color: rgba(64, 158, 255, 0.26);
+}
+
+.account-item.opened.active {
+  background-color: rgba(65, 184, 98, 0.14);
+  border-color: rgba(65, 184, 98, 0.32);
+}
+
+.account-item.selected {
+  background-color: rgba(217, 76, 76, 0.12);
+  border-color: rgba(217, 76, 76, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(217, 76, 76, 0.16);
+}
+
+.account-name {
+  color: var(--text);
+}
+
+.account-meta,
+.account-empty {
+  color: var(--muted);
+}
+
+.account-item.opened .account-name,
+.account-item.opened .account-meta {
+  color: #8bbcff;
+}
+
+.account-item.active .account-name,
+.account-item.active .account-meta {
+  color: #b9efc8;
+}
+
+.account-item.opened.active .account-name,
+.account-item.opened.active .account-meta {
+  color: #b9efc8;
+}
+
+.account-item.selected .account-name,
+.account-item.selected .account-meta,
+.account-item.selected .account-empty {
+  color: #ff9f9f;
+}
+
+.context-menu {
+  background: #141923;
+  border-color: var(--border);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+
+.context-menu button {
+  color: var(--text);
+}
+
+.context-menu button:hover {
+  background: #1f2736;
+}
+
+.account-context-menu-hint {
+  color: var(--muted);
+}
+
+.account-context-menu {
+  border-color: rgba(77, 163, 255, 0.2);
+  background: linear-gradient(180deg, rgba(20, 25, 35, 0.98), rgba(28, 35, 48, 0.98));
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.42);
+}
+
+.account-context-menu .account-context-menu-item {
+  background: rgba(77, 163, 255, 0.12);
+  color: var(--text);
+}
+
+.account-context-menu .account-context-menu-item:hover:not(:disabled) {
+  background: rgba(77, 163, 255, 0.2);
+}
+
+.modal-content {
+  background: #141923;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-header h3,
+#server-message-content {
+  color: var(--text);
+}
+
+.modal-prompt-input {
+  border-color: #3f4a5c;
+  color: #eef3fb;
+  background: #171d27;
+}
+html.theme-light .modal-prompt-input {
+  border-color: #d4d9e0;
+  color: #263445;
+  background: #fff;
+}
+
+.modal-close-btn {
+  color: var(--muted);
+}
+
+.modal-close-btn:hover {
+  color: var(--text);
+}
+
+.modal-actions .btn-gray {
+  background-color: #1a2030;
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.modal-actions .btn-gray:hover {
+  background-color: #242b3c;
+}
+
+.announcement-bar {
+  background-color: var(--panel-2);
+  border-color: var(--border);
+}
+
+.announcement-header {
+  background-color: #1a2030;
+  border-bottom-color: var(--border);
+}
+
+.announcement-title,
+.announcement-content {
+  color: var(--text);
+}
+
+.announcement-content p {
+  color: var(--muted);
+}

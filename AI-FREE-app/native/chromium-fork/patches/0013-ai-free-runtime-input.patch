@@ -1,0 +1,157 @@
+diff --git a/chrome/browser/ui/views/frame/ai_free_runtime_bridge_win.cc b/chrome/browser/ui/views/frame/ai_free_runtime_bridge_win.cc
+--- a/chrome/browser/ui/views/frame/ai_free_runtime_bridge_win.cc
++++ b/chrome/browser/ui/views/frame/ai_free_runtime_bridge_win.cc
+@@ -44,6 +44,7 @@
+ #include "content/public/browser/browser_thread.h"
+ #include "content/public/browser/navigation_controller.h"
+ #include "content/public/browser/render_frame_host.h"
++#include "content/public/browser/render_widget_host.h"
+ #include "content/public/browser/storage_partition.h"
+ #include "content/public/browser/web_contents.h"
+ #include "content/public/browser/web_contents_observer.h"
+@@ -55,6 +56,10 @@
+ #include "net/cookies/cookie_options.h"
+ #include "services/network/public/mojom/cookie_manager.mojom.h"
++#include "third_party/blink/public/common/input/web_input_event.h"
++#include "third_party/blink/public/common/input/web_mouse_event.h"
+ #include "ui/base/page_transition_types.h"
++#include "ui/events/event_utils.h"
++#include "ui/gfx/geometry/rect.h"
+ #include "url/gurl.h"
+ #include "url/origin.h"
+ 
+@@ -64,6 +69,7 @@ constexpr uint32_t kMaximumFrameBytes = 4 * 1024 * 1024;
+ constexpr int kDefaultHeartbeatIntervalMs = 3000;
+ constexpr size_t kMaximumCookies = 2048;
+ constexpr size_t kMaximumStorageKeys = 4096;
++constexpr double kMaximumViewportCoordinate = 1000000.0;
+ std::atomic<bool> g_bridge_started = false;
+ 
+ enum class ReadFrameResult { kOk, kClosed, kTooLarge, kInvalidLength };
+@@ -509,6 +515,116 @@ std::optional<double> FindNumeric(const base::DictValue& dict,
+   return std::nullopt;
+ }
+ 
++bool IsValidViewportValue(const std::optional<double>& value) {
++  return value.has_value() && *value >= 0.0 &&
++         *value <= kMaximumViewportCoordinate;
++}
++
++blink::WebMouseEvent BuildMouseEvent(
++    blink::WebInputEvent::Type type,
++    blink::WebMouseEvent::Button button,
++    int modifiers,
++    int click_count,
++    float x,
++    float y,
++    const gfx::Rect& container_bounds) {
++  blink::WebMouseEvent event(type, modifiers, ui::EventTimeForNow());
++  event.button = button;
++  event.click_count = click_count;
++  event.pointer_type = blink::WebPointerProperties::PointerType::kMouse;
++  event.SetPositionInWidget(x, y);
++  event.SetPositionInScreen(container_bounds.x() + x,
++                            container_bounds.y() + y);
++  return event;
++}
++
++void DispatchMouseSequence(content::RenderWidgetHost* widget,
++                           const gfx::Rect& container_bounds,
++                           float x,
++                           float y,
++                           blink::WebMouseEvent::Button button,
++                           int click_count) {
++  const int button_modifier =
++      button == blink::WebMouseEvent::Button::kRight
++          ? blink::WebInputEvent::kRightButtonDown
++          : blink::WebInputEvent::kLeftButtonDown;
++  const int modifiers = blink::WebInputEvent::kFromDebugger | button_modifier;
++  for (int current_click = 1; current_click <= click_count; ++current_click) {
++    widget->ForwardMouseEvent(BuildMouseEvent(
++        blink::WebInputEvent::Type::kMouseDown, button, modifiers,
++        current_click, x, y, container_bounds));
++    widget->ForwardMouseEvent(BuildMouseEvent(
++        blink::WebInputEvent::Type::kMouseUp, button, modifiers,
++        current_click, x, y, container_bounds));
++  }
++}
++
++void HandleDispatchInput(scoped_refptr<BridgeConnection> connection,
++                         content::WebContents* web_contents,
++                         const base::DictValue& command,
++                         const std::string& request_id) {
++  const std::string* input_type = command.FindString("inputType");
++  const std::string* action = command.FindString("action");
++  const std::optional<double> x = FindNumeric(command, "x");
++  const std::optional<double> y = FindNumeric(command, "y");
++  const std::optional<double> viewport_width =
++      FindNumeric(command, "viewportWidth");
++  const std::optional<double> viewport_height =
++      FindNumeric(command, "viewportHeight");
++  const bool action_valid = action &&
++      (*action == "click" || *action == "double_click" ||
++       *action == "right_click");
++  const bool point_valid = IsValidViewportValue(x) &&
++      IsValidViewportValue(y) && IsValidViewportValue(viewport_width) &&
++      IsValidViewportValue(viewport_height) && *viewport_width > 0.0 &&
++      *viewport_height > 0.0 && *x < *viewport_width &&
++      *y < *viewport_height;
++  if (!input_type || *input_type != "mouse" || !action_valid ||
++      !point_valid) {
++    return connection->SendErrorAsync(
++        request_id, "dispatch-input", "INPUT_PAYLOAD_INVALID",
++        "dispatch-input 需要有效鼠标动作、视口坐标和视口尺寸");
++  }
++
++  content::RenderFrameHost* frame = web_contents->GetPrimaryMainFrame();
++  content::RenderWidgetHost* widget =
++      frame ? frame->GetRenderWidgetHost() : nullptr;
++  if (!widget || !widget->GetView()) {
++    return connection->SendErrorAsync(
++        request_id, "dispatch-input", "INPUT_TARGET_UNAVAILABLE",
++        "活动页面的输入目标不可用");
++  }
++
++  const gfx::Rect container_bounds = web_contents->GetContainerBounds();
++  const float widget_x = static_cast<float>(
++      *x * container_bounds.width() / *viewport_width);
++  const float widget_y = static_cast<float>(
++      *y * container_bounds.height() / *viewport_height);
++  const bool right_click = *action == "right_click";
++  const int click_count = *action == "double_click" ? 2 : 1;
++  const blink::WebMouseEvent::Button button = right_click
++      ? blink::WebMouseEvent::Button::kRight
++      : blink::WebMouseEvent::Button::kLeft;
++
++  widget->Focus();
++  widget->ForwardMouseEvent(BuildMouseEvent(
++      blink::WebInputEvent::Type::kMouseMove,
++      blink::WebMouseEvent::Button::kNoButton,
++      blink::WebInputEvent::kFromDebugger, 0, widget_x, widget_y,
++      container_bounds));
++  DispatchMouseSequence(widget, container_bounds, widget_x, widget_y, button,
++                        click_count);
++
++  base::DictValue result;
++  result.Set("dispatched", true);
++  result.Set("inputType", "mouse");
++  result.Set("action", *action);
++  result.Set("x", *x);
++  result.Set("y", *y);
++  connection->SendSuccessAsync(request_id, "dispatch-input",
++                               std::move(result));
++}
++
+ void HandleSetCookies(scoped_refptr<BridgeConnection> connection,
+                       Browser* browser,
+                       const base::DictValue& command,
+@@ -684,6 +800,9 @@ void HandleCommandOnUi(scoped_refptr<BridgeConnection> connection,
+     web_contents->GetController().Reload(content::ReloadType::NORMAL, true);
+     return;
+   }
++  if (command_name == "dispatch-input") {
++    return HandleDispatchInput(connection, web_contents, command, request);
++  }
+   if (command_name == "set-cookies") {
+     return HandleSetCookies(connection, browser, command, request);
+   }

@@ -1,0 +1,437 @@
+diff --git a/chrome/browser/ui/BUILD.gn b/chrome/browser/ui/BUILD.gn
+index eac375a5..4b380b3f 100644
+--- a/chrome/browser/ui/BUILD.gn
++++ b/chrome/browser/ui/BUILD.gn
+@@ -3308,6 +3308,8 @@ static_library("ui") {
+       "views/frame/ai_free_runtime_bridge_win.h",
+       "views/frame/ai_free_page_automation.cc",
+       "views/frame/ai_free_page_automation.h",
++      "views/frame/ai_free_observe_highlight.cc",
++      "views/frame/ai_free_observe_highlight.h",
+       "views/frame/ai_free_automation_pointer.cc",
+       "views/frame/ai_free_automation_pointer.h",
+       "views/frame/browser_caption_button_container_win.cc",
+diff --git a/chrome/browser/ui/views/frame/ai_free_observe_highlight.cc b/chrome/browser/ui/views/frame/ai_free_observe_highlight.cc
+new file mode 100644
+index 00000000..40741d99
+--- /dev/null
++++ b/chrome/browser/ui/views/frame/ai_free_observe_highlight.cc
+@@ -0,0 +1,307 @@
++// Copyright 2026 AI-FREE Authors. All rights reserved.
++
++#include "chrome/browser/ui/views/frame/ai_free_observe_highlight.h"
++
++#include <algorithm>
++#include <map>
++#include <memory>
++#include <string>
++#include <string_view>
++#include <utility>
++#include <vector>
++
++#include "base/functional/bind.h"
++#include "base/memory/raw_ptr.h"
++#include "base/no_destructor.h"
++#include "base/strings/utf_string_conversions.h"
++#include "base/task/sequenced_task_runner.h"
++#include "base/timer/timer.h"
++#include "cc/paint/paint_flags.h"
++#include "chrome/browser/ui/browser_finder.h"
++#include "chrome/browser/ui/views/frame/browser_view.h"
++#include "chrome/browser/ui/views/frame/contents_web_view.h"
++#include "content/public/browser/navigation_handle.h"
++#include "content/public/browser/visibility.h"
++#include "content/public/browser/web_contents.h"
++#include "ui/compositor/layer.h"
++#include "ui/gfx/canvas.h"
++#include "ui/gfx/font_list.h"
++#include "ui/gfx/geometry/rect_f.h"
++#include "ui/views/view.h"
++#include "ui/views/view_class_properties.h"
++#include "ui/views/view_observer.h"
++
++namespace {
++
++constexpr size_t kMaximumHighlightCount = 120;
++
++struct HighlightMark {
++  gfx::RectF rect;
++  std::u16string label;
++  SkColor color = SkColorSetRGB(37, 99, 235);
++};
++
++SkColor ColorForKind(std::string_view kind) {
++  if (kind == "interactive") {
++    return SkColorSetRGB(22, 163, 74);
++  }
++  if (kind == "media") {
++    return SkColorSetRGB(217, 119, 6);
++  }
++  return SkColorSetRGB(37, 99, 235);
++}
++
++class ObserveHighlightOverlay : public views::View {
++ public:
++  ObserveHighlightOverlay() {
++    SetCanProcessEventsWithinSubtree(false);
++    SetProperty(views::kViewIgnoredByLayoutKey, true);
++    SetPaintToLayer();
++    layer()->SetFillsBoundsOpaquely(false);
++  }
++
++  void SetMarks(std::vector<HighlightMark> marks,
++                float viewport_width,
++                float viewport_height) {
++    marks_ = std::move(marks);
++    viewport_width_ = std::max(1.0f, viewport_width);
++    viewport_height_ = std::max(1.0f, viewport_height);
++    SetVisible(!marks_.empty());
++    SchedulePaint();
++  }
++
++  void OnPaint(gfx::Canvas* canvas) override {
++    const float scale_x = width() / viewport_width_;
++    const float scale_y = height() / viewport_height_;
++    for (const HighlightMark& mark : marks_) {
++      PaintMark(canvas, mark, scale_x, scale_y);
++    }
++  }
++
++ private:
++  void PaintMark(gfx::Canvas* canvas,
++                 const HighlightMark& mark,
++                 float scale_x,
++                 float scale_y) {
++    gfx::RectF rect(mark.rect.x() * scale_x, mark.rect.y() * scale_y,
++                    mark.rect.width() * scale_x,
++                    mark.rect.height() * scale_y);
++    rect.Intersect(gfx::RectF(GetLocalBounds()));
++    if (rect.width() < 2 || rect.height() < 2) {
++      return;
++    }
++    rect.Inset(1.0f);
++    cc::PaintFlags flags;
++    flags.setAntiAlias(true);
++    flags.setStyle(cc::PaintFlags::kStroke_Style);
++    flags.setStrokeWidth(2.0f);
++    flags.setColor(mark.color);
++    canvas->DrawRoundRect(rect, 4.0f, flags);
++    PaintLabel(canvas, mark, rect);
++  }
++
++  void PaintLabel(gfx::Canvas* canvas,
++                  const HighlightMark& mark,
++                  const gfx::RectF& rect) {
++    if (mark.label.empty()) {
++      return;
++    }
++    const int label_width =
++        std::clamp(static_cast<int>(mark.label.size()) * 7 + 8, 24, 56);
++    const int label_y = std::max(0, static_cast<int>(rect.y()) - 17);
++    gfx::Rect label_rect(static_cast<int>(rect.x()), label_y, label_width, 17);
++    cc::PaintFlags background;
++    background.setAntiAlias(true);
++    background.setStyle(cc::PaintFlags::kFill_Style);
++    background.setColor(SkColorSetA(mark.color, 230));
++    canvas->DrawRoundRect(gfx::RectF(label_rect), 3.0f, background);
++    canvas->DrawStringRectWithFlags(
++        mark.label, gfx::FontList(), SK_ColorWHITE, label_rect,
++        gfx::Canvas::TEXT_ALIGN_CENTER | gfx::Canvas::NO_SUBPIXEL_RENDERING);
++  }
++
++  std::vector<HighlightMark> marks_;
++  float viewport_width_ = 1.0f;
++  float viewport_height_ = 1.0f;
++};
++
++class HighlightSession;
++using SessionMap =
++    std::map<content::WebContents*, std::unique_ptr<HighlightSession>>;
++SessionMap& Sessions();
++
++class HighlightSession : public content::WebContentsObserver,
++                         public views::ViewObserver {
++ public:
++  explicit HighlightSession(content::WebContents* contents)
++      : content::WebContentsObserver(contents), observed_contents_(contents) {}
++
++  ~HighlightSession() override { DetachOverlay(); }
++
++  int Show(const base::DictValue& result, base::TimeDelta duration) {
++    std::vector<HighlightMark> marks = ParseMarks(result);
++    if (marks.empty() || !AttachOverlay()) {
++      Clear();
++      return 0;
++    }
++    const base::DictValue* viewport = result.FindDict("viewport");
++    if (!viewport) {
++      Clear();
++      return 0;
++    }
++    const float viewport_width =
++        static_cast<float>(viewport->FindInt("width").value_or(1));
++    const float viewport_height =
++        static_cast<float>(viewport->FindInt("height").value_or(1));
++    const int count = static_cast<int>(marks.size());
++    overlay_->SetMarks(std::move(marks), viewport_width, viewport_height);
++    refresh_timer_.Start(
++        FROM_HERE, base::Milliseconds(100),
++        base::BindRepeating(&HighlightSession::RefreshBounds,
++                            base::Unretained(this)));
++    hide_timer_.Start(FROM_HERE, duration,
++                      base::BindOnce(&HighlightSession::Clear,
++                                     base::Unretained(this)));
++    return count;
++  }
++
++  void Clear() {
++    hide_timer_.Stop();
++    refresh_timer_.Stop();
++    if (overlay_) {
++      overlay_->SetVisible(false);
++    }
++  }
++
++  void DidFinishNavigation(
++      content::NavigationHandle* navigation_handle) override {
++    if (navigation_handle->HasCommitted() &&
++        navigation_handle->IsInPrimaryMainFrame()) {
++      Clear();
++    }
++  }
++
++  void OnVisibilityChanged(content::Visibility visibility) override {
++    if (visibility == content::Visibility::HIDDEN) {
++      Clear();
++    }
++  }
++
++  void WebContentsDestroyed() override {
++    content::WebContents* key = observed_contents_;
++    Clear();
++    base::SequencedTaskRunner::GetCurrentDefault()->PostTask(
++        FROM_HERE,
++        base::BindOnce([](content::WebContents* key) { Sessions().erase(key); },
++                       key));
++  }
++
++  void OnViewIsDeleting(views::View* observed) override {
++    if (observed == overlay_) {
++      overlay_ = nullptr;
++      Clear();
++    }
++  }
++
++ private:
++  std::vector<HighlightMark> ParseMarks(const base::DictValue& result) {
++    std::vector<HighlightMark> marks;
++    const base::ListValue* items = result.FindList("items");
++    if (!items) {
++      return marks;
++    }
++    for (const base::Value& item_value : *items) {
++      const base::DictValue* item = item_value.GetIfDict();
++      if (!item || marks.size() >= kMaximumHighlightCount) {
++        break;
++      }
++      const int width = item->FindInt("width").value_or(0);
++      const int height = item->FindInt("height").value_or(0);
++      if (width < 1 || height < 1) {
++        continue;
++      }
++      const std::string* id = item->FindString("id");
++      const std::string* kind = item->FindString("kind");
++      marks.push_back(
++          {gfx::RectF(item->FindInt("x").value_or(0),
++                      item->FindInt("y").value_or(0), width, height),
++           base::UTF8ToUTF16(id ? *id : ""), ColorForKind(kind ? *kind : "")});
++    }
++    return marks;
++  }
++
++  bool AttachOverlay() {
++    BrowserView* browser_view = CurrentBrowserView();
++    if (!browser_view || !browser_view->contents_web_view()) {
++      return false;
++    }
++    if (overlay_ && overlay_->parent() != browser_view) {
++      DetachOverlay();
++    }
++    if (!overlay_) {
++      std::unique_ptr<views::View> overlay =
++          std::make_unique<ObserveHighlightOverlay>();
++      overlay_ = static_cast<ObserveHighlightOverlay*>(
++          browser_view->AddChildView(std::move(overlay)));
++      overlay_->AddObserver(this);
++    }
++    RefreshBounds();
++    return true;
++  }
++
++  void RefreshBounds() {
++    BrowserView* browser_view = CurrentBrowserView();
++    if (!overlay_ || !browser_view || overlay_->parent() != browser_view) {
++      return Clear();
++    }
++    views::View* web_view = browser_view->contents_web_view();
++    overlay_->SetBoundsRect(views::View::ConvertRectToTarget(
++        web_view, browser_view, web_view->GetLocalBounds()));
++  }
++
++  BrowserView* CurrentBrowserView() const {
++    return BrowserView::GetBrowserViewForBrowser(
++        chrome::FindBrowserWithTab(web_contents()));
++  }
++
++  void DetachOverlay() {
++    Clear();
++    if (!overlay_) {
++      return;
++    }
++    overlay_->RemoveObserver(this);
++    if (overlay_->parent()) {
++      overlay_->parent()->RemoveChildViewT(overlay_);
++    }
++    overlay_ = nullptr;
++  }
++
++  raw_ptr<content::WebContents> observed_contents_ = nullptr;
++  raw_ptr<ObserveHighlightOverlay> overlay_ = nullptr;
++  base::RepeatingTimer refresh_timer_;
++  base::OneShotTimer hide_timer_;
++};
++
++SessionMap& Sessions() {
++  static base::NoDestructor<SessionMap> sessions;
++  return *sessions;
++}
++
++}  // namespace
++
++int ShowAiFreeObserveHighlights(content::WebContents* web_contents,
++                                const base::DictValue& observe_result,
++                                base::TimeDelta duration) {
++  auto [it, inserted] = Sessions().try_emplace(web_contents);
++  if (inserted) {
++    it->second = std::make_unique<HighlightSession>(web_contents);
++  }
++  return it->second->Show(observe_result, duration);
++}
++
++void ClearAiFreeObserveHighlights(content::WebContents* web_contents) {
++  auto it = Sessions().find(web_contents);
++  if (it != Sessions().end()) {
++    it->second->Clear();
++  }
++}
+diff --git a/chrome/browser/ui/views/frame/ai_free_observe_highlight.h b/chrome/browser/ui/views/frame/ai_free_observe_highlight.h
+new file mode 100644
+index 00000000..b7acfa33
+--- /dev/null
++++ b/chrome/browser/ui/views/frame/ai_free_observe_highlight.h
+@@ -0,0 +1,22 @@
++// Copyright 2026 AI-FREE Authors. All rights reserved.
++
++#ifndef CHROME_BROWSER_UI_VIEWS_FRAME_AI_FREE_OBSERVE_HIGHLIGHT_H_
++#define CHROME_BROWSER_UI_VIEWS_FRAME_AI_FREE_OBSERVE_HIGHLIGHT_H_
++
++#include "base/time/time.h"
++#include "base/values.h"
++
++namespace content {
++class WebContents;
++}
++
++// Draws event-transparent element borders in Chromium's Views layer. The
++// overlay is outside the page DOM and therefore cannot be observed by page
++// scripts. Returns the number of accepted visible marks.
++int ShowAiFreeObserveHighlights(content::WebContents* web_contents,
++                                const base::DictValue& observe_result,
++                                base::TimeDelta duration);
++
++void ClearAiFreeObserveHighlights(content::WebContents* web_contents);
++
++#endif  // CHROME_BROWSER_UI_VIEWS_FRAME_AI_FREE_OBSERVE_HIGHLIGHT_H_
+diff --git a/chrome/browser/ui/views/frame/ai_free_page_automation.cc b/chrome/browser/ui/views/frame/ai_free_page_automation.cc
+index 92dd8507..a5814732 100644
+--- a/chrome/browser/ui/views/frame/ai_free_page_automation.cc
++++ b/chrome/browser/ui/views/frame/ai_free_page_automation.cc
+@@ -19,6 +19,7 @@
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/ui/browser.h"
+ #include "chrome/browser/ui/views/frame/ai_free_automation_pointer.h"
++#include "chrome/browser/ui/views/frame/ai_free_observe_highlight.h"
+ #include "chrome/common/chrome_isolated_world_ids.h"
+ #include "components/input/native_web_keyboard_event.h"
+ #include "components/viz/common/frame_sinks/copy_output_result.h"
+@@ -193,16 +194,35 @@ bool DispatchScroll(content::WebContents* contents,
+   return true;
+ }
+ 
+-void OnScriptResult(AiFreeAutomationSuccess success,
+-                    AiFreeAutomationFailure failure,
+-                    std::string error_code,
+-                    base::Value value) {
++void OnObserveResult(content::GlobalRenderFrameHostId frame_id,
++                     bool show_highlights,
++                     int highlight_duration_ms,
++                     AiFreeAutomationSuccess success,
++                     AiFreeAutomationFailure failure,
++                     base::Value value) {
+   const base::DictValue* result = value.GetIfDict();
+   if (!result) {
+-    return Fail(std::move(failure), std::move(error_code),
+-                "Chromium 页面脚本未返回对象");
++    return Fail(std::move(failure), "OBSERVE_FAILED",
++                "Chromium 页面观察未返回对象");
++  }
++  base::DictValue response = result->Clone();
++  content::RenderFrameHost* frame = content::RenderFrameHost::FromID(frame_id);
++  content::WebContents* contents =
++      frame ? content::WebContents::FromRenderFrameHost(frame) : nullptr;
++  if (!contents || !result->FindBool("success").value_or(false)) {
++    return std::move(success).Run(std::move(response));
++  }
++  int highlighted_count = 0;
++  if (show_highlights) {
++    highlighted_count = ShowAiFreeObserveHighlights(
++        contents, *result, base::Milliseconds(highlight_duration_ms));
++  } else {
++    ClearAiFreeObserveHighlights(contents);
+   }
+-  std::move(success).Run(result->Clone());
++  response.Set("highlightMode", "chromium-native-overlay");
++  response.Set("highlightedCount", highlighted_count);
++  response.Set("highlightDurationMs", highlight_duration_ms);
++  std::move(success).Run(std::move(response));
+ }
+ 
+ void OnMouseDispatched(AiFreeAutomationSuccess success,
+@@ -436,9 +456,17 @@ bool HandleAiFreePageAutomationCommand(Browser* browser,
+     return false;
+   }
+   if (*type == "observe-page") {
++    const content::GlobalRenderFrameHostId frame_id =
++        web_contents->GetPrimaryMainFrame()->GetGlobalId();
++    const bool show_highlights =
++        command.FindBool("showHighlights").value_or(true);
++    const int highlight_duration_ms =
++        std::clamp(command.FindInt("highlightDurationMs").value_or(5000), 500,
++                   30000);
+     ExecuteIsolated(web_contents, ObserveScript(command),
+-                    base::BindOnce(&OnScriptResult, std::move(success),
+-                                   std::move(failure), "OBSERVE_FAILED"));
++                    base::BindOnce(&OnObserveResult, frame_id, show_highlights,
++                                   highlight_duration_ms, std::move(success),
++                                   std::move(failure)));
+     return true;
+   }
+   if (*type == "perform-action") {
+@@ -453,6 +481,7 @@ bool HandleAiFreePageAutomationCommand(Browser* browser,
+       return true;
+     }
+     if (action == "scroll") {
++      ClearAiFreeObserveHighlights(web_contents);
+       base::DictValue result;
+       result.Set("success", DispatchScroll(web_contents, command));
+       result.Set("action", action);

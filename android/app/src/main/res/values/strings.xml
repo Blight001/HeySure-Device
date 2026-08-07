@@ -11,7 +11,7 @@
     <string name="card_mcp">Android MCP 工具</string>
     <string name="card_account_info">账号信息</string>
 
-    <string name="server_url_hint">服务器地址，如 http://192.168.1.10:3000</string>
+    <string name="server_url_hint">服务器地址，如 http://192.168.1.10:58150（也兼容 :3000）</string>
     <string name="account_hint">账号</string>
     <string name="password_hint">密码</string>
     <string name="login">登录并连接</string>

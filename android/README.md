@@ -8,31 +8,36 @@ Android App 同时承担两个彼此独立、可并行运行的角色：
    长按、系统导航、文本输入、截屏和录屏；切换到控制台或退到后台时仍由前台服务保活。
 
 启动 App 默认进入数字社会控制台。首次使用或登录态失效时自动进入原生 Agent 登录/授权页；
-控制台右下角的「设备」悬浮入口可随时返回 Agent 设置。
+控制台的「设备」入口是可拖拽气泡：松手后吸附最近的左右边缘并半收起；点击先展开，
+再次点击进入 Agent 设置，避免固定遮挡网页内容。
 
 ## 控制台源码复用与性能方案
 
 ```text
-web/src + web/game（唯一 UI 源码）
+deploy/web/src + deploy/web/game（唯一 UI 源码）
        │ npm run build（Gradle 自动触发、支持增量）
        ▼
 app/build/generated/heysureWebAssets/web
-       │ APK assets，本机读取 JS/CSS/图片/音频
+       │ APK assets，断网时兜底读取 JS/CSS/图片/音频
        ▼
 ConsoleActivity / Android System WebView（硬件加速）
        │ 页面 Origin 保持为用户配置的 serverUrl
        ├── /api、/socket.io、WebRTC ──► HeySure Server
-       └── /assets、/game/       ──► APK 本地资源拦截
+       └── 页面与 /assets、/game/ ──► Web 服务器（APK 断网兜底）
 ```
 
 - 控制台、聊天和「社会显示」继续使用 Web 已有的响应式布局；移动端仍是「控制台 / 社会显示」
   双 Tab，不维护 Android 专属 Vue 组件。
 - 页面 Origin 仍是服务器地址，现有相对 REST 路径、Socket.IO、WebRTC、头像和临时图片契约
   无需分叉，也没有 `file://` 跨域问题。
-- JS/CSS/Phaser 和静态媒体从 APK 本机读取，避免浏览器首次访问时的资源下载与重复网络握手；
-  WebView 开启硬件合成、DOM Storage、本地缓存、预渲染和触摸设备的 Web 性能降级规则。
+- App 在前台时每分钟比较服务器入口页版本，回到前台会立即检查；只有检测到新部署时才刷新，
+  避免打断正在进行的聊天。JS/CSS 使用 Vite 内容哈希与 WebView 缓存，断网时整套切回 APK
+  内置页面和配套资源，避免新旧资源混用。
+- 登录地址建议填写 Web 入口（默认 `:58150`）；如果历史配置填写的是直连 API Gateway
+  `:3000`，App 会自动使用同主机的 `:58150` 加载控制台，API 与 Socket 连接配置不受影响。
 - 「社会显示」仍按 Web 端既有逻辑在首次切换 Tab 时才加载 Phaser，隐藏后暂停渲染循环。
-- 网页更新后重新构建 APK 即会同步最新源码；`web/dist` 和生成的 Android assets 都不是手工维护源。
+- 网页部署更新后，已安装 App 会自动检测并载入；重新构建 APK 仍会同步最新离线兜底源码。
+  `web/dist` 和生成的 Android assets 都不是手工维护源。
 
 > 方案选型：**手机上的原生 Kotlin App**（自包含 endpoint），不依赖电脑/ADB/root。
 > 这与桌面壳"壳运行在它所控制的设备上"的心智模型一致。点击/滑动用
@@ -93,7 +98,7 @@ app/src/main/java/ai/heysure/agent/
 ## 构建与运行
 
 ```bash
-# 需要 JDK 17、Android SDK、Node.js/npm。Gradle 会从同一工作区的 ../../web 自动构建控制台。
+# 需要 JDK 17、Android SDK、Node.js/npm。Gradle 会从同一工作区的 ../../deploy/web 自动构建控制台。
 # 推荐：用 Android Studio 打开 device/android 并构建/运行到真机。
 # 命令行方式（首次需生成 wrapper 脚本/jar，仓库只 pin 了版本 gradle-wrapper.properties）：
 cd device/android
@@ -105,8 +110,8 @@ build-apk.bat debug
 ```
 
 Gradle 任务关系为 `preBuild → syncHeySureWeb → buildHeySureWeb → npm run build`。当 `web/`
-源码和配置没有变化时会命中 Gradle up-to-date，不会重复构建；缺少 `web/node_modules` 时会先
-执行 `npm ci`。因此日常 UI 修改应直接在 `web/src` 或 `web/game` 完成，不要在 Android 中
+源码和配置没有变化时会命中 Gradle up-to-date，不会重复构建；缺少 `deploy/web/node_modules` 时会先
+执行 `npm ci`。因此日常 UI 修改应直接在 `deploy/web/src` 或 `deploy/web/game` 完成，不要在 Android 中
 新建一套显示组件。
 
 原生 Agent 设置页沿用深色靛紫风格（卡片式 + 顶部状态点：绿=已注册 / 黄=连接中 / 红=未连接），

@@ -12,7 +12,10 @@ import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
@@ -37,6 +40,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import java.security.MessageDigest
+import kotlin.math.abs
 
 /**
  * Full-screen Android host for the shared web digital-society console.
@@ -53,8 +60,22 @@ class ConsoleActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var loading: ProgressBar
     private lateinit var loadingText: TextView
+    private lateinit var agentButton: TextView
     private var loadedSessionKey = ""
     private var fileChooser: ValueCallback<Array<Uri>>? = null
+    private val updateHandler = Handler(Looper.getMainLooper())
+    @Volatile private var liveIndexSignature: String? = null
+    @Volatile private var useBundledFallback = false
+    private var updateCheckRunning = false
+    private var agentButtonExpanded = false
+    private var agentButtonDockedLeft = false
+
+    private val updateCheck = object : Runnable {
+        override fun run() {
+            checkForWebUpdate()
+            updateHandler.postDelayed(this, WEB_UPDATE_CHECK_INTERVAL_MS)
+        }
+    }
 
     private val filePicker = registerForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments(),
@@ -90,6 +111,7 @@ class ConsoleActivity : AppCompatActivity() {
                 }
                 AgentService.start(this@ConsoleActivity)
                 loadConsole(force = true)
+                startWebUpdateChecks()
             }
             return
         }
@@ -113,6 +135,7 @@ class ConsoleActivity : AppCompatActivity() {
                     AgentService.start(this@ConsoleActivity)
                     loadConsole(force = true)
                     webView.onResume()
+                    startWebUpdateChecks()
                 }
                 return
             }
@@ -122,6 +145,7 @@ class ConsoleActivity : AppCompatActivity() {
         AgentService.start(this)
         loadConsole(force = false)
         webView.onResume()
+        startWebUpdateChecks()
     }
 
     /** Best-effort token refresh so the embedded web console keeps a live JWT. */
@@ -157,11 +181,13 @@ class ConsoleActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
+        updateHandler.removeCallbacks(updateCheck)
         if (::webView.isInitialized) webView.onPause()
         super.onPause()
     }
 
     override fun onDestroy() {
+        updateHandler.removeCallbacks(updateCheck)
         fileChooser?.onReceiveValue(null)
         fileChooser = null
         if (::webView.isInitialized) {
@@ -216,28 +242,35 @@ class ConsoleActivity : AppCompatActivity() {
             ).apply { topMargin = dp(74) },
         )
 
-        val agentButton = TextView(this).apply {
+        agentButton = TextView(this).apply {
             text = "设备"
             gravity = Gravity.CENTER
             setTextColor(ContextCompat.getColor(this@ConsoleActivity, R.color.text))
             textSize = 12f
             background = ContextCompat.getDrawable(this@ConsoleActivity, R.drawable.pill_bg)
             elevation = dp(6).toFloat()
-            setPadding(dp(15), 0, dp(15), 0)
-            contentDescription = "打开 Android Agent 设置"
-            setOnClickListener { openAgentSettings(closeConsole = false) }
+            contentDescription = "展开设备入口"
+            setOnClickListener {
+                if (agentButtonExpanded) {
+                    openAgentSettings(closeConsole = false)
+                } else {
+                    expandAgentButton()
+                }
+            }
+            installAgentButtonDrag(this)
         }
         root.addView(
             agentButton,
             FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
+                dp(AGENT_BUTTON_COLLAPSED_SIZE_DP),
                 dp(42),
-                Gravity.END or Gravity.BOTTOM,
-            ).apply {
-                marginEnd = dp(14)
-                bottomMargin = dp(82)
-            },
+                Gravity.START or Gravity.TOP,
+            ),
         )
+        root.post {
+            agentButton.y = (root.height - agentButton.height - dp(82)).coerceAtLeast(0).toFloat()
+            collapseAgentButton(dockLeft = false)
+        }
         setContentView(root)
 
         with(webView.settings) {
@@ -287,12 +320,134 @@ class ConsoleActivity : AppCompatActivity() {
     }
 
     private fun loadConsole(force: Boolean) {
-        val baseUrl = ServerApi.normalizeBaseUrl(settings.serverUrl)
+        val baseUrl = consoleBaseUrl()
         val sessionKey = "$baseUrl\n${settings.authToken}"
         if (!force && sessionKey == loadedSessionKey) return
         loadedSessionKey = sessionKey
+        useBundledFallback = false
         showLoading(true)
-        webView.loadUrl("${baseUrl.trimEnd('/')}/")
+        val cacheBuster = if (force) "?heysure_refresh=${System.currentTimeMillis()}" else ""
+        webView.loadUrl("${baseUrl.trimEnd('/')}/$cacheBuster")
+    }
+
+    private fun startWebUpdateChecks() {
+        updateHandler.removeCallbacks(updateCheck)
+        updateHandler.post(updateCheck)
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun installAgentButtonDrag(button: View) {
+        var downRawX = 0f
+        var downRawY = 0f
+        var startX = 0f
+        var startY = 0f
+        var dragged = false
+        val dragThreshold = dp(6).toFloat()
+
+        button.setOnTouchListener { view, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downRawX = event.rawX
+                    downRawY = event.rawY
+                    startX = view.x
+                    startY = view.y
+                    dragged = false
+                    view.parent.requestDisallowInterceptTouchEvent(true)
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX - downRawX
+                    val dy = event.rawY - downRawY
+                    if (!dragged && (abs(dx) > dragThreshold || abs(dy) > dragThreshold)) {
+                        dragged = true
+                    }
+                    if (dragged) {
+                        view.x = (startX + dx).coerceIn(0f, (root.width - view.width).coerceAtLeast(0).toFloat())
+                        view.y = (startY + dy).coerceIn(0f, (root.height - view.height).coerceAtLeast(0).toFloat())
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    view.parent.requestDisallowInterceptTouchEvent(false)
+                    if (dragged) {
+                        val dockLeft = view.x + view.width / 2f < root.width / 2f
+                        collapseAgentButton(dockLeft)
+                    } else {
+                        view.performClick()
+                    }
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    view.parent.requestDisallowInterceptTouchEvent(false)
+                    collapseAgentButton(view.x + view.width / 2f < root.width / 2f)
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private fun expandAgentButton() {
+        agentButtonExpanded = true
+        agentButton.text = "设备设置"
+        agentButton.contentDescription = "打开 Android Agent 设置"
+        agentButton.layoutParams = (agentButton.layoutParams as FrameLayout.LayoutParams).apply {
+            width = dp(AGENT_BUTTON_EXPANDED_WIDTH_DP)
+        }
+        agentButton.post {
+            agentButton.x = if (agentButtonDockedLeft) {
+                dp(8).toFloat()
+            } else {
+                (root.width - agentButton.width - dp(8)).coerceAtLeast(0).toFloat()
+            }
+        }
+    }
+
+    private fun collapseAgentButton(dockLeft: Boolean = agentButtonDockedLeft) {
+        agentButtonExpanded = false
+        agentButtonDockedLeft = dockLeft
+        agentButton.text = "设备"
+        agentButton.contentDescription = "展开设备入口"
+        agentButton.layoutParams = (agentButton.layoutParams as FrameLayout.LayoutParams).apply {
+            width = dp(AGENT_BUTTON_COLLAPSED_SIZE_DP)
+        }
+        agentButton.post {
+            val hiddenPart = dp(AGENT_BUTTON_HIDDEN_EDGE_DP)
+            agentButton.x = if (agentButtonDockedLeft) {
+                -hiddenPart.toFloat()
+            } else {
+                (root.width - agentButton.width + hiddenPart).toFloat()
+            }
+            agentButton.y = agentButton.y.coerceIn(
+                0f,
+                (root.height - agentButton.height).coerceAtLeast(0).toFloat(),
+            )
+        }
+    }
+
+    /** Refresh only when the deployed Vite entry document actually changes. */
+    private fun checkForWebUpdate() {
+        if (updateCheckRunning || !::webView.isInitialized) return
+        updateCheckRunning = true
+        lifecycleScope.launch {
+            val bytes = withContext(Dispatchers.IO) { fetchLiveIndex() }
+            updateCheckRunning = false
+            if (bytes == null || !::webView.isInitialized) return@launch
+
+            val deployedSignature = signatureOf(bytes)
+            val runningSignature = liveIndexSignature
+            when {
+                useBundledFallback -> {
+                    liveIndexSignature = deployedSignature
+                    loadConsole(force = true)
+                }
+                runningSignature == null -> liveIndexSignature = deployedSignature
+                runningSignature != deployedSignature -> {
+                    liveIndexSignature = deployedSignature
+                    loadConsole(force = true)
+                }
+            }
+        }
     }
 
     private fun openAgentSettings(closeConsole: Boolean) {
@@ -314,6 +469,19 @@ class ConsoleActivity : AppCompatActivity() {
             val uri = request?.url ?: return null
             if (!isConsoleOrigin(uri)) return null
             val assetPath = bundledAssetPath(uri.path.orEmpty()) ?: return null
+
+            // Resolve the entry document from the server first. It references the
+            // newest content-hashed assets. If that fails, serve the complete APK
+            // copy so an old index is never mixed with a new deployment.
+            if (assetPath == "web/index.html" && !useBundledFallback) {
+                val liveBytes = fetchLiveIndex(uri)
+                if (liveBytes != null) {
+                    liveIndexSignature = signatureOf(liveBytes)
+                    return htmlResponse(injectNativeSession(liveBytes), "no-store")
+                }
+                useBundledFallback = true
+            }
+            if (!useBundledFallback) return null
             return runCatching { bundledResponse(assetPath) }.getOrNull()
         }
 
@@ -339,7 +507,7 @@ class ConsoleActivity : AppCompatActivity() {
     }
 
     private fun isConsoleOrigin(uri: Uri): Boolean {
-        val base = Uri.parse(ServerApi.normalizeBaseUrl(settings.serverUrl))
+        val base = Uri.parse(consoleBaseUrl())
         return uri.scheme.equals(base.scheme, ignoreCase = true) &&
             uri.host.equals(base.host, ignoreCase = true) &&
             uri.port == base.port
@@ -382,6 +550,65 @@ class ConsoleActivity : AppCompatActivity() {
         }
     }
 
+    private fun fetchLiveIndex(uri: Uri? = null): ByteArray? {
+        val target = uri?.toString()
+            ?: "${consoleBaseUrl()}/?heysure_update_check=${System.currentTimeMillis()}"
+        return runCatching {
+            (URL(target).openConnection() as HttpURLConnection).run {
+                requestMethod = "GET"
+                connectTimeout = WEB_UPDATE_CONNECT_TIMEOUT_MS
+                readTimeout = WEB_UPDATE_READ_TIMEOUT_MS
+                useCaches = false
+                instanceFollowRedirects = true
+                setRequestProperty("Accept", "text/html")
+                setRequestProperty("Cache-Control", "no-cache")
+                try {
+                    if (responseCode !in 200..299) return@run null
+                    val bytes = inputStream.use { it.readBytes() }
+                    // A direct API-gateway URL (commonly :3000) returns JSON at
+                    // `/`; never mistake that health response for the web app.
+                    bytes.takeIf { looksLikeConsoleHtml(it) }
+                } finally {
+                    disconnect()
+                }
+            }
+        }.getOrNull()
+    }
+
+    private fun looksLikeConsoleHtml(bytes: ByteArray): Boolean {
+        val prefix = bytes.toString(Charsets.UTF_8)
+        return prefix.contains("<div id=\"app\"") && prefix.contains("</html>")
+    }
+
+    /**
+     * A saved direct Gateway URL uses :3000, while the standard Web reverse
+     * proxy is :58150. Accept both login forms and transparently choose the Web
+     * origin; custom/public proxy URLs remain unchanged.
+     */
+    private fun consoleBaseUrl(): String {
+        val configured = ServerApi.normalizeBaseUrl(settings.serverUrl).trimEnd('/')
+        return runCatching {
+            val url = URL(configured)
+            if (url.port == API_GATEWAY_PORT) {
+                URL(url.protocol, url.host, DEFAULT_WEB_CONSOLE_PORT, url.file).toString().trimEnd('/')
+            } else {
+                configured
+            }
+        }.getOrDefault(configured)
+    }
+
+    private fun htmlResponse(bytes: ByteArray, cacheControl: String): WebResourceResponse =
+        WebResourceResponse("text/html", "UTF-8", ByteArrayInputStream(bytes)).apply {
+            responseHeaders = mapOf(
+                "Cache-Control" to cacheControl,
+                "X-Content-Type-Options" to "nosniff",
+            )
+        }
+
+    private fun signatureOf(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256")
+        .digest(bytes)
+        .joinToString("") { "%02x".format(it) }
+
     private fun injectNativeSession(htmlBytes: ByteArray): ByteArray {
         val html = htmlBytes.toString(Charsets.UTF_8)
         val bootstrap = """
@@ -412,6 +639,14 @@ class ConsoleActivity : AppCompatActivity() {
 
     companion object {
         private const val JS_BRIDGE_NAME = "HeySureAndroid"
+        private const val WEB_UPDATE_CHECK_INTERVAL_MS = 60_000L
+        private const val WEB_UPDATE_CONNECT_TIMEOUT_MS = 5_000
+        private const val WEB_UPDATE_READ_TIMEOUT_MS = 10_000
+        private const val API_GATEWAY_PORT = 3_000
+        private const val DEFAULT_WEB_CONSOLE_PORT = 58_150
+        private const val AGENT_BUTTON_COLLAPSED_SIZE_DP = 42
+        private const val AGENT_BUTTON_EXPANDED_WIDTH_DP = 92
+        private const val AGENT_BUTTON_HIDDEN_EDGE_DP = 14
 
         fun open(context: Context) {
             context.startActivity(Intent(context, ConsoleActivity::class.java).apply {

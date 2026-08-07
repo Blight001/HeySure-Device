@@ -3,7 +3,9 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-val webProjectDir = rootProject.projectDir.resolve("../../web").canonicalFile
+// The workspace keeps Web and Device as sibling submodules under deploy/ and
+// device/. Resolve from device/android back to the shared deploy/web source.
+val webProjectDir = rootProject.projectDir.resolve("../../deploy/web").canonicalFile
 val webDistDir = webProjectDir.resolve("dist")
 val generatedWebAssetsDir = layout.buildDirectory.dir("generated/heysureWebAssets")
 val npmCommand = if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {

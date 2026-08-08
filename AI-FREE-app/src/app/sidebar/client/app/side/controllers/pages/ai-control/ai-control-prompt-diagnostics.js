@@ -40,7 +40,44 @@
     if (loading) setPromptDiagnosticsText('ai-prompt-diagnostics-status', '正在读取主进程提示词…');
   }
 
+  function promptRequestMetrics(payload) {
+    if (!payload) return '尚无请求数据';
+    const serialized = JSON.stringify(payload);
+    const characters = serialized.length;
+    const messages = Array.isArray(payload.messages) ? payload.messages.length : 0;
+    const tools = Array.isArray(payload.tools) ? payload.tools.length : 0;
+    return `${messages} 条消息 · ${tools} 个工具 · ${characters.toLocaleString()} 字符 · 约 ${Math.ceil(characters / 3).toLocaleString()} tokens`;
+  }
+
+  function selectedPromptRequest() {
+    if (!promptDiagnosticsResult) return null;
+    if (promptDiagnosticsView === 'actual' && promptDiagnosticsResult.lastRequest) {
+      return promptDiagnosticsResult.lastRequest;
+    }
+    return promptDiagnosticsResult.preview || null;
+  }
+
+  function renderSelectedPromptRequest() {
+    const payload = selectedPromptRequest();
+    setPromptDiagnosticsText('ai-prompt-full-content', payload ? JSON.stringify(payload, null, 2) : '尚无请求数据');
+    setPromptDiagnosticsText('ai-prompt-request-metrics', promptRequestMetrics(payload));
+    document.querySelectorAll('[data-ai-prompt-view]').forEach((button) => {
+      const selected = button.dataset.aiPromptView === promptDiagnosticsView;
+      button.setAttribute('aria-selected', String(selected));
+    });
+  }
+
+  function selectPromptDiagnosticsView(view) {
+    promptDiagnosticsView = view === 'preview' ? 'preview' : 'actual';
+    if (promptDiagnosticsView === 'actual' && !promptDiagnosticsResult?.lastRequest) {
+      promptDiagnosticsView = 'preview';
+    }
+    renderSelectedPromptRequest();
+  }
+
   function renderPromptDiagnostics(result) {
+    promptDiagnosticsResult = result;
+    if (!result.lastRequest) promptDiagnosticsView = 'preview';
     setPromptDiagnosticsText(
       'ai-prompt-mcp-functions-content',
       formatMcpFunctions(result.mcpTools),
@@ -49,10 +86,7 @@
       'ai-prompt-tools-content',
       formatToolPromptDefinitions(result.preview?.tools),
     );
-    setPromptDiagnosticsText('ai-prompt-full-content', JSON.stringify({
-      nextRequestPreview: result.preview,
-      lastActualRequest: result.lastRequest,
-    }, null, 2));
+    renderSelectedPromptRequest();
     setPromptDiagnosticsText(
       'ai-prompt-diagnostics-status',
       result.lastRequest ? '已显示最近一次实际请求' : '尚无实际请求，当前显示下一次请求预览',
@@ -80,6 +114,9 @@
     if (!dialog) return;
     dialog.hidden = false;
     document.body.classList.add('ai-prompt-diagnostics-open');
+    document.querySelectorAll('[data-ai-prompt-view]').forEach((button) => {
+      button.onclick = () => selectPromptDiagnosticsView(button.dataset.aiPromptView);
+    });
     void refreshPromptDiagnostics();
   }
 
@@ -88,3 +125,5 @@
     if (dialog) dialog.hidden = true;
     document.body.classList.remove('ai-prompt-diagnostics-open');
   }
+  let promptDiagnosticsResult = null;
+  let promptDiagnosticsView = 'actual';

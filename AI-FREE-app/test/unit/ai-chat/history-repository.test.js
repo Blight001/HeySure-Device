@@ -48,6 +48,35 @@ test('消息持久化保留全部合法消息并过滤非法角色', () => {
   assert.equal(result.session.messages.some((message) => message.role === 'admin'), false);
 });
 
+test('工具协议和活动时间线在保存后完整恢复', () => {
+  const data = fixture();
+  const tool = {
+    id: 'call-1', name: 'browser_observe', status: 'success',
+    arguments: '{"detail":"summary"}', result: '{"ok":true}', duration_ms: 1234,
+  };
+  data.repository.saveSession({}, {
+    id: 'tool-history',
+    messages: [
+      { role: 'user', content: '观察页面' },
+      {
+        role: 'assistant', content: '正在观察',
+        tool_calls: [{ id: 'call-1', function: { name: 'browser_observe', arguments: '{}' } }],
+      },
+      { role: 'tool', tool_call_id: 'call-1', name: 'browser_observe', content: '{"ok":true}' },
+      {
+        role: 'assistant', content: '观察完成', tool_events: [tool],
+        trace_events: [{ type: 'tool', round: 1, tool }],
+      },
+    ],
+  });
+
+  const messages = data.repository.getSession({}, 'tool-history').session.messages;
+  assert.equal(messages[1].tool_calls[0].id, 'call-1');
+  assert.equal(messages[2].tool_call_id, 'call-1');
+  assert.equal(messages[3].tool_events[0].duration_ms, 1234);
+  assert.equal(messages[3].trace_events[0].tool.duration_ms, 1234);
+});
+
 test('空会话不落盘，已有会话删空会删除；写入失败不报告成功', () => {
   const data = fixture();
   assert.equal(data.repository.saveSession({}, { id: 'empty', messages: [] }).skipped, true);

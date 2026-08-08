@@ -129,13 +129,28 @@ const WINDOWS_TAB_INPUT_SCHEMA = {
     name: { type: 'string', description: '定位窗口的现有名称；action=create 时表示新窗口名称' },
     url: { type: 'string', description: 'action=create 的初始 HTTP/HTTPS 地址' },
     new_name: { type: 'string', description: 'action=edit 时设置的新窗口名称' },
+  },
+};
+
+const BROWSER_ENVIRONMENT_INPUT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['action'],
+  properties: {
+    action: {
+      type: 'string',
+      enum: ['get', 'update'],
+      description: '环境操作：get 读取脱敏配置，update 增量修改配置。',
+    },
+    history_id: { type: 'string', description: '栏目记录 ID，来自 windows_tab action=list' },
+    name: { type: 'string', description: '也可使用唯一栏目名称定位' },
     settings: BROWSER_SETTINGS_PATCH_SCHEMA,
-    restart: { type: 'boolean', description: 'action=edit 且窗口已打开时是否重启 Chromium 以立即应用环境，默认 true' },
-    include_settings: { type: 'boolean', description: 'action=list 时是否返回脱敏后的环境配置，默认 false' },
+    restart: { type: 'boolean', description: '栏目已打开时是否重启 Chromium 立即应用，默认 true' },
   },
 };
 
 module.exports = {
+  BROWSER_ENVIRONMENT_INPUT_SCHEMA,
   BROWSER_SETTINGS_PATCH_SCHEMA,
   WINDOWS_TAB_INPUT_SCHEMA,
 };

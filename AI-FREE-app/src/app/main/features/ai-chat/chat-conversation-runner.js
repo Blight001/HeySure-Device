@@ -3,6 +3,7 @@
 const { getAiControlMcpCallLimit } = require('../../utils/ai-control-settings');
 const { sendCustomAIControlMessage } = require('../../services/custom-ai-api');
 const { limitAiControlMessages } = require('../../lib/ai-control-message-window');
+const { fitAiControlContext } = require('../../lib/ai-control-context-budget');
 
 const MAX_AI_CONTROL_TOOL_CALLS_PER_ROUND = 40;
 const {
@@ -93,30 +94,31 @@ function receiveStreamEvent(state, round, event) {
   if (visibleEvent && !['result', 'error'].includes(visibleEvent?.type)) state.emit({ ...visibleEvent, round });
 }
 
-function capturePromptSnapshot(state, round, tools) {
+function capturePromptSnapshot(state, round, tools, messages) {
   state.capturePromptSnapshot?.({
     modelId: state.modelId,
     useCustomApi: state.useCustomApi === true,
     runId: state.runId,
     round,
-    messages: state.modelMessages,
+    messages,
     tools,
   });
 }
 
 async function requestModelRound(state, round) {
   const tools = state.toolContext.tools;
+  const messages = fitAiControlContext(state.modelMessages, tools);
   const signal = state.run?.controller.signal;
-  capturePromptSnapshot(state, round, tools);
+  capturePromptSnapshot(state, round, tools, messages);
   if (state.useCustomApi) {
-    return sendCustomAIControlMessage(state.customApi, state.modelMessages, { tools, signal });
+    return sendCustomAIControlMessage(state.customApi, messages, { tools, signal });
   }
   if (state.useStream && typeof state.httpClient.streamAIControlMessage === 'function') {
     return state.httpClient.streamAIControlMessage(
       state.key,
       state.deviceId,
       state.modelId,
-      state.modelMessages,
+      messages,
       { tools, runId: state.runId, signal },
       (event) => receiveStreamEvent(state, round, event),
     );
@@ -125,7 +127,7 @@ async function requestModelRound(state, round) {
     state.key,
     state.deviceId,
     state.modelId,
-    state.modelMessages,
+    messages,
     { tools, runId: state.runId },
   );
 }

@@ -155,6 +155,30 @@ test('browser download rejects localhost and private DNS answers before fetching
   }
 });
 
+test('browser download resolves relative URLs and allows only the active page private origin', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-free-local-download-'));
+  const requests = [];
+  const service = createBrowserDownloadService({
+    sandboxDir: root,
+    fetchImpl: async (url) => {
+      requests.push(url.href);
+      return new Response('image-data', { status: 200, headers: { 'content-type': 'image/png' } });
+    },
+  });
+  try {
+    const result = await service.execute({ action: 'download', url: '/og.png' }, {
+      pageUrl: 'http://127.0.0.1:4173/',
+    });
+    assert.equal(result.final_url, 'http://127.0.0.1:4173/og.png');
+    assert.deepEqual(requests, ['http://127.0.0.1:4173/og.png']);
+    await assert.rejects(service.execute({
+      action: 'download', url: 'http://127.0.0.1:4174/private.txt',
+    }, { pageUrl: 'http://127.0.0.1:4173/' }), /localhost|私网/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('browser file upload only resolves existing files inside AI-Workspace', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-free-upload-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

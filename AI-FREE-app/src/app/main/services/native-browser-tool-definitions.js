@@ -18,9 +18,10 @@ const NATIVE_BROWSER_TOOL_DEFINITIONS = Object.freeze([
   },
   {
     name: 'browser_file', destructive: true,
-    description: '通过 AI 工作区安全下载文件、向当前页面上传本地文件，或保存当前浏览器会话。',
+    description: '通过 AI 工作区安全下载文件、向当前页面上传本地文件，或保存当前浏览器会话。下载 URL 可为绝对地址或相对于当前页面的地址；当前页面同源的 localhost/私网资源可下载。',
     input_schema: objectSchema({
-      action: { type: 'string', enum: ['download', 'upload', 'save_session', 'info'] }, url: { type: 'string' },
+      action: { type: 'string', enum: ['download', 'upload', 'save_session', 'info'] },
+      url: { type: 'string', description: '下载用绝对 URL 或相对于当前页面的 URL' },
       directory: { type: 'string' }, filename: { type: 'string' }, media_type: { type: 'string' },
       overwrite: { type: 'boolean' }, timeout_ms: { type: 'number' }, max_bytes: { type: 'number' },
       selector: { type: 'string' }, ref: { type: 'string' }, path: { type: 'string' },

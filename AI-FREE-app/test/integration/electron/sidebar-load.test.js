@@ -25,6 +25,7 @@ test('侧边栏页面在真实 Electron 中加载并应用主题', { timeout: 60
   assert.equal(result.tabButtons, 2, 'AI 控制/个人中心两个 tab 按钮应存在');
   assert.equal(result.chatStructure.userTag, 'ARTICLE', '用户气泡应是独立消息节点');
   assert.equal(result.chatStructure.assistantTag, 'ARTICLE', 'AI 回合应是独立消息节点');
+  assert.equal(result.chatStructure.assistantCount, 1, '重启后模型工具协议消息不应重复渲染为 AI 气泡');
   assert.equal(result.chatStructure.activitySummary, '1次思考 · 1次工具调用');
   assert.equal(result.chatStructure.hasActivityRail, true, '思考与工具应位于活动时间线中');
   assert.match(result.chatStructure.toolSummary, /调用\s*AI-FREE\s*browser_observe\s*1\.2s/);

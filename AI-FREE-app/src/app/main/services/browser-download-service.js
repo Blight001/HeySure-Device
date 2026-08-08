@@ -10,8 +10,8 @@ const DEFAULT_MAX_BYTES = 250 * 1024 * 1024;
 const MAX_ALLOWED_BYTES = 1024 * 1024 * 1024;
 const MAX_REDIRECTS = 5;
 
-function normalizeUrl(value) {
-  const parsed = new URL(String(value || '').trim());
+function normalizeUrl(value, baseUrl = undefined) {
+  const parsed = new URL(String(value || '').trim(), baseUrl);
   if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('下载链接只支持 HTTP/HTTPS');
   if (parsed.username || parsed.password) throw new Error('下载链接不能包含用户名或密码');
   return parsed;
@@ -102,14 +102,14 @@ async function discardResponse(response) {
   response.body?.destroy?.();
 }
 
-async function fetchWithRedirects(fetchImpl, sourceUrl, input, signal, resolveHost) {
-  let current = normalizeUrl(sourceUrl);
+async function fetchWithRedirects(fetchImpl, sourceUrl, input, signal, resolveHost, trustedPageUrl) {
+  let current = normalizeUrl(sourceUrl, input.page_url || trustedPageUrl || undefined);
   for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects += 1) {
-    if (fetchImpl) await resolvePublicDownloadHost(current, resolveHost);
+    if (fetchImpl) await resolvePublicDownloadHost(current, resolveHost, trustedPageUrl);
     const headers = downloadRequestHeaders(input, current);
     const response = fetchImpl
       ? await fetchImpl(current, { headers, redirect: 'manual', signal })
-      : await secureDownloadFetch(current, { headers, signal }, resolveHost);
+      : await secureDownloadFetch(current, { headers, signal, trustedPageUrl }, resolveHost);
     if (response.status < 300 || response.status >= 400) return { response, finalUrl: current };
     const location = response.headers.get('location');
     if (!location || redirects === MAX_REDIRECTS) throw new Error('下载重定向次数过多或缺少目标地址');
@@ -206,14 +206,14 @@ function createBrowserDownloadService(options = {}) {
   const fetchImpl = options.fetchImpl || null;
   const resolveHost = options.resolveHost;
 
-  async function download(input) {
+  async function download(input, context) {
     const maxBytes = Math.min(MAX_ALLOWED_BYTES, Math.max(1, Number(input.max_bytes) || DEFAULT_MAX_BYTES));
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), Math.min(300000, Math.max(1000, Number(input.timeout_ms) || 120000)));
     let tempPath = '';
     try {
       const { response, finalUrl } = await fetchWithRedirects(
-        fetchImpl, input.url, input, controller.signal, resolveHost,
+        fetchImpl, input.url, input, controller.signal, resolveHost, context?.pageUrl,
       );
       if (!response.ok) throw new Error(`下载请求失败: HTTP ${response.status}`);
       assertExpectedMediaResponse(response, String(input.media_type || ''));
@@ -240,10 +240,10 @@ function createBrowserDownloadService(options = {}) {
 
   return {
     resolveUploadPaths: (values) => resolveUploadFiles(sandboxDir, values),
-    execute: async (input = {}) => {
+    execute: async (input = {}, context = {}) => {
       const action = String(input.action || 'download').trim().toLowerCase();
       if (action === 'info') return { success: true, action, workspace_path: sandboxDir };
-      if (action === 'download') return download(input);
+      if (action === 'download') return download(input, context);
       if (action === 'save_session') return saveSession(input);
       throw new Error(`未知下载操作: ${action}`);
     },

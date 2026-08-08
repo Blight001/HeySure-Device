@@ -2,13 +2,14 @@
 
 更新时间：2026-08-08
 
-本文档记录当前软件实际向 AI 提供的 MCP 工具。工具分为三组：始终可用的外部软件栏目工具、始终可用的 AI 工作区命令工具，以及只有内置浏览器 MCP 已连接时才可用的浏览器自动化工具。全部连接正常时，共提供 9 个工具。
+本文档记录当前软件实际向 AI 提供的 MCP 工具。常规浏览器对话提供 9 个工具；只有最近用户消息明确涉及环境、指纹、代理、时区等配置时，才额外注入体积较大的 `browser_environment` schema，避免每轮重复传输。
 
 ## 总览
 
 | 工具组 | 数量 | 可用条件 | 代码真源 |
 | --- | ---: | --- | --- |
 | 外部软件栏目 | 1 | 软件运行期间始终可用 | [`ai-browser-window-tools.js`](../src/app/main/services/ai-browser-window-tools.js) |
+| 浏览器高级环境 | 1 | 用户消息命中环境/指纹/代理等配置意图 | [`ai-browser-window-tools.js`](../src/app/main/services/ai-browser-window-tools.js) |
 | AI 工作区命令 | 1 | 软件运行期间始终可用 | [`ai-sandbox-file-tools.js`](../src/app/main/services/ai-sandbox-file-tools.js) |
 | 浏览器自动化 | 7 | 至少有一个已完成 Runtime Bridge 握手的内置 Chromium | [`native-browser-tool-definitions.js`](../src/app/main/services/native-browser-tool-definitions.js) |
 
@@ -17,6 +18,7 @@ AI-FREE 本地 AI 对话使用下表中的“内部名称”。连接 HeySure �
 | 内部名称 | HeySure 注册名称 | 用途 |
 | --- | --- | --- |
 | `windows_tab` | `aifree.windows_tab` | 查询、显示、新建、编辑和关闭外部软件栏目 |
+| `browser_environment` | `aifree.browser_environment` | 按需读取或增量修改栏目的浏览器环境与指纹 |
 | `run_command` | `aifree.run_command` | 在 AI-Workspace 工作目录中执行有界命令行 |
 | `manage_card` | `aifree.manage_card` | 管理和运行浏览器自动化卡片 |
 | `browser_file` | `aifree.browser_file` | 下载文件、上传本地文件，或保存当前页面 Cookie/Storage |
@@ -28,23 +30,31 @@ AI-FREE 本地 AI 对话使用下表中的“内部名称”。连接 HeySure �
 
 ## 外部软件栏目工具
 
-`windows_tab` 不依赖浏览器连接，用于控制 AI-FREE 外部软件栏目的显示、记录和独立环境。
+`windows_tab` 不依赖浏览器连接，用于控制 AI-FREE 外部软件栏目的显示与记录。
 
 ### `windows_tab`
 
 | `action` | 作用 | 主要参数 |
 | --- | --- | --- |
-| `list` | 列出全部栏目记录，包括当前未显示的历史栏目 | 可选 `include_settings` 返回脱敏环境配置 |
+| `list` | 列出全部栏目记录，包括当前未显示的历史栏目 | 无 |
 | `open` | 显示、恢复或聚焦已有栏目 | `history_id` 或 `name` |
-| `create` | 创建并显示新栏目 | 可选 `name`、`url`、`settings` |
-| `edit` | 编辑栏目名称和独立浏览器环境 | `history_id` 或 `name`；至少提供 `new_name`、`settings` 之一 |
+| `create` | 创建并显示新栏目 | 可选 `name`、`url` |
+| `edit` | 编辑栏目名称 | `history_id` 或 `name`；提供 `new_name` |
 | `close` | 关闭栏目显示但保留历史记录 | `history_id` 或 `name` |
 
 工具整体标记为破坏性，因为 `create`、`edit` 和 `close` 会改变本地状态；`list` 为只读操作，`open` 只会打开或切换窗口。
 
+### `browser_environment`
+
+`browser_environment` 与常驻的 `windows_tab` 分离，避免普通对话携带整份高级环境 schema。它支持：
+
+- `action=get`：传 `history_id` 或唯一 `name`，返回脱敏后的环境配置。
+- `action=update`：传 `history_id` 或唯一 `name` 与 `settings`，按增量语义修改。
+- 已打开栏目默认重启 Chromium 立即应用；传 `restart:false` 可只保存。
+
 #### 环境配置
 
-`settings` 使用增量更新语义：只修改本次传入的字段，其他环境配置保持不变。`create` 可以在创建时传入独立配置；`edit` 可以修改任意已有浏览器的独立配置。
+`settings` 使用增量更新语义：只修改本次传入的字段，其他环境配置保持不变。
 
 支持的配置包括：
 
@@ -54,11 +64,9 @@ AI-FREE 本地 AI 对话使用下表中的“内部名称”。连接 HeySure �
 - 设备指纹：`resolution`、`fonts`、`canvas`、`webglImage`、`webglMetadata`、`webgpu`、`audioContext`、`clientRects`、`speechVoices`。
 - 硬件与安全：`cpu`、`memory`、`deviceName`、`macAddress`、`doNotTrack`、`sslEnabled`、`portScanProtection`、`hardwareAcceleration`、`launchArgs`。
 
-对已打开窗口执行 `edit` 时，默认重启 Chromium 让环境立即生效；传入 `restart: false` 可只保存配置，待下次打开或手动重启时完整生效。未打开窗口的配置会在下次 `open` 时生效。
+读取操作返回脱敏配置，其中 Cookie 不返回，代理用户名和密码被替换为 `[REDACTED]`，代理 API 地址和启动参数只标记为已配置。
 
-`list` 默认不返回环境详情。传入 `include_settings: true` 后返回脱敏配置，其中 Cookie 不返回，代理用户名和密码被替换为 `[REDACTED]`，代理 API 地址和启动参数只标记为已配置。
-
-Cookie 属于登录会话数据，不属于 `windows_tab.settings` 的可编辑字段；应使用 `browser_file` 的 `save_session` 操作在软件本机采集和保存。
+Cookie 属于登录会话数据，不属于 `browser_environment.settings` 的可编辑字段；应使用 `browser_file` 的 `save_session` 操作在软件本机采集和保存。
 
 ## AI 工作区命令工具
 

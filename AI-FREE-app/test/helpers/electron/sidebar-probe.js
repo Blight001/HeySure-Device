@@ -34,27 +34,45 @@ app.whenReady().then(async () => {
       tabButtons: document.querySelectorAll('.tab-button').length,
       chatStructure: (() => {
         const messages = document.getElementById('ai-chat-messages');
-        messages.innerHTML = '';
-        appendMessage('user', '请观察当前页面', { messageIndex: 0 });
-        const assistant = createAssistantView({ pending: true });
-        assistant.addReasoning('先确认页面结构。', 1);
-        assistant.upsertTool({
-          id: 'tool-1', name: 'browser_observe', arguments: { detail: 'summary' },
-          result: { success: true, title: '示例页面' }, status: 'success', duration_ms: 1234,
-        }, 1);
-        assistant.addContent('已经取得页面结构。', 1);
-        assistant.upsertTool({
-          id: 'tool-2', name: 'browser_action', arguments: { action: 'click', ref: 'e1' },
-          result: { success: true }, status: 'success', duration_ms: 800,
-        }, 2);
-        assistant.addContent('页面操作已经完成。', 2);
-        assistant.finalize();
+        const firstTool = {
+          id: 'tool-1', name: 'browser_observe', arguments: '{"detail":"summary"}',
+          result: '{"success":true,"title":"示例页面"}', status: 'success', duration_ms: 1234,
+        };
+        const secondTool = {
+          id: 'tool-2', name: 'browser_action', arguments: '{"action":"click","ref":"e1"}',
+          result: '{"success":true}', status: 'success', duration_ms: 800,
+        };
+        // 使用主进程历史仓库重启后返回的完整消息形状。
+        state.messages = [
+          { role: 'user', content: '请观察当前页面' },
+          {
+            role: 'assistant', content: '已经取得页面结构。',
+            tool_calls: [{ id: 'tool-1', function: { name: 'browser_observe', arguments: '{}' } }],
+          },
+          { role: 'tool', tool_call_id: 'tool-1', content: firstTool.result },
+          {
+            role: 'assistant', content: '',
+            tool_calls: [{ id: 'tool-2', function: { name: 'browser_action', arguments: '{}' } }],
+          },
+          { role: 'tool', tool_call_id: 'tool-2', content: secondTool.result },
+          {
+            role: 'assistant', content: '页面操作已经完成。',
+            trace_events: [
+              { type: 'reasoning', round: 1, content: '先确认页面结构。' },
+              { type: 'tool', round: 1, tool: firstTool },
+              { type: 'step', round: 1, content: '已经取得页面结构。' },
+              { type: 'tool', round: 2, tool: secondTool },
+            ],
+          },
+        ];
+        renderConversation();
         const tool = messages.querySelector('.ai-chat-tool');
         tool.open = true;
         const assistantStack = messages.querySelector('.ai-chat-assistant-stack');
         return {
           userTag: messages.querySelector('[data-message-kind="user-bubble"]')?.tagName || '',
           assistantTag: messages.querySelector('[data-message-kind="assistant-turn"]')?.tagName || '',
+          assistantCount: messages.querySelectorAll('[data-message-kind="assistant-turn"]').length,
           activitySummary: messages.querySelector('.ai-chat-activity-label')?.textContent || '',
           hasActivityRail: !!messages.querySelector('.ai-chat-activity .ai-chat-trace'),
           toolSummary: tool?.querySelector('summary')?.textContent || '',
@@ -80,6 +98,34 @@ app.whenReady().then(async () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
       const image = await win.webContents.capturePage();
       fs.writeFileSync(process.env.AI_FREE_CHAT_STRUCTURE_CAPTURE, image.toPNG());
+    }
+    if (process.env.AI_FREE_WELCOME_CAPTURE) {
+      const previewTheme = ['dark', 'light', 'gold'].includes(process.env.AI_FREE_WELCOME_THEME)
+        ? process.env.AI_FREE_WELCOME_THEME
+        : 'dark';
+      await win.webContents.executeJavaScript(`(() => {
+        const theme = ${JSON.stringify(previewTheme)};
+        document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-gold');
+        document.documentElement.classList.add('theme-' + theme);
+        document.documentElement.dataset.theme = theme;
+      })()`);
+      await win.webContents.executeJavaScript(`(() => {
+        state.currentBrowserIds = ['browser-preview'];
+        state.automationCards = [{ id: 'card-preview', name: '微软账号登录' }];
+        state.currentCardId = 'card-preview';
+        state.currentSession = { id: 'current-preview' };
+        state.sessionList = [
+          { id: 'recent-1', title: '整理微软账号登录流程', preview: '检查页面并完成登录', updatedAt: Date.now() - 120000 },
+          { id: 'recent-2', title: '提取页面数据', preview: '已整理为表格', updatedAt: Date.now() - 7200000 },
+          { id: 'recent-3', title: '规划自动化任务', preview: '共 6 个执行步骤', updatedAt: Date.now() - 86400000 },
+        ];
+        state.messages = [];
+        renderWelcome();
+      })()`);
+      win.setSize(500, 820);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const image = await win.webContents.capturePage();
+      fs.writeFileSync(process.env.AI_FREE_WELCOME_CAPTURE, image.toPNG());
     }
     result = { loaded: true, ...report, consoleErrors: consoleErrors.slice(0, 5) };
   } catch (error) {

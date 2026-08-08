@@ -22,11 +22,13 @@ const { readStoreConfigSafe } = require('../ipc/register/store-utils');
 const { normalizeAiFreeBrowserSettings } = require('../utils/ai-free-browser-settings');
 const { FREE_BROWSER_WINDOW_LIMIT, resolveVipAccess } = require('../utils/vip-access');
 const {
+  BROWSER_ENVIRONMENT_INPUT_SCHEMA,
   BROWSER_SETTINGS_PATCH_SCHEMA,
   WINDOWS_TAB_INPUT_SCHEMA,
 } = require('./ai-browser-window-tool-schema');
 
 const WINDOWS_TAB_TOOL_NAME = 'windows_tab';
+const BROWSER_ENVIRONMENT_TOOL_NAME = 'browser_environment';
 const LEGACY_TOOL_NAME = 'software_window';
 const SETTING_KEYS = new Set(Object.keys(BROWSER_SETTINGS_PATCH_SCHEMA.properties));
 
@@ -97,6 +99,12 @@ function createToolDefinitions() {
       destructive: true,
       description: `【外部软件栏目】控制 AI-FREE 外部软件栏目的显示与记录。通过 action=list/open/create/edit/close 查询、显示、新建、编辑或关闭栏目；新建名称默认「${DEFAULT_BROWSER_WINDOW_NAME}」。`,
       input_schema: WINDOWS_TAB_INPUT_SCHEMA,
+    },
+    {
+      name: BROWSER_ENVIRONMENT_TOOL_NAME,
+      destructive: true,
+      description: '按需读取或修改 AI-FREE 外部软件栏目的浏览器环境与指纹配置。',
+      input_schema: BROWSER_ENVIRONMENT_INPUT_SCHEMA,
     },
   ];
 }
@@ -229,6 +237,14 @@ class AiBrowserWindowTools {
     return { success: true, total: items.length, open_count: items.filter((item) => item.is_open).length, items };
   }
 
+  async environment(args = {}) {
+    const action = text(args.action).toLowerCase();
+    const record = this.resolveRecord(args);
+    if (action === 'get') return { success: true, item: slimHistoryItem(record, true) };
+    if (action === 'update') return this.edit({ ...args, action: 'edit' });
+    throw new Error(`未知的浏览器环境操作: ${action || '未提供 action'}`);
+  }
+
   async open(args = {}) {
     const record = this.resolveRecord(args);
     const opened = await openBrowserHistoryRecord(this.ui, record.id);
@@ -336,9 +352,13 @@ class AiBrowserWindowTools {
     };
     return {
       tools,
-      has: (name) => [WINDOWS_TAB_TOOL_NAME, LEGACY_TOOL_NAME].includes(text(name)),
+      has: (name) => [WINDOWS_TAB_TOOL_NAME, BROWSER_ENVIRONMENT_TOOL_NAME, LEGACY_TOOL_NAME].includes(text(name)),
       execute: async (name, args = {}) => {
         const toolName = text(name);
+        if (toolName === BROWSER_ENVIRONMENT_TOOL_NAME) {
+          this.logger.log?.(`[浏览器环境工具] 执行 ${toolName}.${text(args?.action).toLowerCase()}`);
+          return this.environment(args && typeof args === 'object' ? args : {});
+        }
         if (![WINDOWS_TAB_TOOL_NAME, LEGACY_TOOL_NAME].includes(toolName)) throw new Error(`未知的外部软件栏目工具: ${toolName}`);
         const action = text(args?.action).toLowerCase();
         const handler = handlers[action];
@@ -355,6 +375,7 @@ function createAiBrowserWindowTools(deps = {}) {
 }
 
 module.exports = {
+  BROWSER_ENVIRONMENT_TOOL_NAME,
   WINDOWS_TAB_TOOL_NAME,
   createAiBrowserWindowTools,
 };

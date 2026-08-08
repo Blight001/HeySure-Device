@@ -33,9 +33,32 @@ function collectConnectionTools(connections, windowTools) {
   return definitions;
 }
 
+const BROWSER_ENVIRONMENT_INTENT = /(?:浏览器|栏目|窗口)?.{0,10}(?:环境|配置|设置|指纹|代理|proxy|user[ -]?agent|\bua\b|语言|时区|定位|分辨率|webrtc|canvas|webgl|字体|cpu|内存|启动参数)/i;
+
+function shouldIncludeBrowserEnvironment(messages = []) {
+  const recentUsers = messages.filter((message) => message?.role === 'user').slice(-2);
+  return recentUsers.some((message) => BROWSER_ENVIRONMENT_INTENT.test(String(message.content || '')));
+}
+
+function selectedWindowTools(windowTools, initialMessages) {
+  const tools = Array.isArray(windowTools?.tools) ? windowTools.tools : [];
+  if (shouldIncludeBrowserEnvironment(initialMessages)) return tools;
+  return tools.filter((tool) => String(tool?.name || '') !== 'browser_environment');
+}
+
 function appendDownloadWorkflow(workflow, available) {
   if (!available.has('browser_observe') || !available.has('browser_file')) return;
   workflow.push('用户要求寻找或下载文件时，先主动调用 browser_observe（可用 filter:"link"/"media" 或 keyword 收窄），从 item.downloadUrl 或顶层 downloadLinks[].url 取得真实地址和 downloadFilename/filename，再调用 browser_file action=download；下载图片/视频/音频时把条目的 category 传给 media_type，使工具使用当前 Chromium 登录态和网络环境；不得根据链接文字猜测下载地址');
+}
+
+function appendOptionalWorkflows(workflow, available) {
+  appendDownloadWorkflow(workflow, available);
+  if (available.has('run_command')) {
+    workflow.push('需要查看或处理 AI-Workspace 文件时使用 run_command；上传文件时把工作区内路径交给 browser_file action=upload；浏览器下载也会自动保存到该工作区');
+  }
+  if (available.has('browser_environment')) {
+    workflow.push('仅在用户要求查看或修改浏览器环境、指纹、代理等配置时使用 browser_environment');
+  }
 }
 
 function createMcpContext(tools, connections, resolver, controlledConnectionId) {
@@ -55,10 +78,7 @@ function createMcpContext(tools, connections, resolver, controlledConnectionId) 
     workflow.push('网页操作前先用 browser_observe 获取当前状态，再用 browser_action 操作；导航、切换标签页或页面明显变化后重新 observe，禁止跨浏览器或跨页面复用旧 ref');
   } else if (available.has('browser_observe')) workflow.push('用 browser_observe 读取当前页面，不虚构未返回的元素');
   if (available.has('browser_wait')) workflow.push('仅在页面确实需要加载或等待元素时使用 browser_wait');
-  appendDownloadWorkflow(workflow, available);
-  if (available.has('run_command')) {
-    workflow.push('需要查看或处理 AI-Workspace 文件时使用 run_command；上传文件时把工作区内路径交给 browser_file action=upload；浏览器下载也会自动保存到该工作区');
-  }
+  appendOptionalWorkflows(workflow, available);
   const browserWorkflow = workflow.length
     ? `${workflow.join('；')}。操作失败时根据错误调整策略，不要原样盲目重试。`
     : '';
@@ -77,7 +97,7 @@ function createMcpContext(tools, connections, resolver, controlledConnectionId) 
 function buildChatToolContext(options = {}) {
   const { connections, controlledConnectionId, windowTools, selectedAutomationCard, automationCardId, initialMessages } = options;
   const resolver = createConnectionResolver(connections);
-  const tools = [...(windowTools?.tools || []), ...collectConnectionTools(connections, windowTools)];
+  const tools = [...selectedWindowTools(windowTools, initialMessages), ...collectConnectionTools(connections, windowTools)];
   const cardName = String(
     selectedAutomationCard?.cardName || selectedAutomationCard?.cardData?.name || automationCardId,
   ).replace(/[\r\n\t]+/g, ' ').trim().slice(0, 120);
@@ -100,4 +120,11 @@ function buildChatToolContext(options = {}) {
   };
 }
 
-module.exports = { buildChatToolContext, createConnectionResolver, createMcpContext, withBrowserRouteParam };
+module.exports = {
+  buildChatToolContext,
+  createConnectionResolver,
+  createMcpContext,
+  selectedWindowTools,
+  shouldIncludeBrowserEnvironment,
+  withBrowserRouteParam,
+};

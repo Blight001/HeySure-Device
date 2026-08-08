@@ -269,16 +269,22 @@ function registerTabIPC(ipc, ui, contextMenu) {
   });
 }
 
+function readSidebarWidth(sideView) {
+  if (!sideView) return 0;
+  const bounds = sideView.getBounds?.();
+  return Number(bounds?.width) || 0;
+}
+
 function registerUiUtilityIPC(ipc, ctx) {
   const { ui } = ctx;
   ipc.handle('set-sidebar-width', async (event, payload = {}) => {
     const sideView = ui.getSideView?.();
     const sideContents = sideView?.webContents;
+    if (payload.width === undefined) {
+      return { ok: true, width: readSidebarWidth(sideView) };
+    }
     if (!sideContents || sideContents.isDestroyed?.() || sideContents.id !== event.sender?.id) {
       return { ok: false, message: '当前页面不是内嵌侧边栏' };
-    }
-    if (payload.width === undefined) {
-      return { ok: true, width: sideView.getBounds?.().width || 0 };
     }
     const width = ui.setSidebarWidth?.(payload.width) || 0;
     return width > 0 ? { ok: true, width } : { ok: false, message: '侧边栏当前不可调整' };

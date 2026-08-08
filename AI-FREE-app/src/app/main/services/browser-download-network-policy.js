@@ -26,24 +26,37 @@ function normalizedHostname(value) {
   return String(value || '').trim().toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
 }
 
-function assertPublicAddress(address) {
+function assertPublicAddress(address, allowPrivate = false) {
   const family = net.isIP(address);
-  if (!family || blockedAddresses.check(address, family === 6 ? 'ipv6' : 'ipv4')) {
+  if (!family || (!allowPrivate && blockedAddresses.check(address, family === 6 ? 'ipv6' : 'ipv4'))) {
     throw new Error('下载链接解析到 localhost、私网或不可路由地址');
   }
   return { address, family };
 }
 
-async function resolvePublicDownloadHost(url, resolveHost = dns.promises.lookup) {
+function matchesTrustedOrigin(url, trustedPageUrl) {
+  if (!trustedPageUrl) return false;
+  try { return url.origin === new URL(trustedPageUrl).origin; } catch (_) { return false; }
+}
+
+async function resolvePublicDownloadHost(url, resolveHost = dns.promises.lookup, trustedPageUrl = '') {
   const hostname = normalizedHostname(url.hostname);
+  const allowPrivate = matchesTrustedOrigin(url, trustedPageUrl);
   if (!hostname || hostname === 'localhost' || hostname.endsWith('.localhost')
       || hostname.endsWith('.local')) {
+    if (allowPrivate && hostname) {
+      const resolved = await resolveHost(hostname, { all: true, verbatim: true });
+      const records = (Array.isArray(resolved) ? resolved : [resolved])
+        .map((entry) => assertPublicAddress(String(entry?.address || entry), true));
+      if (!records.length) throw new Error('下载链接域名未解析到可用地址');
+      return records;
+    }
     throw new Error('下载链接不允许访问 localhost 或本地网络主机');
   }
-  if (net.isIP(hostname)) return [assertPublicAddress(hostname)];
+  if (net.isIP(hostname)) return [assertPublicAddress(hostname, allowPrivate)];
   const resolved = await resolveHost(hostname, { all: true, verbatim: true });
   const records = (Array.isArray(resolved) ? resolved : [resolved])
-    .map((entry) => assertPublicAddress(String(entry?.address || entry)));
+    .map((entry) => assertPublicAddress(String(entry?.address || entry), allowPrivate));
   if (!records.length) throw new Error('下载链接域名未解析到可用公网地址');
   return records;
 }
@@ -67,7 +80,7 @@ function downloadResponseHeaders(source) {
 }
 
 async function secureDownloadFetch(url, options = {}, resolveHost) {
-  const records = await resolvePublicDownloadHost(url, resolveHost);
+  const records = await resolvePublicDownloadHost(url, resolveHost, options.trustedPageUrl);
   const transport = url.protocol === 'https:' ? https : http;
   return new Promise((resolve, reject) => {
     const request = transport.request(url, {

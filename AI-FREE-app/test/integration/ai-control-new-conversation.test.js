@@ -185,35 +185,30 @@ test('新对话空白页展示五条最近聊天并可点击切换', () => {
   const recent = welcome.querySelector('.ai-chat-recent');
   const list = welcome.querySelector('.ai-chat-recent-list');
   assert.equal(recent['aria-label'], '最近聊天');
+  assert.equal(recent.querySelector('.ai-chat-recent-heading').textContent, '最近聊天');
+  assert.equal(recent.querySelector('.ai-chat-recent-heading').children[0].textContent, '5 条');
   assert.equal(list.children.length, 5);
   assert.equal(list.children[0].querySelector('.ai-chat-recent-title').textContent, '聊天 1');
+  assert.equal(list.children[0].querySelector('.ai-chat-recent-icon'), null);
+  assert.equal(list.children[0].querySelector('.ai-chat-recent-arrow'), null);
 
   list.children[0].listeners.click();
   assert.equal(selectedId, 'session-1');
 });
 
-test('新对话空白页展示任务入口且点击后只填入输入框', () => {
+test('新对话空白页不展示快捷任务入口', () => {
   const messages = new FakeElement('div');
-  const input = new FakeElement('textarea');
   const context = createControllerContext({
     currentMessages: () => [],
     renderRecentHistory() {},
     updateSessionTitleUi() {},
     selectedAutomationCard: () => null,
   });
-  context.document.getElementById = (id) => ({
-    'ai-chat-messages': messages,
-    'ai-chat-input': input,
-  })[id] || null;
+  context.document.getElementById = (id) => (id === 'ai-chat-messages' ? messages : null);
   context.document.createElement = (tagName) => new FakeElement(tagName);
-  context.Event = class Event { constructor(type) { this.type = type; } };
   runController(context, 'ai-control-messages.js');
   vm.runInContext('state.currentBrowserIds = []; renderWelcome()', context);
 
-  const promptList = messages.querySelector('.ai-chat-prompt-list');
-  assert.equal(promptList.children.length, 3);
-  promptList.children[0].listeners.click();
-  assert.match(input.value, /梳理这个任务/);
-  assert.deepEqual(input.dispatched, ['input']);
-  assert.equal(input.focused, true);
+  assert.ok(messages.querySelector('.ai-chat-welcome-hero'));
+  assert.equal(messages.querySelector('.ai-chat-prompts'), null);
 });

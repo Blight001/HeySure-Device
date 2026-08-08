@@ -57,18 +57,10 @@
                   <span>AI-FREE COPILOT</span>
                   <span class="ai-chat-welcome-status"><i></i> 对话就绪</span>
                 </div>
-                <span class="ai-chat-welcome-kicker">NEW CONVERSATION</span>
-                <strong>准备好一起完成什么？</strong>
-                <p>选择一个任务开始，或者直接在下方描述你的目标。</p>
+                <span class="ai-chat-welcome-kicker">新对话</span>
+                <strong>今天想一起完成什么？</strong>
+                <p>直接在下方描述你的目标，我会帮你完成。</p>
               </div>
-              <section class="ai-chat-prompts" aria-label="推荐任务">
-                <span class="ai-chat-prompts-heading">快速开始</span>
-                <div class="ai-chat-prompt-list">
-                  <button class="ai-chat-prompt-item" type="button"><span>梳</span><b>帮我梳理一个任务</b><i>→</i></button>
-                  <button class="ai-chat-prompt-item" type="button"><span>写</span><b>写一份清晰的执行方案</b><i>→</i></button>
-                  <button class="ai-chat-prompt-item" type="button"><span>析</span><b>分析并解释一段内容</b><i>→</i></button>
-                </div>
-              </section>
             </div>
           </div>
         </div>
@@ -184,7 +176,12 @@
             </section>
             <section>
               <h3>发送给 AI 的完整 Prompt</h3>
-              <p>同时显示下一次请求预览，以及最近一次实际发送的请求。</p>
+              <p>实际请求和下次预览分开显示，不会在单次请求中重复发送。</p>
+              <div class="ai-prompt-request-tabs" role="tablist" aria-label="Prompt 请求来源">
+                <button type="button" role="tab" data-ai-prompt-view="actual" aria-selected="true">上次实际请求</button>
+                <button type="button" role="tab" data-ai-prompt-view="preview" aria-selected="false">下一次预览</button>
+              </div>
+              <p id="ai-prompt-request-metrics" class="ai-prompt-request-metrics"></p>
               <pre id="ai-prompt-full-content"></pre>
             </section>
           </div>

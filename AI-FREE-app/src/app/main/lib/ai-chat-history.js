@@ -115,7 +115,13 @@ function sanitizeToolEvent(entry) {
     status: String(entry?.status || 'success'),
     arguments: compactHistoryValue(entry?.arguments),
     result: compactHistoryValue(entry?.result),
+    duration_ms: sanitizeDurationMs(entry?.duration_ms),
   };
+}
+
+function sanitizeDurationMs(value) {
+  const duration = Number(value);
+  return Number.isFinite(duration) && duration >= 0 ? duration : 0;
 }
 
 function sanitizeTraceEvent(entry, index) {
@@ -149,6 +155,7 @@ function sanitizeTraceTool(tool, index) {
     status: String(tool?.status || 'success'),
     arguments: compactHistoryValue(tool?.arguments),
     result: compactHistoryValue(tool?.result),
+    duration_ms: sanitizeDurationMs(tool?.duration_ms),
   };
 }
 

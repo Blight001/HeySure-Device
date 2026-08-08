@@ -47,6 +47,7 @@ ipcMain.handle('set-ai-control-settings', (_event, payload = {}) => ({
   ok: true,
   settings: { mcpCallLimit: Number(payload.mcpCallLimit) },
 }));
+ipcMain.handle('set-sidebar-width', () => ({ ok: true, width: 280 }));
 ipcMain.handle('ai-control-manage-automation-card', (_event, input = {}) => {
   automationOperations.push(input);
   if (input.action === 'write') {
@@ -165,6 +166,15 @@ app.whenReady().then(async () => {
     document.getElementById('automation-workbench-open')?.click();
     await new Promise((resolve) => setTimeout(resolve, 120));
     const flowCanvas = document.getElementById('automation-flow-canvas');
+    const expandedDialogBounds = automationDialog.getBoundingClientRect();
+    const mainContentCenter = (window.innerWidth - 280) / 2;
+    const expandedDialogCenter = expandedDialogBounds.left + expandedDialogBounds.width / 2;
+    document.documentElement.classList.add('sidebar-collapsed');
+    await window.AppShellAutomationWorkbench.syncDialogLayout();
+    const collapsedDialogBounds = automationDialog.getBoundingClientRect();
+    const collapsedDialogCenter = collapsedDialogBounds.left + collapsedDialogBounds.width / 2;
+    document.documentElement.classList.remove('sidebar-collapsed');
+    await window.AppShellAutomationWorkbench.syncDialogLayout();
     const canvasShell = document.querySelector('.automation-canvas-shell');
     const nodeInspector = document.getElementById('automation-node-inspector');
     const inspectorHiddenWithoutSelection = nodeInspector?.hidden === true
@@ -275,6 +285,9 @@ app.whenReady().then(async () => {
       automationInitiallyClosed,
       automationDialogVisible: automationDialog?.open === true
         && document.getElementById('automation-workbench')?.getBoundingClientRect().width > 0,
+      automationDialogCenteredInMainContent: Math.abs(expandedDialogCenter - mainContentCenter) <= 2
+        && expandedDialogBounds.right <= window.innerWidth - 279,
+      automationDialogCenteredAfterCollapse: Math.abs(collapsedDialogCenter - window.innerWidth / 2) <= 2,
       automationWorkbenchBelowHome: document.querySelector('.automation-workbench-launcher')
         ?.getBoundingClientRect().top > document.querySelector('.browser-settings-home')?.getBoundingClientRect().bottom,
       automationLauncherBelowProxy: document.querySelector('.automation-workbench-launcher')?.parentElement
@@ -318,6 +331,8 @@ app.whenReady().then(async () => {
     || !result.automationLauncherVisible
     || !result.automationInitiallyClosed
     || !result.automationDialogVisible
+    || !result.automationDialogCenteredInMainContent
+    || !result.automationDialogCenteredAfterCollapse
     || !result.automationWorkbenchBelowHome
     || !result.automationLauncherBelowProxy
     || !result.automationUsesNativeCopy
@@ -436,19 +451,14 @@ app.whenReady().then(async () => {
   await win.loadFile(path.join(__dirname, '../../../src/app/sidebar/ai-control.html'));
   await new Promise((resolve) => setTimeout(resolve, 120));
   const aiWelcomeResult = await win.webContents.executeJavaScript(`(() => {
-    const prompts = Array.from(document.querySelectorAll('.ai-chat-prompt-item'));
-    const input = document.getElementById('ai-chat-input');
-    prompts[0]?.click();
     return {
       heroVisible: document.querySelector('.ai-chat-welcome-hero')?.getBoundingClientRect().height > 0,
-      promptCount: prompts.length,
-      promptFilledComposer: input?.value.includes('梳理这个任务') === true,
+      promptCount: document.querySelectorAll('.ai-chat-prompt-item').length,
       welcomeStillVisible: !!document.querySelector('.ai-chat-welcome'),
     };
   })()`);
   if (!aiWelcomeResult.heroVisible
-    || aiWelcomeResult.promptCount !== 3
-    || !aiWelcomeResult.promptFilledComposer
+    || aiWelcomeResult.promptCount !== 0
     || !aiWelcomeResult.welcomeStillVisible) {
     throw new Error(`AI 新对话首页校验失败: ${JSON.stringify(aiWelcomeResult)}`);
   }

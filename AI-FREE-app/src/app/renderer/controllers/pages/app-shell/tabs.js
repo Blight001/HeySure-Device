@@ -152,6 +152,7 @@ function initSettingsBtnAnimation() {
   UiApi.onSidebarCollapse( () => {
     console.log('[标签栏] 收到收起动画事件');
     setBrowserEmptyStateSidebarVisible(false);
+    void window.AppShellAutomationWorkbench?.syncDialogLayout?.();
     addTabBtn.classList.add('collapsing');
     addTabBtn.classList.remove('expanding');
     setTimeout(() => {
@@ -162,6 +163,7 @@ function initSettingsBtnAnimation() {
   UiApi.onSidebarExpand( () => {
     console.log('[标签栏] 收到展开动画事件');
     setBrowserEmptyStateSidebarVisible(true);
+    void window.AppShellAutomationWorkbench?.syncDialogLayout?.();
     addTabBtn.classList.add('expanding');
     addTabBtn.classList.remove('collapsing');
     setTimeout(() => {

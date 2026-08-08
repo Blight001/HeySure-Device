@@ -57,7 +57,7 @@ test('AI 默认工具包含 AI-Workspace 命令执行入口', async (t) => {
   });
   const tools = service.getWindowTools();
   assert.equal(tools.has('run_command'), true);
-  assert.deepEqual(tools.tools.map((tool) => tool.name), ['windows_tab', 'run_command']);
+  assert.deepEqual(tools.tools.map((tool) => tool.name), ['windows_tab', 'browser_environment', 'run_command']);
   const command = process.platform === 'win32' ? 'echo ready' : 'printf ready';
   assert.match((await tools.execute('run_command', { command })).stdout, /ready/);
 });
@@ -79,6 +79,29 @@ test('内置模型正常返回完整消息链并发布流式完成事件', async
   assert.equal(result.messages.at(-1).content, '完成');
   assert.equal(result.quota.remaining, 9);
   assert.equal(fixture.sent.at(-1).payload.type, 'done');
+});
+
+test('长对话只压缩模型请求副本，返回的持久化历史保持完整', async () => {
+  let sentMessages = [];
+  const client = {
+    sendAIControlMessage: async (_key, _deviceId, _modelId, messages) => {
+      sentMessages = structuredClone(messages);
+      return { ok: true, message: { role: 'assistant', content: '完成' } };
+    },
+  };
+  const history = Array.from({ length: 100 }, (_, index) => [
+    { role: 'user', content: `问题-${index}-${'内容'.repeat(600)}` },
+    { role: 'assistant', content: `回答-${index}-${'结论'.repeat(600)}` },
+  ]).flat();
+  const service = createService(client);
+  const result = await service.chat(eventFixture().event, {
+    modelId: 'builtin', messages: history, disableTools: true,
+  });
+
+  assert.ok(JSON.stringify({ messages: sentMessages, tools: [] }).length <= 60000);
+  assert.match(sentMessages[0].content, /较早对话摘要/);
+  assert.equal(result.messages.length, history.length + 1);
+  assert.equal(result.messages[0].content, history[0].content);
 });
 
 test('提示词诊断返回下一次预览和最近一次实际发送的完整请求', async () => {

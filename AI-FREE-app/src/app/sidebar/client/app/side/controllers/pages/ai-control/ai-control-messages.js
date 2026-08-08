@@ -219,57 +219,31 @@
     return row;
   }
 
-  function welcomePromptItems(hasBrowser) {
-    if (hasBrowser) {
-      return [
-        ['览', '总结当前页面', '总结当前页面的核心信息，并列出关键结论。'],
-        ['取', '提取页面数据', '提取当前页面中的关键数据，并整理成清晰的表格。'],
-        ['流', '规划自动化流程', '根据当前浏览器页面，帮我规划一套可执行的自动化流程。'],
-      ];
-    }
-    return [
-      ['梳', '梳理一个任务', '帮我梳理这个任务，明确目标、步骤和需要注意的风险：'],
-      ['写', '生成执行方案', '请根据我的目标，写一份清晰、可执行的方案：'],
-      ['析', '分析一段内容', '请分析并解释下面这段内容，提炼重点和结论：'],
-    ];
+  function isRenderableConversationMessage(message) {
+    if (message?.role === 'user') return true;
+    if (message?.role !== 'assistant') return false;
+    // 带 tool_calls 的 assistant 是模型协议消息；其内容已经由最终回复的
+    // trace_events 重建为活动/阶段答案，不能再渲染成独立 AI 气泡。
+    if (Array.isArray(message.tool_calls) && message.tool_calls.length) return false;
+    return !!(String(message.content || '').trim()
+      || String(message.reasoning || '').trim()
+      || message.tool_events?.length
+      || message.trace_events?.length);
   }
 
-  function applyWelcomePrompt(prompt) {
-    const input = el('ai-chat-input');
-    if (!input) return;
-    input.value = prompt;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.focus();
+  function createWelcomeContext(card) {
+    if (!card) return null;
+    const context = document.createElement('div');
+    context.className = 'ai-chat-welcome-context';
+    const label = document.createElement('span');
+    label.textContent = '当前任务';
+    const name = document.createElement('b');
+    name.textContent = card.name;
+    context.append(label, name);
+    return context;
   }
 
-  function createWelcomePrompts(hasBrowser) {
-    const section = document.createElement('section');
-    section.className = 'ai-chat-prompts';
-    section.setAttribute('aria-label', '推荐任务');
-    const heading = document.createElement('span');
-    heading.className = 'ai-chat-prompts-heading';
-    heading.textContent = '快速开始';
-    const list = document.createElement('div');
-    list.className = 'ai-chat-prompt-list';
-    welcomePromptItems(hasBrowser).forEach(([iconText, titleText, prompt]) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'ai-chat-prompt-item';
-      const icon = document.createElement('span');
-      icon.textContent = iconText;
-      const title = document.createElement('b');
-      title.textContent = titleText;
-      const arrow = document.createElement('i');
-      arrow.textContent = '→';
-      button.append(icon, title, arrow);
-      button.addEventListener('click', () => applyWelcomePrompt(prompt));
-      list.appendChild(button);
-    });
-    section.append(heading, list);
-    return section;
-  }
-
-  function createWelcomeHero(browserText, browserCount, logoUrl) {
+  function createWelcomeHero(browserText, browserCount, logoUrl, card) {
     const hero = document.createElement('div');
     hero.className = 'ai-chat-welcome-hero';
     const brand = document.createElement('div');
@@ -294,12 +268,15 @@
     brand.append(logoFrame, brandName, status);
     const kicker = document.createElement('span');
     kicker.className = 'ai-chat-welcome-kicker';
-    kicker.textContent = 'NEW CONVERSATION';
+    kicker.textContent = '新对话';
     const title = document.createElement('strong');
-    title.textContent = '准备好一起完成什么？';
+    title.textContent = '今天想一起完成什么？';
     const summary = document.createElement('p');
     summary.textContent = browserText;
-    hero.append(brand, kicker, title, summary);
+    hero.append(brand, kicker, title);
+    const context = createWelcomeContext(card);
+    if (context) hero.appendChild(context);
+    hero.appendChild(summary);
     return hero;
   }
 
@@ -312,15 +289,12 @@
     const card = selectedAutomationCard();
     const browserCount = state.currentBrowserIds.length;
     const browserText = browserCount
-      ? `已连接 ${browserCount} 个浏览器${card ? `，当前卡片为“${card.name}”` : ''}，AI 将在所选浏览器中执行操作${browserCount > 1 ? '，可按浏览器名称分开控制' : ''}。`
+      ? `描述目标即可开始，我会在当前浏览器中观察、操作并反馈结果${browserCount > 1 ? '，也可按名称切换目标' : ''}。`
       : (card
         ? `当前卡片为“${card.name}”，但未连接浏览器，将进行普通对话。`
         : '当前未连接浏览器，将进行普通对话。');
     const logoUrl = window.aiFreeLogoAssets?.url || '../../assets/logo.ico';
-    welcome.append(
-      createWelcomeHero(browserText, browserCount, logoUrl),
-      createWelcomePrompts(browserCount > 0),
-    );
+    welcome.appendChild(createWelcomeHero(browserText, browserCount, logoUrl, card));
     container.appendChild(welcome);
     renderRecentHistory();
     updateSessionTitleUi();
@@ -333,14 +307,7 @@
     const messages = currentMessages();
     const visible = messages
       .map((message, index) => ({ message, index }))
-      .filter(({ message }) => {
-        if (message.role === 'user') return true;
-        if (message.role !== 'assistant') return false;
-        return !!(String(message.content || '').trim()
-          || String(message.reasoning || '').trim()
-          || message.tool_events?.length
-          || message.trace_events?.length);
-      });
+      .filter(({ message }) => isRenderableConversationMessage(message));
     if (!visible.length) {
       renderWelcome();
       return;

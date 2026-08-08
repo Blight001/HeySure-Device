@@ -231,11 +231,25 @@
     } catch (error) { setStatus(error.message); }
   }
 
+  async function syncDialogLayout() {
+    const dialog = element('automation-workbench-dialog');
+    if (!dialog) return;
+    let sidebarWidth = 0;
+    if (!document.documentElement.classList.contains('sidebar-collapsed')) {
+      try {
+        const result = await window.aiFree?.ui?.setSidebarWidth?.({});
+        if (result?.ok) sidebarWidth = Math.max(0, Number(result.width) || 0);
+      } catch (_) {}
+    }
+    dialog.style.setProperty('--automation-sidebar-width', `${sidebarWidth}px`);
+  }
+
   function bindDialog() {
     const dialog = element('automation-workbench-dialog');
     const opener = element('automation-workbench-open');
     if (!dialog || !opener) return;
-    opener.addEventListener('click', () => {
+    opener.addEventListener('click', async () => {
+      await syncDialogLayout();
       if (typeof dialog.showModal === 'function') dialog.showModal();
       else dialog.setAttribute('open', '');
       opener.setAttribute('aria-expanded', 'true');
@@ -253,6 +267,9 @@
     dialog.addEventListener('close', () => {
       opener.setAttribute('aria-expanded', 'false');
       opener.focus();
+    });
+    window.addEventListener('resize', () => {
+      if (dialog.open) void syncDialogLayout();
     });
   }
 
@@ -312,6 +329,6 @@
     element('automation-card-steps')?.addEventListener('change', syncStepsToCanvas);
   }
 
-  window.AppShellAutomationWorkbench = Object.freeze({ bind, refresh });
+  window.AppShellAutomationWorkbench = Object.freeze({ bind, refresh, syncDialogLayout });
   if (document.documentElement.classList.contains('browser-settings-page')) bind();
 })();

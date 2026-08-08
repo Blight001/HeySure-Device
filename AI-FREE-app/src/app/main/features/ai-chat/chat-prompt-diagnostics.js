@@ -6,6 +6,7 @@ const {
   resolveConnections,
 } = require('./chat-request-context');
 const { buildChatToolContext } = require('./chat-tool-context');
+const { fitAiControlContext } = require('../../lib/ai-control-context-budget');
 
 function clonePromptValue(value) {
   if (typeof structuredClone === 'function') return structuredClone(value);
@@ -42,7 +43,7 @@ function buildPromptPreview(deps, input, getWindowTools) {
   });
   return {
     modelId: String(input.modelId || ''),
-    messages: clonePromptValue(toolContext.modelMessages),
+    messages: clonePromptValue(fitAiControlContext(toolContext.modelMessages, toolContext.tools)),
     tools: clonePromptValue(toolContext.tools),
     runId: '',
     round: null,

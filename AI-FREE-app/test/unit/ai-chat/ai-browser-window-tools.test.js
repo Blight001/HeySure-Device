@@ -68,8 +68,11 @@ test('window tool registry lists records and validates lookup arguments', async 
     ui: { getTabs: () => new Map([['tab-1', { id: 'tab-1', browserHistoryId: 'history-1' }]]) },
     logger: { log: (line) => logLines.push(line) },
   });
-  assert.equal(tools.tools.length, 1);
+  assert.equal(tools.tools.length, 2);
   assert.equal(tools.tools[0].input_schema.properties.action.enum.includes('edit'), true);
+  assert.equal(tools.tools[1].name, 'browser_environment');
+  assert.ok(JSON.stringify(tools.tools[0]).length < 1500, 'windows_tab 常驻 schema 不应再携带完整环境配置');
+  assert.ok(JSON.stringify(tools.tools[1]).length > 5000, '高级环境 schema 应独立保留在按需工具中');
   assert.equal(tools.has('windows_tab'), true);
   assert.equal(tools.tools[0].name, 'windows_tab');
   assert.equal(tools.has(' unknown '), false);
@@ -192,6 +195,14 @@ test('edit updates name and per-browser settings while close preserves records',
   assert.equal(history[0].settings.proxy.host, 'proxy.test');
   assert.equal(applied[0][0], 'tab-1');
   assert.equal(applied[0][2].restartChromium, true);
+  const environment = await tools.execute('browser_environment', {
+    action: 'get', history_id: 'history-1',
+  });
+  assert.equal(environment.item.settings.timezone.value, 'Asia/Shanghai');
+  const environmentUpdate = await tools.execute('browser_environment', {
+    action: 'update', history_id: 'history-1', settings: { webrtc: { mode: 'block' } },
+  });
+  assert.deepEqual(environmentUpdate.changed_settings, ['webrtc']);
   const openClosed = await tools.execute('software_window', { action: 'close', history_id: 'history-1' });
   assert.equal(openClosed.closed, true);
   assert.equal(openClosed.browser_total, 3);

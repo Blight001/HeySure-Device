@@ -11,8 +11,26 @@ const {
 } = require('../../../src/app/main/features/ai-chat/chat-tool-executor');
 const {
   buildChatToolContext,
+  shouldIncludeBrowserEnvironment,
   withBrowserRouteParam,
 } = require('../../../src/app/main/features/ai-chat/chat-tool-context');
+
+test('大型浏览器环境 schema 仅在相关用户意图中注入', () => {
+  assert.equal(shouldIncludeBrowserEnvironment([{ role: 'user', content: '打开一个新窗口' }]), false);
+  assert.equal(shouldIncludeBrowserEnvironment([{ role: 'user', content: '把这个浏览器时区改成 UTC' }]), true);
+  const windowTools = {
+    tools: [{ name: 'windows_tab' }, { name: 'browser_environment' }],
+    has: () => true,
+  };
+  const regular = buildChatToolContext({
+    connections: [], windowTools, initialMessages: [{ role: 'user', content: '创建浏览器' }],
+  });
+  const environment = buildChatToolContext({
+    connections: [], windowTools, initialMessages: [{ role: 'user', content: '修改代理配置' }],
+  });
+  assert.deepEqual(regular.tools.map((tool) => tool.name), ['windows_tab']);
+  assert.deepEqual(environment.tools.map((tool) => tool.name), ['windows_tab', 'browser_environment']);
+});
 
 test('浏览器工具 schema 暴露可选 change_browser 且保留原必填参数', () => {
   const tool = withBrowserRouteParam({

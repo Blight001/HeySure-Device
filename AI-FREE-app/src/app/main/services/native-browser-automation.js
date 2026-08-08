@@ -200,6 +200,14 @@ class NativeBrowserAutomation {
       return { ...result, action: 'upload' };
     }
     if (!this.downloadService?.execute) throw new Error('AI 工作区下载服务不可用');
+    if (action === 'download') {
+      const response = await this.runtimeCommand(connection, 'get-session-data', {});
+      const session = response?.result || response;
+      const pageUrl = text(session?.url);
+      return this.downloadService.execute({
+        ...args, page_url: pageUrl, referer: pageUrl, cookies: session?.cookies || [],
+      }, { pageUrl });
+    }
     if (action !== 'save_session') return this.downloadService.execute(args);
     const response = await this.runtimeCommand(connection, 'get-session-data', {});
     return this.downloadService.execute({ ...args, session: response?.result || response });

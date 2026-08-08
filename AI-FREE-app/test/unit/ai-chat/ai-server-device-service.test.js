@@ -72,6 +72,25 @@ test('当前 MCP 工具转换为不占用保留前缀的 aifree 工具目录', (
   assert.equal(catalog.routes.get('aifree.browser_tab'), 'browser_tab');
 });
 
+test('aifree 目录保留软件内置 MCP 的完整 schema 和一对一执行路由', () => {
+  const internalTools = ['windows_tab', 'run_command', 'browser_observe', 'browser_tab', 'browser_wait']
+    .map((name) => ({
+      name,
+      description: `${name} description`,
+      inputSchema: {
+        type: 'object', properties: { action: { type: 'string', enum: ['list', 'run'] } }, required: ['action'],
+      },
+    }));
+  const catalog = normalizeToolCatalog({ tools: internalTools });
+
+  assert.deepEqual(catalog.tools.map((tool) => tool.name), internalTools.map((tool) => `aifree.${tool.name}`));
+  for (const source of internalTools) {
+    const remote = catalog.tools.find((tool) => tool.name === `aifree.${source.name}`);
+    assert.deepEqual(remote.input_schema, source.inputSchema);
+    assert.equal(catalog.routes.get(remote.name), source.name);
+  }
+});
+
 test('登录后注册 custom 设备并将派发任务恰好回一个终态', async () => {
   const socket = new FakeSocket();
   const calls = [];

@@ -6,6 +6,7 @@ const { createNativeBrowserAutomation } = require('../../../src/app/main/service
 
 function fixture() {
   const calls = [];
+  const downloads = [];
   let automationHandler = null;
   let listedTabs = {
     success: true, action: 'list', count: 1, activeTabId: '0',
@@ -21,6 +22,9 @@ function fixture() {
       calls.push(['automation', ...args]);
       if (automationHandler) return automationHandler(...args);
       if (args[1] === 'list-tabs') return { result: listedTabs };
+      if (args[1] === 'get-session-data') return { result: {
+        success: true, url: 'http://127.0.0.1:4173/', cookies: [{ name: 'sid', value: 'test' }],
+      } };
       if (args[1] === 'activate-tab') {
         return { result: { id: '1', index: 1, active: true, title: '目标页面', url: args[2].url } };
       }
@@ -38,12 +42,16 @@ function fixture() {
       id: 'profile-a', fixedTitle: '工作浏览器', runtimeUrl: 'https://example.com/',
     }]]),
     browserDownloadService: {
-      execute: async (args) => ({ success: true, action: args.action }),
+      execute: async (args, context) => {
+        downloads.push({ args, context });
+        return { success: true, action: args.action };
+      },
       resolveUploadPaths: (paths) => paths,
     },
   });
   return {
     calls,
+    downloads,
     service,
     setAutomationHandler: (handler) => { automationHandler = handler; },
     setListedTabs: (value) => { listedTabs = value; },
@@ -71,6 +79,17 @@ test('native automation publishes ready managed Chromium as the browser connecti
   const actionProperties = tools.find((tool) => tool.name === 'browser_action').input_schema.properties;
   assert.equal(actionProperties.ctrl.type, 'boolean');
   assert.equal(actionProperties.meta.type, 'boolean');
+});
+
+test('browser_file download uses the active page as the trusted relative URL context', async () => {
+  const { calls, downloads, service } = fixture();
+  await service.dispatch('native:profile-a', 'browser_file', {
+    action: 'download', url: '/og.png', page_url: 'http://spoofed.invalid/',
+  });
+  assert.deepEqual(calls[0], ['automation', 42, 'get-session-data', {}]);
+  assert.equal(downloads[0].args.page_url, 'http://127.0.0.1:4173/');
+  assert.equal(downloads[0].args.referer, 'http://127.0.0.1:4173/');
+  assert.deepEqual(downloads[0].context, { pageUrl: 'http://127.0.0.1:4173/' });
 });
 
 test('observe and action dispatch directly to the Chromium runtime bridge', async () => {

@@ -42,6 +42,15 @@ function protocolToolName(sourceName) {
   const action = String(sourceName || '')
     .trim()
     .toLocaleLowerCase()
+    .replace(/[^a-z0-9]+/g, '+')
+    .replace(/^\++|\++$/g, '');
+  return action ? `aifree.${action}` : '';
+}
+
+function legacyProtocolToolName(sourceName) {
+  const action = String(sourceName || '')
+    .trim()
+    .toLocaleLowerCase()
     .replace(/[^a-z0-9_-]+/g, '_')
     .replace(/^_+|_+$/g, '');
   return action ? `aifree.${action}` : '';
@@ -55,6 +64,10 @@ function normalizeToolCatalog(listed = {}) {
     const name = protocolToolName(sourceName);
     if (!name || routes.has(name)) continue;
     routes.set(name, sourceName);
+    // Publish only the canonical `+` spelling, while keeping the previous
+    // underscore route executable for tasks already queued during an upgrade.
+    const legacyName = legacyProtocolToolName(sourceName);
+    if (legacyName && legacyName !== name && !routes.has(legacyName)) routes.set(legacyName, sourceName);
     tools.push({
       name,
       description: String(source.description || `调用 AI-FREE 的 ${sourceName} MCP 工具`).trim(),

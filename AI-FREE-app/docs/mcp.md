@@ -17,16 +17,16 @@ AI-FREE 本地 AI 对话使用下表中的“内部名称”。连接 HeySure �
 
 | 内部名称 | HeySure 注册名称 | 用途 |
 | --- | --- | --- |
-| `windows_tab` | `aifree.windows_tab` | 查询、显示、新建、编辑和关闭外部软件栏目 |
-| `browser_environment` | `aifree.browser_environment` | 按需读取或增量修改栏目的浏览器环境与指纹 |
-| `run_command` | `aifree.run_command` | 在 AI-Workspace 工作目录中执行有界命令行 |
-| `manage_card` | `aifree.manage_card` | 管理和运行浏览器自动化卡片 |
-| `browser_file` | `aifree.browser_file` | 下载文件、上传本地文件，或保存当前页面 Cookie/Storage |
-| `browser_tab` | `aifree.browser_tab` | 查询、切换、导航、刷新标签页和聚焦浏览器 |
-| `browser_observe` | `aifree.browser_observe` | 获取页面中可交互或可见的元素 |
-| `browser_screenshot` | `aifree.browser_screenshot` | 截取页面可视区或指定坐标区域 |
-| `browser_action` | `aifree.browser_action` | 点击、输入、滚动和发送按键 |
-| `browser_wait` | `aifree.browser_wait` | 等待元素出现或等待指定时间 |
+| `windows_tab` | `aifree.windows+tab` | 查询、显示、新建、编辑和关闭外部软件栏目 |
+| `browser_environment` | `aifree.browser+environment` | 按需读取或增量修改栏目的浏览器环境与指纹 |
+| `run_command` | `aifree.run+command` | 在 AI-Workspace 工作目录中执行有界命令行 |
+| `manage_card` | `aifree.manage+card` | 管理和运行浏览器自动化卡片 |
+| `browser_file` | `aifree.browser+file` | 下载文件、上传本地文件，或保存当前页面 Cookie/Storage |
+| `browser_tab` | `aifree.browser+tab` | 查询、切换、导航、刷新标签页和聚焦浏览器 |
+| `browser_observe` | `aifree.browser+observe` | 获取页面中可交互或可见的元素 |
+| `browser_screenshot` | `aifree.browser+screenshot` | 截取页面可视区或指定坐标区域 |
+| `browser_action` | `aifree.browser+action` | 点击、输入、滚动和发送按键 |
+| `browser_wait` | `aifree.browser+wait` | 等待元素出现或等待指定时间 |
 
 ## 外部软件栏目工具
 

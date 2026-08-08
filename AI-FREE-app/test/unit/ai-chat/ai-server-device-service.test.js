@@ -64,11 +64,12 @@ test('当前 MCP 工具转换为不占用保留前缀的 aifree 工具目录', (
     inputSchema: { type: 'object', properties: { action: { type: 'string' } }, required: ['action'] },
   }] });
   assert.deepEqual(catalog.tools, [{
-    name: 'aifree.browser_tab',
+    name: 'aifree.browser+tab',
     description: '管理标签页',
     input_schema: { type: 'object', properties: { action: { type: 'string' } }, required: ['action'] },
     destructive: false,
   }]);
+  assert.equal(catalog.routes.get('aifree.browser+tab'), 'browser_tab');
   assert.equal(catalog.routes.get('aifree.browser_tab'), 'browser_tab');
 });
 
@@ -83,9 +84,12 @@ test('aifree 目录保留软件内置 MCP 的完整 schema 和一对一执行路
     }));
   const catalog = normalizeToolCatalog({ tools: internalTools });
 
-  assert.deepEqual(catalog.tools.map((tool) => tool.name), internalTools.map((tool) => `aifree.${tool.name}`));
+  assert.deepEqual(
+    catalog.tools.map((tool) => tool.name),
+    internalTools.map((tool) => `aifree.${tool.name.replaceAll('_', '+')}`),
+  );
   for (const source of internalTools) {
-    const remote = catalog.tools.find((tool) => tool.name === `aifree.${source.name}`);
+    const remote = catalog.tools.find((tool) => tool.name === `aifree.${source.name.replaceAll('_', '+')}`);
     assert.deepEqual(remote.input_schema, source.inputSchema);
     assert.equal(catalog.routes.get(remote.name), source.name);
   }
@@ -118,16 +122,16 @@ test('登录后注册 custom 设备并将派发任务恰好回一个终态', asy
   assert.equal(registration.id, 'ai-free-machine-123');
   assert.equal(registration.deviceType, 'custom');
   assert.equal(registration.platform, 'ai-free-custom-service');
-  assert.deepEqual(registration.capabilities, ['aifree.browser_action']);
+  assert.deepEqual(registration.capabilities, ['aifree.browser+action']);
   assert.equal(registration.toolDefs[0].input_schema.required[0], 'action');
 
   socket.serverEmit('device:registered', { aiConfigId: 7 });
   await socket.serverEmit('task:dispatch', {
-    taskId: 'task-1', tool: 'aifree.browser_action', args: { action: 'click' },
+    taskId: 'task-1', tool: 'aifree.browser+action', args: { action: 'click' },
   });
   await tick();
   await socket.serverEmit('task:dispatch', {
-    taskId: 'task-1', tool: 'aifree.browser_action', args: { action: 'click' },
+    taskId: 'task-1', tool: 'aifree.browser+action', args: { action: 'click' },
   });
   await tick();
   assert.deepEqual(calls, [{ name: 'browser_action', args: { action: 'click' } }]);

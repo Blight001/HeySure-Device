@@ -8,6 +8,31 @@ const RETRYABLE_WAIT_ERRORS = new Set(['INPUT_TARGET_UNAVAILABLE', 'WEB_CONTENTS
 
 function text(value) { return String(value == null ? '' : value).trim(); }
 
+function nonNegativePoint(x, y) {
+  const point = { x: Number(x), y: Number(y) };
+  if (!Object.values(point).every(Number.isFinite)) return null;
+  return Math.min(point.x, point.y) >= 0 ? point : null;
+}
+
+function observedCenter(item) {
+  const source = item || {};
+  const explicit = nonNegativePoint(source.clickX, source.clickY);
+  if (explicit) return explicit;
+  const [x, y, width, height] = [source.x, source.y, source.width, source.height].map(Number);
+  if (![x, y, width, height].every(Number.isFinite)) return null;
+  if (Math.min(width, height) <= 0) return null;
+  return nonNegativePoint(x + (width / 2), y + (height / 2));
+}
+
+function observedTarget(item) {
+  const id = text(item?.id);
+  if (!id) return null;
+  const selector = text(item?.selector);
+  const point = observedCenter(item);
+  if (!selector && !point) return null;
+  return [id, { ...(selector ? { selector } : {}), ...(point || {}) }];
+}
+
 function normalizeToolName(value) {
   return value === 'browser_download' ? 'browser_file' : value;
 }
@@ -70,7 +95,7 @@ class NativeBrowserAutomation {
     this.getTabs = options.getTabs;
     this.downloadService = options.browserDownloadService;
     this.cardService = options.cardService || null;
-    this.observeSelectors = new Map();
+    this.observeTargets = new Map();
   }
 
   listConnections() {
@@ -151,15 +176,15 @@ class NativeBrowserAutomation {
 
   resolveObservedTarget(connection, args) {
     if (text(args.selector) || !text(args.ref)) return args;
-    const selector = this.observeSelectors.get(connection.id)?.get(text(args.ref));
-    return selector ? { ...args, selector } : args;
+    const target = this.observeTargets.get(connection.id)?.get(text(args.ref));
+    return target ? { ...args, ...target } : args;
   }
 
   async browserObserve(connection, input) {
     const result = await this.runtimeCommand(connection, 'observe-page', input);
-    const selectors = new Map((Array.isArray(result?.items) ? result.items : [])
-      .map((item) => [text(item?.id), text(item?.selector)]).filter(([id, selector]) => id && selector));
-    this.observeSelectors.set(connection.id, selectors);
+    const targets = new Map((Array.isArray(result?.items) ? result.items : [])
+      .map(observedTarget).filter(Boolean));
+    this.observeTargets.set(connection.id, targets);
     return result;
   }
 

@@ -14,9 +14,10 @@ test('normalizes bounded native observe and action payloads', () => {
   assert.deepEqual(normalizeRuntimeAutomation('observe-page', {
     max_items: 5000, keyword: '登录', include_media: false,
   }), {
-    limit: 1000, keyword: '登录', tag: '', filter: '', includeText: true, includeMedia: false,
+    limit: 1000, textLimit: 120, keyword: '登录', tag: '', filter: '', includeText: true, includeMedia: false,
     showHighlights: true, highlightDurationMs: 5000,
   });
+  assert.equal(normalizeRuntimeAutomation('observe-page', { text_limit: 5000 }).textLimit, 500);
   const hiddenMarks = normalizeRuntimeAutomation('observe-page', {
     mark: false, highlight_duration_ms: 999999,
   });
@@ -25,6 +26,12 @@ test('normalizes bounded native observe and action payloads', () => {
   assert.equal(normalizeRuntimeAutomation('perform-action', {
     action: 'type', selector: '#email', text: 'a@example.com', timeout: 1,
   }).timeoutMs, 100);
+  assert.deepEqual(normalizeRuntimeAutomation('perform-action', {
+    action: 'click', ref: 'e1', selector: 'button', x: 160.5, y: 55.25,
+  }), {
+    action: 'click', selector: 'button', text: '', key: '', ref: 'e1', direction: 'down', amount: 600,
+    timeoutMs: 10000, ctrl: false, shift: false, alt: false, meta: false, x: 160.5, y: 55.25,
+  });
   assert.deepEqual(normalizeRuntimeAutomation('perform-action', {
     action: 'press_key', key: 'Ctrl+Shift+Enter', alt: true,
   }), {
@@ -39,6 +46,7 @@ test('normalizes bounded native observe and action payloads', () => {
 test('rejects unknown native commands and actions', () => {
   assert.throws(() => normalizeRuntimeAutomation('execute-script', {}), /不支持的 Chromium 自动化命令/);
   assert.throws(() => normalizeRuntimeAutomation('perform-action', { action: 'eval' }), /不支持的原生页面动作/);
+  assert.throws(() => normalizeRuntimeAutomation('perform-action', { action: 'click', x: 10 }), /必须同时提供/);
 });
 
 test('routes native automation only to a live managed Chromium process', async () => {
@@ -136,6 +144,32 @@ test('fork keyboard modifier patch forwards trusted Ctrl+Enter modifiers', () =>
   assert.match(patch, /kShiftKey/);
   assert.match(patch, /KeyboardModifiers\(command\)/);
   assert.match(patch, /NativeWebKeyboardEvent event\(type, modifiers/);
+});
+
+test('fork coordinate actions bypass selector lookup and retain native hit testing', () => {
+  const patchDirectory = path.join(__dirname, '../../../native/chromium-fork/patches');
+  const series = fs.readFileSync(path.join(patchDirectory, 'series'), 'utf8');
+  const patch = fs.readFileSync(
+    path.join(patchDirectory, '0028-ai-free-observed-coordinate-actions.patch'), 'utf8',
+  );
+  assert.match(series, /0027-ai-free-keyboard-modifiers\.patch\s+0028-ai-free-observed-coordinate-actions\.patch/);
+  assert.match(patch, /targetMode:'viewport-coordinate'/);
+  assert.match(patch, /nativeInput:\{x,y,viewportWidth:innerWidth,viewportHeight:innerHeight\}/);
+  assert.match(patch, /TARGET_COORDINATE_INVALID/);
+});
+
+test('fork observe filters topmost click owners and bounds text summaries', () => {
+  const patchDirectory = path.join(__dirname, '../../../native/chromium-fork/patches');
+  const series = fs.readFileSync(path.join(patchDirectory, 'series'), 'utf8');
+  const patch = fs.readFileSync(
+    path.join(patchDirectory, '0030-ai-free-observe-topmost.patch'), 'utf8',
+  );
+  assert.match(series, /0028-ai-free-observed-coordinate-actions\.patch\s+0030-ai-free-observe-topmost\.patch/);
+  assert.match(patch, /deepElementFromPoint/);
+  assert.match(patch, /clickOwner/);
+  assert.match(patch, /topmostFiltered:true/);
+  assert.match(patch, /textTruncated/);
+  assert.match(patch, /item\.clickX/);
 });
 
 test('fork observe highlights stay in the native event-transparent UI layer', () => {

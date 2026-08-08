@@ -34,9 +34,22 @@ function optionalText(value, maxLength = 8192) {
   return result;
 }
 
+function normalizeActionCoordinates(source) {
+  const hasX = source.x !== undefined && source.x !== null && source.x !== '';
+  const hasY = source.y !== undefined && source.y !== null && source.y !== '';
+  if (!hasX && !hasY) return {};
+  const x = Number(source.x);
+  const y = Number(source.y);
+  if (!hasX || !hasY || !Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) {
+    throw automationError('AUTOMATION_PAYLOAD_INVALID', '页面点击坐标必须同时提供有效的非负 x/y');
+  }
+  return { x: Math.min(x, 1_000_000), y: Math.min(y, 1_000_000) };
+}
+
 function normalizeObservePayload(source) {
   return {
     limit: boundedInteger(source.limit ?? source.max_items, 200, 1, 1000),
+    textLimit: boundedInteger(source.text_limit ?? source.textLimit, 120, 20, 500),
     keyword: optionalText(source.keyword, 512),
     tag: optionalText(source.tag, 64).toLowerCase(),
     filter: optionalText(source.filter, 64).toLowerCase(),
@@ -74,11 +87,13 @@ function normalizeActionPayload(source) {
     throw automationError('AUTOMATION_ACTION_INVALID', `不支持的原生页面动作: ${action || '<empty>'}`);
   }
   const keyboard = normalizeKeyboardInput(source);
+  const coordinates = normalizeActionCoordinates(source);
   return {
     action,
     selector: optionalText(source.selector, 4096),
     text: optionalText(source.text ?? source.value, 1024 * 1024),
     ...keyboard,
+    ...coordinates,
     ref: optionalText(source.ref, 128),
     direction: optionalText(source.direction || 'down', 16),
     amount: boundedInteger(source.amount ?? source.delta_y, 600, -100000, 100000),

@@ -72,6 +72,20 @@ function createTestServer() {
         </script>`);
       return;
     }
+    if (url.pathname === '/coordinate-input') {
+      response.end(`<!doctype html><meta charset="utf-8"><title>COORDINATE_INPUT_READY</title>
+        <button style="position:fixed;left:0;top:0">错误按钮</button>
+        <button id="publish" style="position:fixed;left:200px;top:150px;width:240px;height:80px"><span>发布</span></button>
+        <button id="covered" style="position:fixed;left:20px;top:260px;width:180px;height:60px;z-index:1">被遮挡按钮</button>
+        <div id="cover" style="position:fixed;left:20px;top:260px;width:180px;height:60px;z-index:2;background:white">遮罩</div>
+        <p id="long-text" style="position:fixed;left:20px;top:340px;width:600px;height:80px">${'这是需要截断的长文本段落。'.repeat(30)}</p>
+        <script>
+          document.querySelector('#publish').addEventListener('click', (event) => {
+            fetch('/input-result?profile=coordinate&trusted=' + event.isTrusted).catch(() => {});
+          });
+        </script>`);
+      return;
+    }
     if (url.pathname === '/native-input') {
       response.end(`<!doctype html><meta charset="utf-8"><title>NATIVE_INPUT_READY</title>
         <input id="native-input" style="position:fixed;left:20px;top:20px;width:300px;height:50px">
@@ -286,6 +300,42 @@ app.whenReady().then(async () => {
   const inputRequest = await waitForRequest((item) => item.path === '/input-result' && item.profile === 'b');
   assert.equal(new URLSearchParams(inputRequest.query || '').get('trusted'), 'true');
 
+  const coordinatePage = await manager.navigate('phase3_b', 'chromium', `${origin}/coordinate-input`);
+  assert.equal(coordinatePage.result.title, 'COORDINATE_INPUT_READY');
+  const topmostObserved = await manager.dispatchAutomationByProcessId(b.state.pid, 'observe-page', {
+    limit: 50, text_limit: 40, show_highlights: false,
+  });
+  assert.equal(topmostObserved.result.topmostFiltered, true);
+  assert.equal(topmostObserved.result.textLimit, 40);
+  assert.equal(topmostObserved.result.items.some((item) => item.text === '被遮挡按钮'), false);
+  const visiblePublishItems = topmostObserved.result.items.filter((item) => item.text === '发布');
+  assert.equal(visiblePublishItems.length, 1);
+  assert.equal(visiblePublishItems[0].kind, 'interactive');
+  assert.equal(visiblePublishItems[0].tag, 'button');
+  assert.equal(Number.isFinite(visiblePublishItems[0].clickX), true);
+  assert.equal(Number.isFinite(visiblePublishItems[0].clickY), true);
+  const longTextItem = topmostObserved.result.items.find((item) => item.selector === '#long-text');
+  assert.equal(longTextItem?.kind, 'text');
+  assert.equal(longTextItem?.text.length, 40);
+  assert.equal(longTextItem?.textTruncated, true);
+  const coordinateObserved = await manager.dispatchAutomationByProcessId(b.state.pid, 'observe-page', {
+    keyword: '发布', limit: 10, show_highlights: false,
+  });
+  const publishItem = coordinateObserved.result.items.find((item) => item.text === '发布');
+  assert.equal(publishItem?.selector, '#publish');
+  const targetX = publishItem.clickX;
+  const targetY = publishItem.clickY;
+  const coordinateClicked = await manager.dispatchAutomationByProcessId(b.state.pid, 'perform-action', {
+    action: 'click', ref: publishItem.id, selector: 'button', x: targetX, y: targetY,
+  });
+  assert.equal(coordinateClicked.result.inputMode, 'chromium-visible-pointer');
+  assert.equal(coordinateClicked.result.targetMode, 'viewport-coordinate');
+  assert.deepEqual(coordinateClicked.result.target, { x: targetX, y: targetY });
+  const coordinateRequest = await waitForRequest(
+    (item) => item.path === '/input-result' && item.profile === 'coordinate',
+  );
+  assert.equal(new URLSearchParams(coordinateRequest.query || '').get('trusted'), 'true');
+
   const uploadPath = path.join(runtimeRoot, 'input-video.mp4');
   fs.writeFileSync(uploadPath, 'ai-free-upload-acceptance');
   await manager.show('phase3_b', 'chromium');
@@ -431,6 +481,8 @@ app.whenReady().then(async () => {
   console.log('[phase3-acceptance] navigate/reload command responses passed');
   console.log('[phase3-acceptance] trusted local file selection reached the real HTML file input');
   console.log('[phase3-acceptance] native keyboard and wheel events reached the page as trusted input');
+  console.log('[phase3-acceptance] observe returned only topmost click owners and truncated long text');
+  console.log('[phase3-acceptance] observed coordinates clicked the topmost target as trusted native input');
   console.log('[phase3-acceptance] native observe highlights were attached outside the page DOM');
   console.log('[phase3-acceptance] visible + HttpOnly cookies reached real Chromium requests');
   console.log('[phase3-acceptance] LocalStorage/SessionStorage verification and two-Profile isolation passed');

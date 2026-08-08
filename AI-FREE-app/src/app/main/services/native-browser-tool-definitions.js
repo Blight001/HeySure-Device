@@ -42,7 +42,8 @@ const NATIVE_BROWSER_TOOL_DEFINITIONS = Object.freeze([
     input_schema: objectSchema({
       limit: { type: 'number' }, max_items: { type: 'number' }, filter: { type: 'string' },
       tag: { type: 'string' }, keyword: { type: 'string' }, include_text: { type: 'boolean' },
-      include_media: { type: 'boolean' }, mark: { type: 'boolean' }, highlight_duration_ms: { type: 'number' },
+      include_media: { type: 'boolean' }, text_limit: { type: 'number' },
+      mark: { type: 'boolean' }, highlight_duration_ms: { type: 'number' },
     }),
   },
   {
@@ -59,6 +60,7 @@ const NATIVE_BROWSER_TOOL_DEFINITIONS = Object.freeze([
     input_schema: objectSchema({
       action: { type: 'string', enum: ['click', 'double_click', 'right_click', 'scroll', 'type', 'press_key'] },
       selector: { type: 'string' }, ref: { type: 'string' }, text: { type: 'string' },
+      x: { type: 'number' }, y: { type: 'number' },
       key: { type: 'string', description: '按键名或组合键，例如 Enter、Ctrl+Enter' },
       ctrl: { type: 'boolean' }, shift: { type: 'boolean' }, alt: { type: 'boolean' }, meta: { type: 'boolean' },
       direction: { type: 'string' }, amount: { type: 'number' }, timeout_ms: { type: 'number' },

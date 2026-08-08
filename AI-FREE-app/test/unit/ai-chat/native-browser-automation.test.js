@@ -79,6 +79,8 @@ test('native automation publishes ready managed Chromium as the browser connecti
   const actionProperties = tools.find((tool) => tool.name === 'browser_action').input_schema.properties;
   assert.equal(actionProperties.ctrl.type, 'boolean');
   assert.equal(actionProperties.meta.type, 'boolean');
+  assert.equal(actionProperties.x.type, 'number');
+  assert.equal(actionProperties.y.type, 'number');
 });
 
 test('browser_file download uses the active page as the trusted relative URL context', async () => {
@@ -102,6 +104,22 @@ test('observe and action dispatch directly to the Chromium runtime bridge', asyn
     ['automation', 42, 'observe-page', { limit: 5 }],
     ['automation', 42, 'perform-action', { action: 'click', selector: '#go' }],
   ]);
+});
+
+test('observed refs click the validated exposed point instead of re-querying a generic selector', async () => {
+  const { calls, service, setAutomationHandler } = fixture();
+  setAutomationHandler(async (_pid, command) => ({ result: command === 'observe-page' ? {
+    success: true,
+    items: [{
+      id: 'e1', selector: 'button', x: 120, y: 40, width: 80, height: 30,
+      clickX: 126, clickY: 46,
+    }],
+  } : { success: true } }));
+  await service.dispatch('native:profile-a', 'browser_observe', { limit: 5 });
+  await service.dispatch('native:profile-a', 'browser_action', { action: 'click', ref: 'e1' });
+  assert.deepEqual(calls[1], ['automation', 42, 'perform-action', {
+    action: 'click', ref: 'e1', selector: 'button', x: 126, y: 46,
+  }]);
 });
 
 test('native tab and session operations do not enqueue extension tasks', async () => {

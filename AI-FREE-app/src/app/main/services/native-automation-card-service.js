@@ -9,8 +9,8 @@ const STEP_TYPES = new Set([
 ]);
 const RULES = `原生自动化卡片格式：cardData 至少包含 name、website 或首个 navigate，以及非空 steps。
 步骤 type 仅允许 navigate/click/type/wait/condition/save_cookies/clear_current_page_cache/get_credits/screenshot。
-click/type/wait 使用 selector；type 可用 variable 与 inputs 覆盖 text；condition 支持 selector_exists/selector_missing/text_exists/text_missing/url_matches。
-可选 flow={start,nodes,edges}，边 label 使用 next/default/true/false。MCP 不允许任意 JavaScript。`;
+click/type/wait 使用 selector；type 可用 variable 与 inputs 覆盖 text；condition 支持 selector_exists/selector_missing/text_exists/text_missing/url_matches，可用 fail_on_false=true 把未满足条件作为卡片失败。
+可选 flow={start,nodes,edges}，边 label 使用 next/default/true/false；有 flow 时没有出边的节点即为流程终点。MCP 不允许任意 JavaScript。`;
 
 function text(value) { return String(value == null ? '' : value).trim(); }
 function clone(value) { return JSON.parse(JSON.stringify(value)); }
@@ -87,7 +87,7 @@ function nextFlowIndex(card, currentIndex, branch) {
   const labels = branch === undefined ? ['next', 'default', ''] : [String(branch), 'default', 'next'];
   const edge = edges.find((item) => text(item.from || item.source) === currentId
     && labels.includes(text(item.label || item.branch || 'next').toLowerCase()));
-  if (!edge) return currentIndex + 1 < card.steps.length ? currentIndex + 1 : -1;
+  if (!edge) return -1;
   const target = text(edge.to || edge.target);
   return card.steps.findIndex((step, index) => (text(step.id) || `step_${index + 1}`) === target);
 }
@@ -143,12 +143,40 @@ async function executeStep(step, dispatch) {
 function failedStepResult(error, index, inputs, execution) {
   return {
     success: false,
-    errorCode: error?.code || 'CARD_STEP_FAILED',
+    errorCode: error?.errorCode || error?.code || 'CARD_STEP_FAILED',
     error: error?.message || String(error),
     stepIndex: index + 1,
     context: inputs,
     execution,
   };
+}
+
+function conditionMustPass(step) {
+  return text(step.type).toLowerCase() === 'condition' && step.fail_on_false === true;
+}
+
+function toolResultFailed(step, result) {
+  if (text(step.type).toLowerCase() === 'condition') return false;
+  return result?.success === false || result?.ok === false;
+}
+
+function resultErrorMessage(step, result, failedCondition) {
+  const reported = text(result?.error || result?.errorReason || result?.message);
+  if (reported) return reported;
+  if (failedCondition) return `条件未满足: ${text(step.name) || text(step.condition_mode) || 'condition'}`;
+  return `步骤执行失败: ${text(step.name) || text(step.type) || 'unknown'}`;
+}
+
+function stepResultError(step, result) {
+  const failedCondition = conditionMustPass(step) && result?.success !== true;
+  const failedTool = toolResultFailed(step, result);
+  if (!failedCondition && !failedTool) return null;
+  const error = /** @type {Error & {errorCode?: string}} */ (
+    new Error(resultErrorMessage(step, result, failedCondition))
+  );
+  error.errorCode = text(result?.errorCode || result?.code)
+    || (failedCondition ? 'CARD_CONDITION_FAILED' : 'CARD_STEP_FAILED');
+  return error;
 }
 
 async function runCard(card, args, dispatch) {
@@ -161,6 +189,8 @@ async function runCard(card, args, dispatch) {
     const step = materializeStep(card.steps[index], inputs);
     try {
       const result = await executeStep(step, dispatch);
+      const resultError = stepResultError(step, result);
+      if (resultError) throw resultError;
       execution.push({ stepIndex: index + 1, name: text(step.name), type: step.type, success: true, result });
       index = card.flow ? nextFlowIndex(card, index, text(step.type) === 'condition' ? result.success : undefined) : index + 1;
       if (index >= card.steps.length) index = -1;

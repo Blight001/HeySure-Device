@@ -92,6 +92,8 @@ Cookie 属于登录会话数据，不属于 `browser_environment.settings` 的�
 - 运行参数：`inputs`、`account`、`password`、`email`、`start_step`、`timeout_seconds`、`tab_id`。
 - 注意：不同 `action` 使用不同参数；`write`、步骤编辑和 `delete` 会修改本地卡片数据。
 - 脚本限制：MCP 不公开 `external_script`，也不允许 `condition_mode=js`；写入、局部编辑和运行历史卡片时都会拒绝任意页面脚本。
+- 失败语义：原生步骤返回 `success=false`/`ok=false` 时卡片立即失败并停止；需要把业务校验作为断言时，在 `condition` 步骤设置 `fail_on_false=true`。
+- 流程终点：存在 `flow` 时严格按连线执行，没有出边的节点就是终点，不会继续落入 `steps` 数组中的后续步骤。
 
 ### `browser_file`
 
@@ -118,7 +120,8 @@ Cookie 属于登录会话数据，不属于 `browser_environment.settings` 的�
 - 数量参数：`limit`、`max_items`。
 - 筛选参数：`filter`、`tag`、`tags`、`keyword`、`query`、`text_filter`。
 - 框架参数：`frame`、`frame_path`。
-- 文本与标记参数：`include_text`、`text_limit`、`allow_truncate`、`mark`、`highlight_duration_ms`。
+- 文本与标记参数：`include_text`、`text_limit`（默认 120，范围 20–500）、`mark`、`highlight_duration_ms`。超长文本会截断并返回 `textTruncated=true`。
+- 顶层可点击筛选：交互元素必须在当前视口的至少一个候选点通过 Chromium 命中测试；被遮罩完全覆盖、`pointer-events:none`或禁用的元素不返回。按钮内部的 `span/svg/path` 会归并到最近的按钮或链接。
 - Fork 原生 Observe 默认在 Chromium UI 层绘制与元素 `id` 对应的边框标签，不写入网页 DOM、不接收鼠标事件；导航、滚动、窗口隐藏或超时后自动清除。最多绘制 120 个标记。
 - 路由参数：`tab_id`。
 - 下载链接：可见 HTTP/HTTPS 链接会在对应 item 中提供 `downloadUrl`，并汇总到顶层 `downloadLinks`；其中的 `url` 可直接交给 `browser_file`。
@@ -133,7 +136,7 @@ Cookie 属于登录会话数据，不属于 `browser_environment.settings` 的�
 
 - 作用：操作网页中的元素或坐标位置。
 - `action`：必填，可用值为 `click`、`double_click`、`right_click`、`scroll`、`type`、`press_key`。
-- 元素定位：`ref`、`selector`，也可使用 `x`、`y` 坐标。
+- 元素定位：优先使用 `browser_observe` 返回的 `ref`。原生连接会保存该元素的视口中心坐标，后续点击直接在该坐标注入鼠标事件，由 Chromium 命中测试选择坐标处最上层元素；selector 只用于诊断和坐标缺失时回退。也可显式传入 `x`、`y`。
 - 点击实现：`click`、`double_click`、`right_click` 会经主进程 Runtime Bridge 使用 Chromium Views 层的可见虚拟指针；平滑移动轨迹、按下、抬起和点击反馈均在内核侧完成。覆盖层不进入页面 DOM、不接收事件，也不移动 Windows 全局鼠标；RenderWidgetHost 正常执行坐标命中测试，不会穿透遮挡元素。
 - 输入参数：`text`、`clear_first`、`submit`。
 - 键盘参数：`key` 支持单键或 `Ctrl+Enter` 形式的组合键，也可用 `ctrl`、`shift`、`alt`、`meta` 布尔参数显式指定修饰键。

@@ -1,7 +1,7 @@
 'use strict';
 
 const { createWindowBackgroundController } = require('../features/window/window-background-controller');
-const { resolveSidebarWidth } = require('../../shared/sidebar-layout');
+const { clampSidebarWidth, resolveSidebarWidth } = require('../../shared/sidebar-layout');
 const { createAppShellWindowStateController } = require('./app-shell-window-state');
 
 function createWindowInstance(deps, windowStateController) {
@@ -124,6 +124,7 @@ function resolveLayout(deps, mainWindow, sideView) {
     isMaximized: mainWindow.isMaximized?.() === true,
     currentWidth: sideView?.getBounds?.().width,
     normalWindowWidth: mainWindow.getNormalBounds?.().width,
+    preferredWidth: deps.getPreferredSidebarWidth?.(),
   });
   const activeTab = deps.resolveTabs().get(deps.resolveActiveTabId());
   return {
@@ -220,9 +221,25 @@ function revealMainWindow(deps) {
 function createAppShellMainWindowController(deps = {}) {
   const backgroundController = createWindowBackgroundController(deps);
   const windowStateController = createAppShellWindowStateController(deps);
+  let preferredSidebarWidth = windowStateController.getSidebarWidth();
+  const controllerDeps = {
+    ...deps,
+    getPreferredSidebarWidth: () => preferredSidebarWidth,
+  };
+  const setSidebarWidth = (requestedWidth) => {
+    const mainWindow = deps.resolveMainWindow?.();
+    const isSidebarVisible = deps.getIsSidebarVisible ? deps.getIsSidebarVisible() : true;
+    if (!mainWindow || mainWindow.isDestroyed?.() || !isSidebarVisible) return 0;
+    preferredSidebarWidth = clampSidebarWidth(requestedWidth, mainWindow.getContentSize?.()[0]);
+    if (preferredSidebarWidth === 0) return 0;
+    windowStateController.setSidebarWidth(preferredSidebarWidth);
+    updateMainWindowLayout(controllerDeps, mainWindow);
+    return preferredSidebarWidth;
+  };
   return {
-    createMainWindow: () => createMainWindow(deps, backgroundController, windowStateController),
+    createMainWindow: () => createMainWindow(controllerDeps, backgroundController, windowStateController),
     revealMainWindow: () => backgroundController.revealWindow() || revealMainWindow(deps),
+    setSidebarWidth,
   };
 }
 

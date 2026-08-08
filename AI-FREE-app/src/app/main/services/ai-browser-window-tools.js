@@ -2,7 +2,7 @@
 //
 // 与 Chromium 原生页面工具配合，这组工具负责软件外层的浏览器窗口生命周期，
 // 始终注入 AI 控制对话，直接操作软件自身的独立浏览器窗口：
-// 通过 software_window 的 action 子选项列出、打开、新建、编辑和关闭窗口。
+// 通过 windows_tab 的 action 子选项列出、打开、新建、编辑和关闭栏目。
 // 底层复用 ipc/register/settings 的浏览器历史（browserHistory）读写逻辑，
 // 保证 AI 操作与设置页/标签栏手工操作看到的是同一份数据。
 
@@ -23,10 +23,11 @@ const { normalizeAiFreeBrowserSettings } = require('../utils/ai-free-browser-set
 const { FREE_BROWSER_WINDOW_LIMIT, resolveVipAccess } = require('../utils/vip-access');
 const {
   BROWSER_SETTINGS_PATCH_SCHEMA,
-  SOFTWARE_WINDOW_INPUT_SCHEMA,
+  WINDOWS_TAB_INPUT_SCHEMA,
 } = require('./ai-browser-window-tool-schema');
 
-const SOFTWARE_WINDOW_TOOL_NAME = 'software_window';
+const WINDOWS_TAB_TOOL_NAME = 'windows_tab';
+const LEGACY_TOOL_NAME = 'software_window';
 const SETTING_KEYS = new Set(Object.keys(BROWSER_SETTINGS_PATCH_SCHEMA.properties));
 
 function text(value) {
@@ -92,10 +93,10 @@ function windowSummary(items) {
 function createToolDefinitions() {
   return [
     {
-      name: SOFTWARE_WINDOW_TOOL_NAME,
+      name: WINDOWS_TAB_TOOL_NAME,
       destructive: true,
-      description: `【软件窗口】统一管理独立浏览器窗口。通过 action=list/open/create/edit/close 选择操作；edit 可同时重命名并增量修改单个浏览器的环境配置。新建名称默认「${DEFAULT_BROWSER_WINDOW_NAME}」。`,
-      input_schema: SOFTWARE_WINDOW_INPUT_SCHEMA,
+      description: `【外部软件栏目】控制 AI-FREE 外部软件栏目的显示与记录。通过 action=list/open/create/edit/close 查询、显示、新建、编辑或关闭栏目；新建名称默认「${DEFAULT_BROWSER_WINDOW_NAME}」。`,
+      input_schema: WINDOWS_TAB_INPUT_SCHEMA,
     },
   ];
 }
@@ -199,13 +200,13 @@ class AiBrowserWindowTools {
     const historyId = text(args.history_id);
     if (historyId) {
       const byId = serialized.find((item) => text(item?.id) === historyId);
-      if (!byId) throw new Error(`浏览器窗口记录不存在: ${historyId}，请先调用 ${SOFTWARE_WINDOW_TOOL_NAME} 的 list 操作查看`);
+      if (!byId) throw new Error(`外部软件栏目记录不存在: ${historyId}，请先调用 ${WINDOWS_TAB_TOOL_NAME} 的 list 操作查看`);
       return byId;
     }
     const name = text(args.name);
     if (!name) throw new Error('请提供 history_id 或 name 来定位浏览器窗口');
     const matches = serialized.filter((item) => text(item?.name).toLocaleLowerCase() === name.toLocaleLowerCase());
-    if (!matches.length) throw new Error(`没有名为「${name}」的浏览器窗口记录，请先调用 ${SOFTWARE_WINDOW_TOOL_NAME} 的 list 操作查看`);
+    if (!matches.length) throw new Error(`没有名为「${name}」的外部软件栏目记录，请先调用 ${WINDOWS_TAB_TOOL_NAME} 的 list 操作查看`);
     if (matches.length > 1) {
       const ids = matches.map((item) => text(item?.id)).join(', ');
       throw new Error(`有 ${matches.length} 个窗口都叫「${name}」（${ids}），请改用 history_id 指定`);
@@ -335,10 +336,10 @@ class AiBrowserWindowTools {
     };
     return {
       tools,
-      has: (name) => text(name) === SOFTWARE_WINDOW_TOOL_NAME,
+      has: (name) => [WINDOWS_TAB_TOOL_NAME, LEGACY_TOOL_NAME].includes(text(name)),
       execute: async (name, args = {}) => {
         const toolName = text(name);
-        if (toolName !== SOFTWARE_WINDOW_TOOL_NAME) throw new Error(`未知的软件窗口工具: ${toolName}`);
+        if (![WINDOWS_TAB_TOOL_NAME, LEGACY_TOOL_NAME].includes(toolName)) throw new Error(`未知的外部软件栏目工具: ${toolName}`);
         const action = text(args?.action).toLowerCase();
         const handler = handlers[action];
         if (!handler) throw new Error(`未知的软件窗口操作: ${action || '未提供 action'}`);
@@ -354,6 +355,6 @@ function createAiBrowserWindowTools(deps = {}) {
 }
 
 module.exports = {
-  SOFTWARE_WINDOW_TOOL_NAME,
+  WINDOWS_TAB_TOOL_NAME,
   createAiBrowserWindowTools,
 };

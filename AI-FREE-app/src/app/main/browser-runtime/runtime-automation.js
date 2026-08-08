@@ -3,7 +3,7 @@
 const { findProfileIdByProcessId } = require('./runtime-input');
 
 const AUTOMATION_COMMANDS = new Set([
-  'observe-page', 'capture-screenshot', 'perform-action', 'get-session-data',
+  'observe-page', 'capture-screenshot', 'perform-action', 'get-session-data', 'list-tabs', 'activate-tab',
 ]);
 const ACTIONS = new Set([
   'click', 'double_click', 'right_click', 'upload_file', 'scroll', 'type', 'press_key', 'wait',
@@ -73,15 +73,37 @@ function normalizeActionPayload(source) {
   if (!ACTIONS.has(action)) {
     throw automationError('AUTOMATION_ACTION_INVALID', `不支持的原生页面动作: ${action || '<empty>'}`);
   }
+  const keyboard = normalizeKeyboardInput(source);
   return {
     action,
     selector: optionalText(source.selector, 4096),
     text: optionalText(source.text ?? source.value, 1024 * 1024),
-    key: optionalText(source.key, 64),
+    ...keyboard,
     ref: optionalText(source.ref, 128),
     direction: optionalText(source.direction || 'down', 16),
     amount: boundedInteger(source.amount ?? source.delta_y, 600, -100000, 100000),
     timeoutMs: boundedInteger(source.timeout_ms ?? source.timeout, 10000, 100, 120000),
+  };
+}
+
+function normalizeTabTarget(source) {
+  const index = Number(source.index ?? source.tab_index ?? source.id ?? source.tab_id);
+  return {
+    url: optionalText(source.url, 8192).trim(),
+    index: Number.isInteger(index) && index >= 0 ? index : -1,
+  };
+}
+
+function normalizeKeyboardInput(source) {
+  const parts = optionalText(source.key, 64).split('+').map((part) => part.trim()).filter(Boolean);
+  const key = parts.length > 1 ? parts.pop() : (parts[0] || '');
+  const names = new Set(parts.map((part) => part.toLowerCase()));
+  return {
+    key,
+    ctrl: source.ctrl === true || source.control === true || names.has('ctrl') || names.has('control'),
+    shift: source.shift === true || names.has('shift'),
+    alt: source.alt === true || names.has('alt') || names.has('option'),
+    meta: source.meta === true || names.has('meta') || names.has('cmd') || names.has('command') || names.has('win'),
   };
 }
 
@@ -94,6 +116,7 @@ function normalizeRuntimeAutomation(command, source = {}) {
   if (name === 'observe-page') return normalizeObservePayload(input);
   if (name === 'capture-screenshot') return normalizeScreenshotPayload(input);
   if (name === 'perform-action') return normalizeActionPayload(input);
+  if (name === 'activate-tab') return normalizeTabTarget(input);
   return {};
 }
 

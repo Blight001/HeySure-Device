@@ -48,7 +48,7 @@ test('等待新窗口对应的自动化 MCP 连接后返回完整连接', async 
   assert.equal(found.id, 'mcp-1');
 });
 
-test('AI 默认工具包含安装目录沙盒文件入口', async (t) => {
+test('AI 默认工具包含 AI-Workspace 命令执行入口', async (t) => {
   const sandboxDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-free-chat-workspace-'));
   t.after(() => fs.rmSync(sandboxDir, { recursive: true, force: true }));
   const service = createService({}, {
@@ -56,8 +56,10 @@ test('AI 默认工具包含安装目录沙盒文件入口', async (t) => {
     browserWindowUi: { getTabs: () => new Map() },
   });
   const tools = service.getWindowTools();
-  assert.equal(tools.has('sandbox_files'), true);
-  assert.equal((await tools.execute('sandbox_files', { action: 'info' })).workspace_path, sandboxDir);
+  assert.equal(tools.has('run_command'), true);
+  assert.deepEqual(tools.tools.map((tool) => tool.name), ['windows_tab', 'run_command']);
+  const command = process.platform === 'win32' ? 'echo ready' : 'printf ready';
+  assert.match((await tools.execute('run_command', { command })).stdout, /ready/);
 });
 
 test('内置模型正常返回完整消息链并发布流式完成事件', async () => {

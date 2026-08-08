@@ -49,6 +49,32 @@ function createFixture(root, overrides = {}) {
   return { calls, connections, gateway };
 }
 
+test('external gateway without a descriptor path does not create a cwd temp file', () => {
+  const gateway = createBrowserAutomationExternalGateway({ getAccess: () => true });
+
+  assert.equal(gateway.publish({ host: '127.0.0.1', port: 18765 }), false);
+  assert.equal(gateway.descriptorPath, '');
+});
+
+test('external gateway removes its atomic temp file when descriptor commit fails', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-free-external-mcp-failed-publish-'));
+  const occupiedPath = path.join(root, 'occupied-descriptor');
+  fs.mkdirSync(occupiedPath);
+  const gateway = createBrowserAutomationExternalGateway({
+    descriptorPath: occupiedPath,
+    getAccess: () => true,
+  });
+  try {
+    assert.throws(() => gateway.publish({ host: '127.0.0.1', port: 18765 }));
+    assert.deepEqual(
+      fs.readdirSync(root).filter((name) => name.endsWith('.tmp')),
+      [],
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('external gateway combines software and per-window MCP tools with routing fields', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-free-external-mcp-tools-'));
   try {

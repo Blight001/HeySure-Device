@@ -224,6 +224,11 @@ const IPC_PAYLOAD_SCHEMAS = Object.freeze({
     }
     return input;
   },
+  'ui.sidebar-width': (channel, payload) => {
+    const input = objectPayload(channel, payload, { optional: true });
+    numberLikeField(channel, input, 'width');
+    return input;
+  },
   'ai.automation-card-operation': (channel, payload) => {
     const input = objectPayload(channel, payload, { optional: true });
     stringField(channel, input, 'action', { required: true, maxLength: 32 });

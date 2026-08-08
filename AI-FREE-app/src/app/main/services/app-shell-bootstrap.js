@@ -46,6 +46,7 @@ function createBootstrapUiDeps(deps) {
     refreshActiveTabToUrl: deps.resolveRefreshActiveTabToUrl(),
     refreshActiveTab: deps.resolveRefreshActiveTab(),
     toggleSidebar: deps.toggleSidebar,
+    setSidebarWidth: deps.setSidebarWidth,
     sendToSide: deps.sendToSide,
     startAppUpdate: deps.startAppUpdate,
     getAppVersion: deps.getAppVersion,

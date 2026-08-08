@@ -17,6 +17,18 @@
     ].join('\n')).join('\n\n');
   }
 
+  function formatMcpFunctions(tools) {
+    if (!Array.isArray(tools) || !tools.length) return '当前没有可用的 MCP 工具。';
+    const details = tools.map((tool, index) => {
+      const actions = Array.isArray(tool?.actions) && tool.actions.length
+        ? `\n支持操作：${tool.actions.join('、')}`
+        : '';
+      const risk = tool?.destructive ? '可能修改本地或页面状态' : '未标记为修改状态';
+      return `${index + 1}. ${String(tool?.name || '未命名工具')}\n功能：${String(tool?.description || '暂无功能说明')}${actions}\n风险标记：${risk}`;
+    });
+    return `当前可用 ${tools.length} 个 MCP 工具。\n\n${details.join('\n\n')}`;
+  }
+
   function setPromptDiagnosticsText(id, text) {
     const target = el(id);
     if (target) target.textContent = String(text || '');
@@ -29,6 +41,10 @@
   }
 
   function renderPromptDiagnostics(result) {
+    setPromptDiagnosticsText(
+      'ai-prompt-mcp-functions-content',
+      formatMcpFunctions(result.mcpTools),
+    );
     setPromptDiagnosticsText(
       'ai-prompt-tools-content',
       formatToolPromptDefinitions(result.preview?.tools),

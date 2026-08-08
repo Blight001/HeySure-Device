@@ -54,6 +54,7 @@ function readWindowState(deps, statePath) {
       version: STATE_VERSION,
       maximized: parsed.maximized === true,
       bounds: normalizeBounds(parsed.bounds, deps.screen),
+      sidebarWidth: Math.max(0, finiteNumber(parsed.sidebarWidth) || 0),
     };
   } catch (error) {
     deps.logger.warn?.('[WindowState] 读取主窗口状态失败，使用默认大窗口:', error?.message || error);
@@ -84,6 +85,7 @@ function createAppShellWindowStateController(deps = {}) {
     version: STATE_VERSION,
     maximized: true,
     bounds: { ...DEFAULT_BOUNDS },
+    sidebarWidth: 0,
   };
   let saveTimer = null;
 
@@ -101,7 +103,9 @@ function createAppShellWindowStateController(deps = {}) {
     if (!window || window.isDestroyed?.() || window.isMinimized?.()) return;
     const maximized = window.isMaximized?.() === true;
     const bounds = maximized ? window.getNormalBounds?.() : window.getBounds?.();
-    if (bounds) state = { version: STATE_VERSION, maximized, bounds: normalizeBounds(bounds, deps.screen) };
+    if (bounds) {
+      state = { ...state, version: STATE_VERSION, maximized, bounds: normalizeBounds(bounds, deps.screen) };
+    }
     if (immediate) flush(); else scheduleSave();
   };
   const bindWindow = (window) => {
@@ -118,7 +122,15 @@ function createAppShellWindowStateController(deps = {}) {
   return {
     bindWindow,
     flush,
+    getSidebarWidth: () => state.sidebarWidth || 0,
     getWindowOptions: () => ({ ...state.bounds }),
+    setSidebarWidth: (width) => {
+      const sidebarWidth = finiteNumber(width);
+      if (sidebarWidth === null || sidebarWidth <= 0) return false;
+      state = { ...state, sidebarWidth };
+      scheduleSave();
+      return true;
+    },
     shouldMaximize: () => state.maximized,
   };
 }

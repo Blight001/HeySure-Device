@@ -105,7 +105,8 @@ class BrowserAutomationExternalGateway {
   constructor(options = {}) {
     this.options = options;
     this.logger = options.logger || console;
-    this.descriptorPath = path.resolve(String(options.descriptorPath || ''));
+    const descriptorPath = String(options.descriptorPath || '').trim();
+    this.descriptorPath = descriptorPath ? path.resolve(descriptorPath) : '';
     this.token = String(options.token || crypto.randomBytes(32).toString('hex'));
     this.getConnections = typeof options.getConnections === 'function' ? options.getConnections : options.listConnections;
     this.getWindowTools = typeof options.getWindowTools === 'function' ? options.getWindowTools : () => null;
@@ -312,8 +313,12 @@ class BrowserAutomationExternalGateway {
     fs.mkdirSync(path.dirname(this.descriptorPath), { recursive: true });
     const payload = this.createDescriptor(host, port);
     const temporary = `${this.descriptorPath}.${process.pid}.${crypto.randomBytes(5).toString('hex')}.tmp`;
-    fs.writeFileSync(temporary, `${JSON.stringify(payload, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
-    fs.renameSync(temporary, this.descriptorPath);
+    try {
+      fs.writeFileSync(temporary, `${JSON.stringify(payload, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+      fs.renameSync(temporary, this.descriptorPath);
+    } finally {
+      try { fs.rmSync(temporary, { force: true }); } catch (_) {}
+    }
     try { fs.chmodSync(this.descriptorPath, 0o600); } catch (_) {}
     this.publishedPid = process.pid;
     this.publishedAccessAllowed = accessAllowed;

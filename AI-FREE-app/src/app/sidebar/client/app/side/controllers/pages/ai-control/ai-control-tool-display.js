@@ -1,31 +1,21 @@
-  function parseToolArguments(value) {
-    if (value && typeof value === 'object') return value;
-    if (typeof value !== 'string' || !value.trim()) return {};
-    try {
-      const parsed = JSON.parse(value);
-      return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (_) {
-      return {};
-    }
-  }
-
-  function toolDisplayName(tool = {}) {
-    const rawName = String(tool.name || '').trim();
-    const args = parseToolArguments(tool.arguments);
-    const action = String(args.action || '').trim().toLowerCase();
-    const actionName = TOOL_ACTION_DISPLAY_NAMES[rawName]?.[action];
-    if (actionName) return actionName;
-    if (TOOL_DISPLAY_NAMES[rawName]) return TOOL_DISPLAY_NAMES[rawName];
-    if (/\p{Script=Han}/u.test(rawName)) return rawName;
-
-    const separatorIndex = rawName.indexOf('.');
-    if (separatorIndex > 0) {
-      const namespace = TOOL_NAMESPACE_NAMES[rawName.slice(0, separatorIndex)];
-      const operation = TOOL_OPERATION_NAMES[rawName.slice(separatorIndex + 1)];
-      if (namespace && operation) return `${namespace}${operation}`;
-      if (namespace) return `${namespace}工具`;
-    }
-    return '浏览器原生工具';
+  function createActivityGroup() {
+    const element = document.createElement('details');
+    element.className = 'ai-chat-activity';
+    element.open = true;
+    element.hidden = true;
+    const summary = document.createElement('summary');
+    summary.innerHTML = '<span class="ai-chat-activity-arrow" aria-hidden="true">➣</span><span class="ai-chat-activity-label">运行过程</span><span class="ai-chat-activity-status" aria-live="polite"></span><span class="ai-chat-disclosure" aria-hidden="true">›</span>';
+    const body = document.createElement('div');
+    body.className = 'ai-chat-trace';
+    element.append(summary, body);
+    const disclosure = enableDetailsAnimation(element, body);
+    return {
+      body,
+      element,
+      label: summary.querySelector('.ai-chat-activity-label'),
+      status: summary.querySelector('.ai-chat-activity-status'),
+      setOpen: disclosure.setOpen,
+    };
   }
 
   function getDetailsContentAnimationStart(wasOpen, contentStyle) {
@@ -115,64 +105,26 @@
     return { setOpen };
   }
 
-  function createToolActivity(tool = {}) {
-    const card = document.createElement('details');
-    card.className = `ai-chat-tool ${tool.status || 'running'}`;
-    card.dataset.toolId = String(tool.id || '');
-    const summary = document.createElement('summary');
-    summary.innerHTML = '<span class="ai-chat-tool-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path><circle cx="12" cy="12" r="2.75"></circle></svg></span><span class="ai-chat-tool-kind">工具</span><span class="ai-chat-tool-name"></span><span class="ai-chat-tool-status"></span><span class="ai-chat-disclosure" aria-hidden="true">›</span>';
-    const detail = document.createElement('div');
-    detail.className = 'ai-chat-tool-detail';
-    card.append(summary, detail);
-    const disclosure = enableDetailsAnimation(card, detail);
-
-    const update = (next = {}) => {
-      Object.assign(tool, next);
-      const status = String(tool.status || 'running');
-      card.className = `ai-chat-tool ${status}`;
-      summary.querySelector('.ai-chat-tool-name').textContent = toolDisplayName(tool);
-      summary.querySelector('.ai-chat-tool-status').textContent =
-        status === 'running' ? '调用中' : status === 'error' ? '调用失败' : '已完成';
-      detail.innerHTML = '';
-      if (tool.arguments !== undefined && tool.arguments !== '') {
-        const label = document.createElement('span');
-        label.className = 'ai-chat-tool-detail-label';
-        label.textContent = '输入';
-        const pre = document.createElement('pre');
-        pre.textContent = formatActivityDetail(tool.arguments);
-        detail.append(label, pre);
-      }
-      if (tool.result !== undefined && tool.result !== '') {
-        const label = document.createElement('span');
-        label.className = 'ai-chat-tool-detail-label';
-        label.textContent = status === 'error' ? '错误' : '输出';
-        const pre = document.createElement('pre');
-        pre.textContent = formatActivityDetail(tool.result);
-        detail.append(label, pre);
-      }
-    };
-    update(tool);
-    return { card, update, setOpen: disclosure.setOpen };
-  }
-
   class AssistantView {
     constructor(container, options) {
       this.container = container;
       container.querySelector('.ai-chat-welcome')?.remove();
-      this.row = document.createElement('div');
+      this.row = document.createElement('article');
       this.row.className = `ai-chat-message assistant${options.pending ? ' pending' : ''}`;
+      this.row.dataset.messageKind = 'assistant-turn';
       this.stack = document.createElement('div');
       this.stack.className = 'ai-chat-assistant-stack';
-      this.trace = document.createElement('div');
-      this.trace.className = 'ai-chat-trace';
-      this.stack.appendChild(this.trace);
+      this.activities = [];
       this.row.appendChild(this.stack);
       container.appendChild(this.row);
       this.content = '';
       this.answer = null;
       this.answerRound = -1;
+      this.answerCopy = null;
+      this.answerWrap = null;
       this.thinkingViews = new Map();
       this.toolViews = new Map();
+      this.startActivityGroup();
       this.hydrate({ traceEvents: options.traceEvents || [], reasoning: options.reasoning, toolEvents: options.toolEvents || [] });
       if (options.content) this.addContent(options.content, Number.MAX_SAFE_INTEGER);
       if (!options.pending) this.finalize();
@@ -183,21 +135,71 @@
       this.container.scrollTop = this.container.scrollHeight;
     }
 
+    startActivityGroup() {
+      this.activity = createActivityGroup();
+      this.trace = this.activity.body;
+      this.activities.push(this.activity);
+      this.stack.appendChild(this.activity.element);
+    }
+
     ensureAnswer() {
       if (this.answer) return this.answer;
+      this.answerWrap = document.createElement('section');
+      this.answerWrap.className = 'ai-chat-answer-wrap';
+      const toolbar = document.createElement('div');
+      toolbar.className = 'ai-chat-answer-toolbar';
+      const copy = document.createElement('button');
+      copy.type = 'button';
+      copy.className = 'ai-chat-copy-action ai-chat-answer-copy';
+      copy.textContent = '复制';
+      copy.setAttribute('aria-label', '复制 AI 回复');
+      copy.addEventListener('click', async () => {
+        const copied = await copyTextToClipboard(copy.dataset.copyText || '');
+        copy.textContent = copied ? '已复制' : '复制失败';
+        window.setTimeout(() => { copy.textContent = '复制'; }, 1400);
+      });
+      toolbar.appendChild(copy);
       this.answer = document.createElement('div');
       this.answer.className = 'ai-chat-answer is-streaming';
-      this.stack.appendChild(this.answer);
+      this.answerCopy = copy;
+      this.answerWrap.append(toolbar, this.answer);
+      this.stack.appendChild(this.answerWrap);
       return this.answer;
+    }
+
+    updateAnswer(value) {
+      renderMarkdownInto(this.ensureAnswer(), value);
+      this.answerCopy.dataset.copyText = String(value || '');
+    }
+
+    syncActivityGroup(activity = this.activity) {
+      const thinkingViews = [...this.thinkingViews.values()]
+        .filter((view) => view.activity === activity);
+      const thinkingCount = thinkingViews.filter((view) => view.content).length;
+      const activeThinking = thinkingViews.find((view) => !view.finished);
+      const toolViews = [...this.toolViews.values()].filter((view) => view.activity === activity);
+      const toolCount = toolViews.length;
+      const parts = [];
+      if (thinkingCount) parts.push(`${thinkingCount}次思考`);
+      if (toolCount) parts.push(`${toolCount}次工具调用`);
+      if (!parts.length && activeThinking) parts.push('正在生成');
+      activity.element.hidden = !parts.length;
+      activity.label.textContent = parts.join(' · ') || '运行过程';
+      const runningTool = toolViews.find((view) => view.tool.status === 'running');
+      activity.status.textContent = runningTool
+        ? `正在执行 ${toolDisplayName(runningTool.tool)}`
+        : activeThinking?.content ? '深度思考中' : '';
+      activity.element.classList.toggle('is-running', Boolean(runningTool || activeThinking));
     }
 
     finishThinking(round) {
       const view = this.thinkingViews.get(Number(round));
       if (!view || view.finished) return;
       view.element.classList.remove('is-streaming');
-      view.label.textContent = '思考过程';
+      view.label.textContent = '深度思考';
       view.setOpen(false);
       view.finished = true;
+      this.syncActivityGroup(view.activity);
     }
 
     discardEmptyThinking(round) {
@@ -206,23 +208,33 @@
       if (!view || view.content) return;
       view.element.remove();
       this.thinkingViews.delete(roundId);
+      this.syncActivityGroup(view.activity);
     }
 
     appendStep(value) {
       if (!String(value || '').trim()) return;
-      const step = document.createElement('div');
-      step.className = 'ai-chat-step-output';
-      renderMarkdownInto(step, value);
-      this.trace.appendChild(step);
+      this.content = String(value);
+      this.updateAnswer(this.content);
+      this.answer.classList.remove('is-streaming');
+      this.answerWrap.classList.add('ai-chat-step-answer');
+      this.content = '';
+      this.answer = null;
+      this.answerCopy = null;
+      this.answerWrap = null;
+      this.answerRound = -1;
+      this.startActivityGroup();
     }
 
     demoteAnswerToStep() {
       if (!this.content.trim() || !this.answer) return;
-      this.appendStep(this.content);
-      this.answer.remove();
+      this.answer.classList.remove('is-streaming');
+      this.answerWrap.classList.add('ai-chat-step-answer');
       this.answer = null;
+      this.answerCopy = null;
+      this.answerWrap = null;
       this.content = '';
       this.answerRound = -1;
+      this.startActivityGroup();
     }
 
     createThinkingView(roundId) {
@@ -231,7 +243,7 @@
       element.className = 'ai-chat-thinking is-streaming';
       element.open = true;
       const summary = document.createElement('summary');
-      summary.innerHTML = '<span class="ai-chat-thinking-mark" aria-hidden="true">✦</span><span class="ai-chat-thinking-label">思考中</span><span class="ai-chat-disclosure" aria-hidden="true">›</span>';
+      summary.innerHTML = '<span class="ai-chat-thinking-mark" aria-hidden="true">➣</span><span class="ai-chat-thinking-label">深度思考</span><span class="ai-chat-disclosure" aria-hidden="true">›</span>';
       const textNode = document.createElement('div');
       textNode.className = 'ai-chat-thinking-text';
       element.append(summary, textNode);
@@ -239,9 +251,10 @@
       const disclosure = enableDetailsAnimation(element, textNode);
       const view = {
         element, text: textNode, label: summary.querySelector('.ai-chat-thinking-label'),
-        content: '', finished: false, setOpen: disclosure.setOpen,
+        activity: this.activity, content: '', finished: false, setOpen: disclosure.setOpen,
       };
       this.thinkingViews.set(roundId, view);
+      this.syncActivityGroup();
       return view;
     }
 
@@ -251,6 +264,7 @@
       const view = this.thinkingViews.get(roundId) || this.createThinkingView(roundId);
       view.content += String(delta || '');
       view.text.textContent = view.content;
+      this.syncActivityGroup(view.activity);
       this.scroll();
     }
 
@@ -259,13 +273,13 @@
       this.discardEmptyThinking(this.answerRound);
       this.finishThinking(this.answerRound);
       this.content += String(delta || '');
-      renderMarkdownInto(this.ensureAnswer(), this.content);
+      this.updateAnswer(this.content);
       this.scroll();
     }
 
     setContent(value) {
       this.content = String(value || '');
-      renderMarkdownInto(this.ensureAnswer(), this.content);
+      this.updateAnswer(this.content);
     }
 
     replaceContent(value, round = 0) {
@@ -273,12 +287,14 @@
       if (this.answer && this.answerRound !== roundId) return;
       this.content = String(value || '');
       if (!this.content) {
-        this.answer?.remove();
+        this.answerWrap?.remove();
         this.answer = null;
+        this.answerCopy = null;
+        this.answerWrap = null;
         this.answerRound = -1;
       } else {
         this.answerRound = roundId;
-        renderMarkdownInto(this.ensureAnswer(), this.content);
+        this.updateAnswer(this.content);
       }
       this.scroll();
     }
@@ -292,11 +308,13 @@
         this.finishThinking(roundId);
         this.demoteAnswerToStep();
         view = createToolActivity(tool);
+        view.activity = this.activity;
         this.toolViews.set(id, view);
         this.trace.appendChild(view.card);
       } else {
         view.update(tool);
       }
+      this.syncActivityGroup(view.activity);
       this.scroll();
     }
 
@@ -331,6 +349,7 @@
         else this.discardEmptyThinking(round);
       });
       this.answer?.classList.remove('is-streaming');
+      this.activities.forEach((activity) => this.syncActivityGroup(activity));
       this.scroll();
     }
   }

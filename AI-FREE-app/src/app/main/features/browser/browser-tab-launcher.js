@@ -169,6 +169,7 @@ class BrowserTabLauncher {
       isMaximized: mainWindow.isMaximized?.() === true,
       currentWidth: sideView?.getBounds?.().width,
       normalWindowWidth: mainWindow.getNormalBounds?.().width,
+      retainCurrentWidth: true,
     });
     return { x: 0, y: 41, width: contentWidth - sidebarWidth, height: Math.max(0, contentHeight - 41) };
   }

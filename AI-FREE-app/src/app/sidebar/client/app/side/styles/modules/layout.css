@@ -316,6 +316,39 @@ body.expanding {
   box-sizing: border-box;
 }
 
+.sidebar-resize-handle {
+  position: fixed;
+  z-index: 2147483647;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 8px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.sidebar-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: rgba(77, 145, 255, 0);
+  transition: background 120ms ease;
+}
+
+.sidebar-resize-handle:hover::after,
+.sidebar-resize-handle:focus-visible::after,
+.sidebar-resizing .sidebar-resize-handle::after {
+  background: rgba(77, 145, 255, 0.92);
+}
+
+body.sidebar-resizing {
+  cursor: ew-resize;
+  user-select: none;
+}
+
 .personal-footer .footer-left {
   flex-direction: row;
 }

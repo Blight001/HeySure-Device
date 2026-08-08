@@ -131,7 +131,7 @@ async function executeStep(step, dispatch) {
     ...step, ms: step.timeout, timeout_ms: step.timeout, selector: step.selector || step.wait_for_element,
   });
   if (type === 'condition') return executeCondition(step, dispatch);
-  if (type === 'save_cookies') return dispatch('browser_download', { ...step, action: 'save_session' });
+  if (type === 'save_cookies') return dispatch('browser_file', { ...step, action: 'save_session' });
   if (type === 'screenshot') return dispatch('browser_screenshot', step);
   if (type === 'get_credits') return dispatch('browser_observe', { keyword: step.selector || step.text, limit: 10, mark: false });
   if (type === 'clear_current_page_cache') {

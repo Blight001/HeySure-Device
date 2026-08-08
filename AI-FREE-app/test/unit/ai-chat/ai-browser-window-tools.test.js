@@ -70,9 +70,10 @@ test('window tool registry lists records and validates lookup arguments', async 
   });
   assert.equal(tools.tools.length, 1);
   assert.equal(tools.tools[0].input_schema.properties.action.enum.includes('edit'), true);
-  assert.equal(tools.has('software_window'), true);
+  assert.equal(tools.has('windows_tab'), true);
+  assert.equal(tools.tools[0].name, 'windows_tab');
   assert.equal(tools.has(' unknown '), false);
-  const listed = await tools.execute('software_window', { action: 'list', include_settings: true });
+  const listed = await tools.execute('windows_tab', { action: 'list', include_settings: true });
   assert.equal(listed.total, 3);
   assert.equal(listed.open_count, 1);
   assert.equal(listed.items[0].history_id, 'history-1');
@@ -82,9 +83,9 @@ test('window tool registry lists records and validates lookup arguments', async 
   assert.equal(listed.items[0].settings.proxy.apiUrl, '[CONFIGURED]');
   assert.equal(listed.items[0].settings.launchArgs.value, '[CONFIGURED]');
   assert.equal('cookies' in listed.items[0].settings, false);
-  assert.match(logLines[0], /software_window\.list/);
-  await assert.rejects(tools.execute('missing'), /未知的软件窗口工具/);
-  await assert.rejects(tools.execute('software_window', {}), /未提供 action/);
+  assert.match(logLines[0], /windows_tab\.list/);
+  await assert.rejects(tools.execute('missing'), /未知的外部软件栏目工具/);
+  await assert.rejects(tools.execute('windows_tab', {}), /未提供 action/);
   await assert.rejects(tools.execute('software_window', { action: 'open' }), /history_id 或 name/);
   await assert.rejects(tools.execute('software_window', { action: 'open', history_id: 'missing' }), /记录不存在/);
   await assert.rejects(tools.execute('software_window', { action: 'open', name: 'Duplicate' }), /2 个窗口/);

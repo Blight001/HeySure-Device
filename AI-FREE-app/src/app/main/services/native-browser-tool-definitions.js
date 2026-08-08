@@ -17,12 +17,14 @@ const NATIVE_BROWSER_TOOL_DEFINITIONS = Object.freeze([
     }, ['action']),
   },
   {
-    name: 'browser_download', destructive: true,
-    description: '通过 AI 工作区安全下载文件，或通过 Chromium 原生通道读取并保存当前会话。',
+    name: 'browser_file', destructive: true,
+    description: '通过 AI 工作区安全下载文件、向当前页面上传本地文件，或保存当前浏览器会话。',
     input_schema: objectSchema({
-      action: { type: 'string', enum: ['download', 'save_session', 'info'] }, url: { type: 'string' },
+      action: { type: 'string', enum: ['download', 'upload', 'save_session', 'info'] }, url: { type: 'string' },
       directory: { type: 'string' }, filename: { type: 'string' }, media_type: { type: 'string' },
       overwrite: { type: 'boolean' }, timeout_ms: { type: 'number' }, max_bytes: { type: 'number' },
+      selector: { type: 'string' }, ref: { type: 'string' }, path: { type: 'string' },
+      paths: { type: 'array', items: { type: 'string' } }, mode: { type: 'string' }, page_url: { type: 'string' },
     }, ['action']),
   },
   {
@@ -30,7 +32,7 @@ const NATIVE_BROWSER_TOOL_DEFINITIONS = Object.freeze([
     description: '通过受认证 Chromium Runtime Bridge 管理当前浏览器的导航、页面打开、刷新与焦点。',
     input_schema: objectSchema({
       action: { type: 'string', enum: ['list', 'switch', 'replace', 'navigate', 'reload'] },
-      url: { type: 'string' },
+      url: { type: 'string' }, id: { type: 'string' }, index: { type: 'number' },
     }, ['action']),
   },
   {
@@ -52,12 +54,13 @@ const NATIVE_BROWSER_TOOL_DEFINITIONS = Object.freeze([
   },
   {
     name: 'browser_action', destructive: true,
-    description: '通过 Chromium 原生输入与页面自动化通道点击、输入、滚动、按键或上传文件。',
+    description: '通过 Chromium 原生输入与页面自动化通道点击、输入、滚动或按键。',
     input_schema: objectSchema({
-      action: { type: 'string', enum: ['click', 'double_click', 'right_click', 'upload_file', 'scroll', 'type', 'press_key'] },
-      selector: { type: 'string' }, ref: { type: 'string' }, text: { type: 'string' }, key: { type: 'string' },
+      action: { type: 'string', enum: ['click', 'double_click', 'right_click', 'scroll', 'type', 'press_key'] },
+      selector: { type: 'string' }, ref: { type: 'string' }, text: { type: 'string' },
+      key: { type: 'string', description: '按键名或组合键，例如 Enter、Ctrl+Enter' },
+      ctrl: { type: 'boolean' }, shift: { type: 'boolean' }, alt: { type: 'boolean' }, meta: { type: 'boolean' },
       direction: { type: 'string' }, amount: { type: 'number' }, timeout_ms: { type: 'number' },
-      path: { type: 'string' }, paths: { type: 'array', items: { type: 'string' } }, mode: { type: 'string' },
     }, ['action']),
   },
   {

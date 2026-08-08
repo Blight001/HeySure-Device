@@ -81,7 +81,8 @@ function createTestServer() {
           input.addEventListener('input', (event) => fetch('/native-event?kind=input&trusted=' +
             event.isTrusted + '&value=' + encodeURIComponent(input.value)).catch(() => {}));
           input.addEventListener('keydown', (event) => fetch('/native-event?kind=key&trusted=' +
-            event.isTrusted + '&key=' + encodeURIComponent(event.key)).catch(() => {}));
+            event.isTrusted + '&key=' + encodeURIComponent(event.key) + '&ctrl=' + event.ctrlKey +
+            '&shift=' + event.shiftKey + '&alt=' + event.altKey + '&meta=' + event.metaKey).catch(() => {}));
           addEventListener('wheel', (event) => fetch('/native-event?kind=wheel&trusted=' +
             event.isTrusted).catch(() => {}), { once: true });
           setTimeout(() => {
@@ -332,13 +333,15 @@ app.whenReady().then(async () => {
   assert.equal(new URLSearchParams(typedRequest.query).get('trusted'), 'true');
   assert.equal(new URLSearchParams(typedRequest.query).get('value'), 'Native42');
   const pressed = await manager.dispatchAutomationByProcessId(b.state.pid, 'perform-action', {
-    action: 'press_key', selector: '#native-input', key: 'Enter',
+    action: 'press_key', selector: '#native-input', key: 'Enter', ctrl: true,
   });
   assert.equal(pressed.result.inputMode, 'chromium-native-keyboard');
   const keyRequest = await waitForRequest((item) => item.path === '/native-event'
     && new URLSearchParams(item.query).get('kind') === 'key');
   assert.equal(new URLSearchParams(keyRequest.query).get('trusted'), 'true');
   assert.equal(new URLSearchParams(keyRequest.query).get('key'), 'Enter');
+  assert.equal(new URLSearchParams(keyRequest.query).get('ctrl'), 'true');
+  assert.equal(new URLSearchParams(keyRequest.query).get('shift'), 'false');
   const scrolled = await manager.dispatchAutomationByProcessId(b.state.pid, 'perform-action', {
     action: 'scroll', direction: 'down', amount: 300,
   });

@@ -30,7 +30,7 @@ function resolvePluginTarget(args, connections, findConnectionByRef, describeCon
   }
   if (resolved.kind === 'not_found') {
     return { error: `未在当前 AI 已选且在线的浏览器中找到 ${JSON.stringify(resolved.reference)}。`
-        + `software_window 的 history_id/tab_id 不能代替 change_browser；可用浏览器：${describeConnections()}` };
+        + `windows_tab 的 history_id/tab_id 不能代替 change_browser；可用浏览器：${describeConnections()}` };
   }
   return { error: `当前没有唯一的控制浏览器，请通过 change_browser 指定目标（连接 ID 或名称）：${describeConnections()}` };
 }
@@ -133,7 +133,7 @@ function readyWindowConnection(context, toolResult) {
 }
 
 function syncWindowToolControl(context, toolName, args, toolResult) {
-  if (toolName !== 'software_window' || toolResult?.success === false || !context.browserControl) return;
+  if (!['windows_tab', 'software_window'].includes(toolName) || toolResult?.success === false || !context.browserControl) return;
   const action = String(args?.action || '').trim().toLowerCase();
   const next = readyWindowConnection(context, toolResult)
     || nextWindowControl(context, action, toolResult?.name);
@@ -184,6 +184,7 @@ async function executeSingleTool(context, call) {
   const toolName = String(call?.function?.name || '').trim();
   const parsedArguments = parseToolArguments(call);
   const args = parsedArguments.args;
+  const startedAt = Date.now();
   const activity = {
     id: String(call.id || ''),
     name: toolName,
@@ -211,6 +212,7 @@ async function executeSingleTool(context, call) {
   }
   const prepared = prepareToolResult(toolResult, toolName);
   activity.status = prepared.failed ? 'error' : 'success';
+  activity.duration_ms = Math.max(0, Date.now() - startedAt);
   activity.result = compactToolActivityResult(context, toolResult, toolName);
   context.emit({ type: 'tool_result', tool: { ...activity }, round: context.round });
   const serialized = serializeToolResult(prepared.result, toolName);

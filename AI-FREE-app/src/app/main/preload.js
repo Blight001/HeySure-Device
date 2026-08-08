@@ -175,6 +175,7 @@ contextBridge.exposeInMainWorld('aiFree', Object.freeze({
     emitServerAccountCookieReceived: sendChannel('server-account-cookie-received'),
     focusSidebarInput: invokeChannel('focus-sidebar-input'),
     requestAccountCenter: sendChannel('request-account-center'),
+    setSidebarWidth: invokeChannel('set-sidebar-width'),
     getWindowCloseBehavior: invokeChannel('get-window-close-behavior'),
     setWindowCloseBehavior: invokeChannel('set-window-close-behavior'),
     setZoom: sendChannel('set-zoom'),

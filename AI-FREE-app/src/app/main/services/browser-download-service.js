@@ -127,6 +127,21 @@ function resolveTargetDirectory(sandboxDir, directory) {
   return { ...resolved, target: realTarget };
 }
 
+function resolveUploadFiles(sandboxDir, values) {
+  const requested = Array.isArray(values) ? values : [];
+  if (!requested.length) throw new Error('browser_file upload 缺少 path 或 paths');
+  return requested.map((value) => {
+    const candidate = path.isAbsolute(String(value || ''))
+      ? path.resolve(String(value))
+      : path.resolve(sandboxDir, String(value || ''));
+    resolveInside(sandboxDir, path.relative(sandboxDir, candidate));
+    if (!fs.existsSync(candidate) || !fs.statSync(candidate).isFile()) throw new Error(`上传文件不存在: ${value}`);
+    const realFile = fs.realpathSync(candidate);
+    resolveInside(sandboxDir, path.relative(sandboxDir, realFile));
+    return realFile;
+  });
+}
+
 function availableTarget(directory, fileName, overwrite) {
   const target = path.join(directory, fileName);
   if (overwrite || !fs.existsSync(target)) return target;
@@ -224,6 +239,7 @@ function createBrowserDownloadService(options = {}) {
   }
 
   return {
+    resolveUploadPaths: (values) => resolveUploadFiles(sandboxDir, values),
     execute: async (input = {}) => {
       const action = String(input.action || 'download').trim().toLowerCase();
       if (action === 'info') return { success: true, action, workspace_path: sandboxDir };
@@ -239,5 +255,6 @@ module.exports = {
   MAX_ALLOWED_BYTES,
   cookieHeader,
   createBrowserDownloadService,
+  resolveUploadFiles,
   sanitizeFileName,
 };

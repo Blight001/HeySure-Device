@@ -98,6 +98,7 @@ const INVOKE_CHANNELS = [
   { channel: 'set-extension-enabled', kind: 'invoke', domain: 'extensions', registrar: 'src/app/main/ipc/register/extensions.js' },
   { channel: 'set-network-magic-auto-start-enabled', kind: 'invoke', domain: 'network', registrar: 'src/app/main/ipc/register/settings.js' },
   { channel: 'set-plugin-settings', kind: 'invoke', domain: 'ui', registrar: 'src/app/main/ipc/register/settings.js' },
+  { channel: 'set-sidebar-width', kind: 'invoke', domain: 'ui', registrar: 'src/app/main/ipc/register/ui.js', requestSchema: 'ui.sidebar-width' },
   { channel: 'set-window-close-behavior', kind: 'invoke', domain: 'ui', registrar: 'src/app/main/ipc/register/ui.js', requestSchema: 'ui.window-close-behavior' },
   { channel: 'show-browser-history-gesture-popup', kind: 'invoke', domain: 'browser', registrar: 'src/app/main/features/browser/register-browser-history-ipc.js' },
   { channel: 'show-tab-context-menu', kind: 'invoke', domain: 'browser', registrar: 'src/app/main/ipc/register/ui.js' },

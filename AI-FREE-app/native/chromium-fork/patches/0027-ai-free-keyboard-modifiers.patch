@@ -1,0 +1,90 @@
+diff --git a/chrome/browser/ui/views/frame/ai_free_page_automation.cc b/chrome/browser/ui/views/frame/ai_free_page_automation.cc
+--- a/chrome/browser/ui/views/frame/ai_free_page_automation.cc
++++ b/chrome/browser/ui/views/frame/ai_free_page_automation.cc
+@@ -93,7 +93,7 @@ std::string ActionScript(const base::DictValue& command) {
+     if(action==='wait')return find()?{success:true,action,found:true}:{success:false,action,error:'等待元素中',errorCode:'WAIT_PENDING'};
+     const el=find();if(!el)return {success:false,action,error:'未找到目标元素',errorCode:'ELEMENT_NOT_FOUND'};el.scrollIntoView({block:'center',inline:'center'});el.focus();
+     if(action==='type'){if(typeof el.select==='function')el.select();return {success:true,action,selector:a.selector||'',nativeKeyboard:true};}
+-    if(action==='press_key')return {success:true,action,key:String(a.key||a.text||'Enter'),nativeKeyboard:true};
++    if(action==='press_key')return {success:true,action,key:String(a.key||a.text||'Enter'),ctrl:!!a.ctrl,shift:!!a.shift,alt:!!a.alt,meta:!!a.meta,nativeKeyboard:true};
+     const r=el.getBoundingClientRect();if(r.width<1||r.height<1)return {success:false,action,error:'目标元素不可见',errorCode:'ELEMENT_NOT_VISIBLE'};return {success:true,action,nativeInput:{x:r.left+r.width/2,y:r.top+r.height/2,viewportWidth:innerWidth,viewportHeight:innerHeight},selector:a.selector||''};
+   } catch(e) { return {success:false,error:String(e&&e.message||e),errorCode:'ACTION_FAILED'}; } })())JS"});
+ }
+@@ -127,9 +127,9 @@ void DispatchResolvedMouse(content::WebContents* contents,
+ }
+ 
+ input::NativeWebKeyboardEvent KeyboardEvent(blink::WebInputEvent::Type type,
+-                                             int windows_key_code) {
+-  input::NativeWebKeyboardEvent event(type, blink::WebInputEvent::kNoModifiers,
+-                                      ui::EventTimeForNow());
++                                             int windows_key_code,
++                                             int modifiers) {
++  input::NativeWebKeyboardEvent event(type, modifiers, ui::EventTimeForNow());
+   event.windows_key_code = windows_key_code;
+   return event;
+ }
+@@ -150,9 +150,23 @@ int KeyCode(std::string_view key) {
+   return 0x0D;
+ }
+ 
++int KeyboardModifiers(const base::DictValue& command) {
++  int modifiers = blink::WebInputEvent::kNoModifiers;
++  if (command.FindBool("ctrl").value_or(false))
++    modifiers |= blink::WebInputEvent::kControlKey;
++  if (command.FindBool("shift").value_or(false))
++    modifiers |= blink::WebInputEvent::kShiftKey;
++  if (command.FindBool("alt").value_or(false))
++    modifiers |= blink::WebInputEvent::kAltKey;
++  if (command.FindBool("meta").value_or(false))
++    modifiers |= blink::WebInputEvent::kMetaKey;
++  return modifiers;
++}
++
+ bool DispatchKeyboard(content::WebContents* contents,
+                       std::string_view action,
+-                      std::string_view value) {
++                      std::string_view value,
++                      int modifiers) {
+   content::RenderWidgetHost* widget =
+       contents->GetPrimaryMainFrame()->GetRenderWidgetHost();
+   if (!widget) return false;
+@@ -163,7 +177,8 @@ bool DispatchKeyboard(content::WebContents* contents,
+   }
+   const int key_code = KeyCode(value);
+   input::NativeWebKeyboardEvent key_down =
+-      KeyboardEvent(blink::WebInputEvent::Type::kRawKeyDown, key_code);
++      KeyboardEvent(blink::WebInputEvent::Type::kRawKeyDown, key_code,
++                    modifiers);
+   key_down.dom_key =
+       static_cast<int>(ui::KeycodeConverter::KeyStringToDomKey(value));
+   key_down.dom_code =
+@@ -241,6 +256,7 @@ void OnMouseDispatched(AiFreeAutomationSuccess success,
+ void OnActionResult(content::GlobalRenderFrameHostId frame_id,
+                     std::string action,
+                     std::string keyboard_value,
++                    int keyboard_modifiers,
+                     AiFreeAutomationSuccess success,
+                     AiFreeAutomationFailure failure,
+                     base::Value value) {
+@@ -265,7 +281,8 @@ void OnActionResult(content::GlobalRenderFrameHostId frame_id,
+   base::DictValue response = result->Clone();
+   if (native_keyboard) {
+     response.Remove("nativeKeyboard");
+-    if (!DispatchKeyboard(contents, action, keyboard_value)) {
++    if (!DispatchKeyboard(contents, action, keyboard_value,
++                          keyboard_modifiers)) {
+       return Fail(std::move(failure), "INPUT_TARGET_UNAVAILABLE",
+                   "Chromium 原生键盘输入目标不可用");
+     }
+@@ -504,9 +521,10 @@ bool HandleAiFreePageAutomationCommand(Browser* browser,
+         command.FindString(action == "type" ? "text" : "key");
+     const std::string keyboard_value =
+         keyboard_input ? *keyboard_input : (action == "type" ? "" : "Enter");
++    const int keyboard_modifiers = KeyboardModifiers(command);
+     ExecuteIsolated(web_contents, ActionScript(command),
+                     base::BindOnce(&OnActionResult, frame_id, action,
+-                                   keyboard_value,
++                                   keyboard_value, keyboard_modifiers,
+                                    std::move(success), std::move(failure)));
+     return true;
+   }

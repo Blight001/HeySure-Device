@@ -50,6 +50,17 @@ test('恢复上次普通窗口样式并把越界位置校正到当前屏幕', (t
   assert.equal(controller.shouldMaximize(), false);
 });
 
+test('恢复上次手动调整的侧边栏宽度', (t) => {
+  const { controller } = createFixture(t, {
+    version: 1,
+    maximized: true,
+    bounds: { width: 1440, height: 900 },
+    sidebarWidth: 516,
+  });
+
+  assert.equal(controller.getSidebarWidth(), 516);
+});
+
 test('窗口尺寸和最大化样式在关闭前原子保存并可再次读取', (t) => {
   const { controller, statePath } = createFixture(t);
   const window = new EventEmitter();
@@ -61,11 +72,13 @@ test('窗口尺寸和最大化样式在关闭前原子保存并可再次读取',
   window.getBounds = () => bounds;
   window.getNormalBounds = window.getBounds;
   controller.bindWindow(window);
+  assert.equal(controller.setSidebarWidth(488), true);
   window.emit('close');
   assert.deepEqual(JSON.parse(fs.readFileSync(statePath, 'utf8')), {
     version: 1,
     maximized: true,
     bounds: { x: 120, y: 80, width: 1320, height: 820 },
+    sidebarWidth: 488,
   });
   maximized = false;
   bounds = { x: 40, y: 30, width: 1180, height: 740 };
@@ -74,6 +87,7 @@ test('窗口尺寸和最大化样式在关闭前原子保存并可再次读取',
     version: 1,
     maximized: false,
     bounds: { x: 40, y: 30, width: 1180, height: 740 },
+    sidebarWidth: 488,
   });
   assert.equal(fs.readdirSync(path.dirname(statePath)).some((name) => name.endsWith('.tmp')), false);
 });

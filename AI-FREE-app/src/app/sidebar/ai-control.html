@@ -174,7 +174,12 @@
           <div class="ai-prompt-diagnostics-body">
             <p id="ai-prompt-diagnostics-status" class="ai-custom-api-status" aria-live="polite"></p>
             <section>
-              <h3>所有工具对应的 AI 提示词</h3>
+              <h3>当前 MCP 功能</h3>
+              <p>根据当前浏览器连接动态显示实际可用的工具、功能和支持操作。</p>
+              <pre id="ai-prompt-mcp-functions-content"></pre>
+            </section>
+            <section>
+              <h3>所有 MCP 对应的 AI 提示词</h3>
               <pre id="ai-prompt-tools-content"></pre>
             </section>
             <section>
@@ -196,6 +201,7 @@
 
   <script src="./client/scripts/logo-assets.js"></script>
   <script src="./client/scripts/control-panel.js"></script>
+  <script src="./client/app/side/controllers/shared/sidebar-resizer.js"></script>
 
   <script src="./client/app/side/controllers/pages/side-panel/tabs.js"></script>
   <script src="../shared/quota-display.js"></script>
@@ -208,6 +214,7 @@
   <script src="./client/app/side/controllers/pages/ai-control/ai-control-history-list.js"></script>
   <script src="./client/app/side/controllers/pages/ai-control/ai-control-history-session.js"></script>
   <script src="./client/app/side/controllers/pages/ai-control/ai-control-markdown.js"></script>
+  <script src="./client/app/side/controllers/pages/ai-control/ai-control-tool-card.js"></script>
   <script src="./client/app/side/controllers/pages/ai-control/ai-control-tool-display.js"></script>
   <script src="./client/app/side/controllers/pages/ai-control/ai-control-messages.js"></script>
   <script src="./client/app/side/controllers/pages/ai-control/ai-control-data-loaders.js"></script>
@@ -258,4 +265,3 @@
   <script src="../renderer/controllers/pages/app-shell/shell-automation-workbench.js"></script>
 </body>
 </html>
-

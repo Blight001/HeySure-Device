@@ -81,5 +81,9 @@ test('浏览器配置内嵌主窗口且只创建侧边栏子视图', () => {
   assert.deepEqual(loadedPages, ['C:/app/sidebar/ai-control.html']);
   assert.deepEqual(views[0].bounds, { x: 700, y: 41, width: 300, height: 659 });
   assert.equal(views[0].visible, true);
+  assert.equal(controller.setSidebarWidth(500), 500);
+  assert.deepEqual(views[0].bounds, { x: 500, y: 41, width: 500, height: 659 });
+  assert.equal(controller.setSidebarWidth(900), 680);
+  assert.deepEqual(views[0].bounds, { x: 320, y: 41, width: 680, height: 659 });
   window.emit('closed');
 });

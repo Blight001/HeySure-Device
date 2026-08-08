@@ -59,6 +59,7 @@ function bootstrapDeps(options = {}) {
     resolveSyncTutorialTabUrl: () => () => {},
     resolveTabs: () => new Map(),
     revealMainWindow() { calls.revealMainWindow += 1; },
+    setSidebarWidth: (width) => width,
     setAuth() {},
     setIsMainBootstrapped: (value) => { bootstrapped = value; },
     statePluginGetter: () => ({}),
@@ -116,4 +117,12 @@ test('启动 IPC 保留晚绑定的全局网络魔法浏览器同步动作', asy
 
   assert.deepEqual(result, { ok: true, updated: 2 });
   assert.deepEqual(proxyChanges, [true]);
+});
+
+test('启动 IPC 注入侧边栏宽度调整动作', async () => {
+  const { calls, deps } = bootstrapDeps();
+
+  await createAppShellBootstrap(deps)();
+
+  assert.equal(calls.registerIPCContext.ui.setSidebarWidth(480), 480);
 });

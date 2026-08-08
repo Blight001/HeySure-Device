@@ -423,7 +423,7 @@ class BrowserAutomationBridgeRuntime {
   }
 
   saveBrowserSession(connectionId, args = {}, options = {}) {
-    return this.dispatch(connectionId, 'browser_download', {
+    return this.dispatch(connectionId, 'browser_file', {
       ...args,
       action: 'save_session',
     }, options);

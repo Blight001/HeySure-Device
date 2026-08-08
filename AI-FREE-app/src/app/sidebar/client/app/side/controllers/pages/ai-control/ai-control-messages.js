@@ -201,8 +201,9 @@
     }
     const welcome = container.querySelector('.ai-chat-welcome');
     if (welcome) welcome.remove();
-    const row = document.createElement('div');
+    const row = document.createElement('article');
     row.className = `ai-chat-message ${role}${options.pending ? ' pending' : ''}`;
+    row.dataset.messageKind = role === 'user' ? 'user-bubble' : role;
     const bubble = document.createElement('div');
     bubble.className = 'ai-chat-bubble';
     bubble.textContent = content;
@@ -355,23 +356,36 @@
     updateSessionTitleUi();
   }
 
+  function chatInputHasSendableContent(input = el('ai-chat-input')) {
+    return Boolean(String(input?.value || '').trim());
+  }
+
+  function resolveChatButtonMode(hasContent) {
+    if (!state.loading) return { icon: 'send', label: '发送消息', stop: false, insert: false };
+    if (state.stopping) return { icon: 'stop', label: '正在停止', stop: true, insert: false };
+    if (hasContent) return { icon: 'send', label: '插入当前对话', stop: false, insert: true };
+    return { icon: 'stop', label: '停止 AI 输出', stop: true, insert: false };
+  }
+
   function syncSendState() {
     const send = el('ai-chat-send');
     const input = el('ai-chat-input');
     const model = el('ai-chat-model');
     const modelUnavailable = !model?.value;
     const quotaExhausted = !selectedModelIsCustom() && state.accountAuthenticated && isQuotaExhausted();
+    const hasContent = chatInputHasSendableContent(input);
+    const mode = resolveChatButtonMode(hasContent);
     if (send) {
       send.disabled = state.loading
         ? state.stopping
-        : modelUnavailable || quotaExhausted || !input?.value.trim();
-      const iconMode = state.loading ? 'stop' : 'send';
-      if (send.dataset.iconMode !== iconMode) {
-        send.innerHTML = SEND_BUTTON_ICONS[iconMode];
-        send.dataset.iconMode = iconMode;
+        : modelUnavailable || quotaExhausted || !hasContent;
+      if (send.dataset.iconMode !== mode.icon) {
+        send.innerHTML = SEND_BUTTON_ICONS[mode.icon];
+        send.dataset.iconMode = mode.icon;
       }
-      send.title = state.loading ? (state.stopping ? '正在停止' : '停止 AI 输出') : '发送消息';
-      send.setAttribute('aria-label', state.loading ? '停止 AI 输出' : '发送消息');
-      send.classList.toggle('is-stop', state.loading);
+      send.title = mode.label;
+      send.setAttribute('aria-label', mode.label);
+      send.classList.toggle('is-stop', mode.stop);
+      send.classList.toggle('is-insert', mode.insert);
     }
   }

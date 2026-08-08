@@ -170,18 +170,32 @@
   const TOOL_DISPLAY_NAMES = Object.freeze({
     manage_card: '自动化卡片',
     save_cookies: '保存浏览器数据',
-    browser_download: '下载与保存会话',
+    browser_file: '浏览器文件',
     browser_tab: '浏览器标签页',
     browser_observe: '观察页面',
     browser_action: '操作页面',
     browser_wait: '等待页面',
-    software_window: '管理浏览器窗口',
+    windows_tab: '外部软件栏目',
+    run_command: '沙盒命令行',
     get_status: '查看卡片状态',
     run_card: '运行自动化卡片',
     write_card: '保存自动化卡片',
   });
 
   const TOOL_ACTION_DISPLAY_NAMES = Object.freeze({
+    windows_tab: {
+      list: '查看外部软件栏目',
+      open: '显示外部软件栏目',
+      create: '新建外部软件栏目',
+      edit: '编辑外部软件栏目',
+      close: '关闭外部软件栏目',
+    },
+    browser_file: {
+      info: '查看 AI 工作区',
+      download: '下载文件',
+      upload: '上传文件',
+      save_session: '保存浏览器会话',
+    },
     manage_card: {
       rules: '查看卡片规范',
       list: '查看卡片列表',

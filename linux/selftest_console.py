@@ -37,7 +37,7 @@ def main() -> int:
     )
     print(f"   收到输出: {out.strip()!r}")
     check("命令停在提示符处等待输入（而不是卡死/直接结束）", "[Y/n]" in out)
-    check("此时还没有结果（说明确实在等我回答）", "ANSWER=" not in out)
+    check("此时还没有结果（说明确实在等我回答）", "\nANSWER=" not in out)
 
     print("3) 回答 y + 回车，拿这一轮的新增输出")
     _, out = mgr.send(session.session_id, "y", max_wait=5.0)

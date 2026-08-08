@@ -264,6 +264,7 @@ class AppShellRuntime {
     });
     this.createMainWindow = mainController.createMainWindow;
     this.revealMainWindow = mainController.revealMainWindow;
+    this.setSidebarWidth = mainController.setSidebarWidth;
     this.bootstrapMainApp = this.createBootstrapMainApp();
   }
 
@@ -277,6 +278,7 @@ class AppShellRuntime {
       ensureAnnouncementPoller: this.ensureAnnouncementPoller.bind(this),
       isControlPanelOnlyModeEnabled: this.isControlPanelOnlyModeEnabled.bind(this),
       revealMainWindow: this.revealMainWindow,
+      setSidebarWidth: this.setSidebarWidth,
       resolveActiveTabId: this.resolveActiveTabId.bind(this),
       resolveAddTab: this.resolveAddTab.bind(this),
       resolveAuth: this.resolveAuth.bind(this),

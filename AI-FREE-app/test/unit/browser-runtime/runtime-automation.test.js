@@ -25,6 +25,15 @@ test('normalizes bounded native observe and action payloads', () => {
   assert.equal(normalizeRuntimeAutomation('perform-action', {
     action: 'type', selector: '#email', text: 'a@example.com', timeout: 1,
   }).timeoutMs, 100);
+  assert.deepEqual(normalizeRuntimeAutomation('perform-action', {
+    action: 'press_key', key: 'Ctrl+Shift+Enter', alt: true,
+  }), {
+    action: 'press_key', selector: '', text: '', key: 'Enter', ref: '', direction: 'down', amount: 600,
+    timeoutMs: 10000, ctrl: true, shift: true, alt: true, meta: false,
+  });
+  assert.deepEqual(normalizeRuntimeAutomation('activate-tab', {
+    url: ' https://example.test/page ', id: '2',
+  }), { url: 'https://example.test/page', index: 2 });
 });
 
 test('rejects unknown native commands and actions', () => {
@@ -51,12 +60,29 @@ test('routes native automation only to a live managed Chromium process', async (
 
 test('fork automation commands are allowlisted without an automation extension', () => {
   assert.equal(ALLOWED_COMMANDS.has('open-tabs'), true);
-  for (const command of ['observe-page', 'capture-screenshot', 'perform-action', 'get-session-data']) {
+  for (const command of [
+    'observe-page', 'capture-screenshot', 'perform-action', 'get-session-data', 'list-tabs', 'activate-tab',
+  ]) {
     assert.equal(ALLOWED_COMMANDS.has(command), true);
   }
   assert.equal(fs.existsSync(path.join(
     __dirname, '../../../src/assets/extensions/browser_automation',
   )), false);
+});
+
+test('fork live tab patch reads the active Chromium tab strip', () => {
+  const patchDirectory = path.join(__dirname, '../../../native/chromium-fork/patches');
+  const series = fs.readFileSync(path.join(patchDirectory, 'series'), 'utf8');
+  const patch = fs.readFileSync(
+    path.join(patchDirectory, '0026-ai-free-live-tab-list.patch'), 'utf8',
+  );
+  assert.match(series, /0025-ai-free-sandbox-launch-diagnostics\.patch\s+0026-ai-free-live-tab-list\.patch/);
+  assert.match(patch, /command_name == "list-tabs"/);
+  assert.match(patch, /command_name == "activate-tab"/);
+  assert.match(patch, /tab_strip->active_index\(\)/);
+  assert.match(patch, /ActivateTabAt\(target_index\)/);
+  assert.match(patch, /TAB_NOT_FOUND/);
+  assert.match(patch, /GetVisibleURL\(\)\.spec\(\)/);
 });
 
 test('fork click patch uses an event-transparent visible Chromium pointer', () => {
@@ -97,6 +123,19 @@ test('fork keyboard and scroll actions use fixed native input events', () => {
   assert.match(patch, /ForwardKeyboardEvent/);
   assert.match(patch, /ForwardWheelEvent/);
   assert.doesNotMatch(patch, /^\+.*dispatchEvent\(new (?:InputEvent|KeyboardEvent)/m);
+});
+
+test('fork keyboard modifier patch forwards trusted Ctrl+Enter modifiers', () => {
+  const patchDirectory = path.join(__dirname, '../../../native/chromium-fork/patches');
+  const series = fs.readFileSync(path.join(patchDirectory, 'series'), 'utf8');
+  const patch = fs.readFileSync(
+    path.join(patchDirectory, '0027-ai-free-keyboard-modifiers.patch'), 'utf8',
+  );
+  assert.match(series, /0026-ai-free-live-tab-list\.patch\s+0027-ai-free-keyboard-modifiers\.patch/);
+  assert.match(patch, /kControlKey/);
+  assert.match(patch, /kShiftKey/);
+  assert.match(patch, /KeyboardModifiers\(command\)/);
+  assert.match(patch, /NativeWebKeyboardEvent event\(type, modifiers/);
 });
 
 test('fork observe highlights stay in the native event-transparent UI layer', () => {

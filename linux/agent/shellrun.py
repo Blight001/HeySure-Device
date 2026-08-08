@@ -28,6 +28,7 @@ def run(
     cwd: Optional[str] = None,
     env: Optional[Dict[str, str]] = None,
     input_text: Optional[str] = None,
+    truncate_output: bool = True,
 ) -> Dict[str, object]:
     """执行一条命令，返回结构化结果。
 
@@ -48,15 +49,15 @@ def run(
         return {
             "ok": proc.returncode == 0,
             "code": proc.returncode,
-            "stdout": _truncate(proc.stdout or ""),
-            "stderr": _truncate(proc.stderr or ""),
+            "stdout": _truncate(proc.stdout or "") if truncate_output else (proc.stdout or ""),
+            "stderr": _truncate(proc.stderr or "") if truncate_output else (proc.stderr or ""),
             "timed_out": False,
         }
     except subprocess.TimeoutExpired as exc:
         return {
             "ok": False,
             "code": None,
-            "stdout": _truncate(exc.stdout.decode() if isinstance(exc.stdout, bytes) else (exc.stdout or "")),
+            "stdout": (_truncate(exc.stdout.decode() if isinstance(exc.stdout, bytes) else (exc.stdout or "")) if truncate_output else (exc.stdout.decode() if isinstance(exc.stdout, bytes) else (exc.stdout or ""))),
             "stderr": f"命令超时（>{timeout}s）",
             "timed_out": True,
         }

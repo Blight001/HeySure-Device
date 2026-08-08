@@ -151,9 +151,10 @@ class ConsoleManager:
         *,
         max_wait: float = 0.0,
         quiet: float = 0.3,
+        max_chars: int = _MAX_OUTPUT_CHARS,
     ) -> Tuple[ConsoleSession, str]:
         session = self._require(session_id)
-        output = self._collect(session, max_wait=max_wait, quiet=quiet)
+        output = self._collect(session, max_wait=max_wait, quiet=quiet, max_chars=max_chars)
         return session, output
 
     def close(self, session_id: str) -> ConsoleSession:
@@ -245,7 +246,7 @@ class ConsoleManager:
                     session.base += overflow
         self._finish(session)
 
-    def _collect(self, session: ConsoleSession, *, max_wait: float, quiet: float) -> str:
+    def _collect(self, session: ConsoleSession, *, max_wait: float, quiet: float, max_chars: int = _MAX_OUTPUT_CHARS) -> str:
         """等到「有新增输出且已静默 quiet 秒」或超过 max_wait，然后取走新增文本。
 
         这样能在交互式提示（如 [Y/n]）打印完、进程停下等待输入时及时返回，
@@ -265,20 +266,26 @@ class ConsoleManager:
             if now - start >= max_wait:
                 break
             time.sleep(0.05)
-        return self._drain(session)
+        return self._drain(session, max_chars=max_chars)
 
-    def _drain(self, session: ConsoleSession) -> str:
+    def _drain(self, session: ConsoleSession, *, max_chars: int = _MAX_OUTPUT_CHARS) -> str:
         """取走 [cursor, total) 的字节并推进 cursor，返回洗净后的可读文本。"""
+        limit = max(1000, min(_MAX_OUTPUT_CHARS, int(max_chars or _MAX_OUTPUT_CHARS)))
         with session.lock:
+            dropped = max(0, session.base - session.cursor)
             start = max(session.cursor, session.base)
-            raw = bytes(session.buffer[start - session.base:])
-            session.cursor = session.total
+            available = session.total - start
+            take = min(available, limit)
+            raw = bytes(session.buffer[start - session.base:start - session.base + take])
+            session.cursor = start + take
         text = raw.decode("utf-8", "replace")
         text = _ANSI_RE.sub("", text).replace("\r\n", "\n").replace("\r", "\n")
-        if len(text) > _MAX_OUTPUT_CHARS:
-            text = text[-_MAX_OUTPUT_CHARS:]
-            text = f"…[输出过长，仅显示最后 {_MAX_OUTPUT_CHARS} 字符]\n" + text
-        return text
+        prefix = ""
+        if dropped:
+            prefix = f"…[环形缓冲已丢弃 {dropped} 字节]\n"
+        if available > take:
+            prefix += f"…[本次读取 {take} 字节，尚余 {available - take} 字节，可继续 console.read]\n"
+        return prefix + text
 
     def _finish(self, session: ConsoleSession) -> None:
         with self._lock:
@@ -383,7 +390,7 @@ def _read(args: Dict[str, Any]) -> Tuple[Any, str]:
         raise ValueError("缺少 sessionId")
     # 复用 timeout_seconds 命名：服务器据它延长任务超时，避免「等 200s 但服务器 120s 就掐」。
     max_wait = float(max(0, min(300, _as_int(args.get("timeout_seconds"), 0))))
-    session, output = _MANAGER.read(session_id, max_wait=max_wait)
+    session, output = _MANAGER.read(session_id, max_wait=max_wait, max_chars=_as_int(args.get("max_chars"), _MAX_OUTPUT_CHARS))
     result = _status(session, output)
     return result, f"读取 {session_id}：{len(output)} 字符新增输出"
 
@@ -471,6 +478,7 @@ def build_tools(enabled: bool, default_shell: str = "") -> List[Tool]:
             input_schema=obj_schema(
                 {
                     "sessionId": {"type": "string", "description": "console.open 返回的会话 ID"},
+                    "max_chars": {"type": "integer", "description": "单次最多消费的输出字符数（1000-60000，默认60000）；剩余内容可继续读取", "minimum": 1000, "maximum": 60000},
                     "timeout_seconds": {
                         "type": "integer",
                         "description": "最长等待秒数以收集输出（可选，默认 0=立即返回当前已有的新增）",

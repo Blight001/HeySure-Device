@@ -211,10 +211,17 @@ html.theme-gold .ai-chat-quota-value {
   color: #e3cb92;
 }
 
-html.theme-gold .ai-chat-tool-icon {
-  color: #e8d59c;
-  background: rgba(212, 183, 118, .11);
+html.theme-gold .ai-chat-message.user .ai-chat-bubble {
+  color: #ead9ad;
+  border-color: rgba(212, 183, 118, .42);
+  background: rgba(212, 183, 118, .1);
 }
+
+html.theme-gold .ai-chat-activity-arrow,
+html.theme-gold .ai-chat-activity-status,
+html.theme-gold .ai-chat-thinking-mark { color: #d4b776; }
+
+html.theme-gold .ai-chat-tool.running .ai-chat-tool-dot { background: #d4b776; }
 
 html.theme-gold .ai-model-custom-api-action {
   color: #e0c584;

@@ -66,7 +66,7 @@
   function bindChatForm() {
     el('ai-chat-form')?.addEventListener('submit', (event) => {
       event.preventDefault();
-      if (state.loading) stopAIOutput();
+      if (state.loading && !chatInputHasSendableContent()) stopAIOutput();
       else sendMessage();
     });
   }

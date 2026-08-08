@@ -23,5 +23,15 @@ test('侧边栏页面在真实 Electron 中加载并应用主题', { timeout: 60
   assert.ok(['dark', 'light', 'gold'].includes(result.theme), `主题未应用: ${result.theme}`);
   assert.equal(result.hasControlShell, true, '缺少 .control-shell 容器');
   assert.equal(result.tabButtons, 2, 'AI 控制/个人中心两个 tab 按钮应存在');
+  assert.equal(result.chatStructure.userTag, 'ARTICLE', '用户气泡应是独立消息节点');
+  assert.equal(result.chatStructure.assistantTag, 'ARTICLE', 'AI 回合应是独立消息节点');
+  assert.equal(result.chatStructure.activitySummary, '1次思考 · 1次工具调用');
+  assert.equal(result.chatStructure.hasActivityRail, true, '思考与工具应位于活动时间线中');
+  assert.match(result.chatStructure.toolSummary, /调用\s*AI-FREE\s*browser_observe\s*1\.2s/);
+  assert.equal(result.chatStructure.toolName, 'browser_observe');
+  assert.deepEqual(result.chatStructure.toolSections, ['参数', '结果']);
+  assert.equal(result.chatStructure.activityCount, 2);
+  assert.deepEqual(result.chatStructure.answerTexts, ['已经取得页面结构。', '页面操作已经完成。']);
+  assert.deepEqual(result.chatStructure.turnOrder, ['activity', 'answer', 'activity', 'answer']);
   assert.deepEqual(result.consoleErrors, [], `页面控制台报错: ${JSON.stringify(result.consoleErrors)}`);
 });

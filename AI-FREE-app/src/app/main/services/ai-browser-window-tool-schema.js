@@ -26,7 +26,7 @@ const seededObject = (modes, description) => ({
 const BROWSER_SETTINGS_PATCH_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  description: '该浏览器的环境配置增量；只修改传入字段，未传入字段保持不变。Cookie 会话请使用 browser_download 的 save_session 操作，不通过本工具传输。',
+  description: '该栏目的浏览器环境配置增量；只修改传入字段，未传入字段保持不变。Cookie 会话请使用 browser_file 的 save_session 操作，不通过本工具传输。',
   properties: {
     os: modeValue(['win7', 'win8', 'win10', 'win11'], '操作系统指纹'),
     browserVersion: { type: 'string', description: '浏览器版本指纹，例如 126.0.0.0' },
@@ -115,7 +115,7 @@ const BROWSER_SETTINGS_PATCH_SCHEMA = {
   },
 };
 
-const SOFTWARE_WINDOW_INPUT_SCHEMA = {
+const WINDOWS_TAB_INPUT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   required: ['action'],
@@ -137,5 +137,5 @@ const SOFTWARE_WINDOW_INPUT_SCHEMA = {
 
 module.exports = {
   BROWSER_SETTINGS_PATCH_SCHEMA,
-  SOFTWARE_WINDOW_INPUT_SCHEMA,
+  WINDOWS_TAB_INPUT_SCHEMA,
 };

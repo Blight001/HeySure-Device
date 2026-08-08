@@ -12,6 +12,20 @@ function clonePromptValue(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function summarizeMcpTools(tools) {
+  if (!Array.isArray(tools)) return [];
+  return tools.map((tool) => {
+    const schema = tool?.input_schema || tool?.inputSchema || {};
+    const actions = schema?.properties?.action?.enum;
+    return {
+      name: String(tool?.name || '未命名工具'),
+      description: String(tool?.description || '暂无功能说明'),
+      actions: Array.isArray(actions) ? actions.map((action) => String(action)) : [],
+      destructive: tool?.destructive === true,
+    };
+  });
+}
+
 function buildPromptPreview(deps, input, getWindowTools) {
   const options = normalizeChatOptions({ ...input, disableTools: false, stream: false });
   const resolvedConnections = resolveConnections(deps, options);
@@ -41,8 +55,14 @@ function createPromptDiagnostics(deps, input, getWindowTools, lastRequest) {
   return {
     ok: true,
     preview,
+    mcpTools: summarizeMcpTools(preview.tools),
     lastRequest: lastRequest ? clonePromptValue(lastRequest) : null,
   };
 }
 
-module.exports = { buildPromptPreview, clonePromptValue, createPromptDiagnostics };
+module.exports = {
+  buildPromptPreview,
+  clonePromptValue,
+  createPromptDiagnostics,
+  summarizeMcpTools,
+};

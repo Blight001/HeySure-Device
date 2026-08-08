@@ -4,8 +4,28 @@ const { NATIVE_BROWSER_TOOL_DEFINITIONS } = require('./native-browser-tool-defin
 
 const CONNECTION_PREFIX = 'native:';
 const READY_STATUSES = new Set(['ready', 'hidden']);
+const RETRYABLE_WAIT_ERRORS = new Set(['INPUT_TARGET_UNAVAILABLE', 'WEB_CONTENTS_UNAVAILABLE']);
 
 function text(value) { return String(value == null ? '' : value).trim(); }
+
+function normalizeToolName(value) {
+  return value === 'browser_download' ? 'browser_file' : value;
+}
+
+function boundedWaitTimeout(args) {
+  return Math.min(120000, Math.max(100, Number(args.timeout_ms ?? args.ms) || 10000));
+}
+
+function retryDelay(timeoutMs) {
+  return new Promise((resolve) => setTimeout(resolve, Math.min(100, timeoutMs)));
+}
+
+function waitTimeoutResult(selector, timeoutMs, result = {}) {
+  return {
+    ...result, success: false, action: 'wait', selector,
+    error: `等待元素超时: ${selector}`, errorCode: 'WAIT_TIMEOUT', timeout_ms: timeoutMs,
+  };
+}
 
 function normalizeUrl(value) {
   const raw = text(value);
@@ -84,14 +104,18 @@ class NativeBrowserAutomation {
   async browserTab(connection, args) {
     const action = text(args.action).toLowerCase();
     const profileId = connection.profileId;
-    const tab = findTab(this.getTabs, profileId);
-    if (action === 'list') {
-      const item = { id: profileId, active: true, title: connection.name, url: text(tab?.runtimeUrl || tab?.requestedUrl) };
-      return { success: true, action, count: 1, activeTabId: profileId, activeTab: item, tabs: [item] };
-    }
+    if (action === 'list') return this.runtimeCommand(connection, 'list-tabs');
     if (action === 'switch') {
+      const index = Number(args.index ?? args.tab_index ?? args.id ?? args.tab_id);
+      const target = {
+        url: text(args.url),
+        index: Number.isInteger(index) && index >= 0 ? index : -1,
+      };
+      const switched = target.url || target.index >= 0
+        ? await this.runtimeCommand(connection, 'activate-tab', target)
+        : (await this.runtimeCommand(connection, 'list-tabs')).activeTab;
       await this.runtime.focus(profileId, 'chromium');
-      return { success: true, action, id: profileId, title: connection.name, url: text(tab?.runtimeUrl) };
+      return { success: true, action, ...switched };
     }
     if (action === 'reload') {
       await this.runtime.reload(profileId, 'chromium');
@@ -106,16 +130,22 @@ class NativeBrowserAutomation {
 
   async browserAction(connection, args) {
     const input = this.resolveObservedTarget(connection, args);
-    if (text(args.action) === 'upload_file') {
-      const paths = Array.isArray(args.paths) ? args.paths : [args.path].filter(Boolean);
-      const mode = text(args.mode) || (paths.length > 1 ? 'open-multiple' : 'open');
-      const session = text(args.page_url || args.pageUrl)
-        ? null
-        : await this.runtimeCommand(connection, 'get-session-data', {});
-      await this.runtime.selectFilesByProcessId(connection.browserProcessId, {
-        pageUrl: text(args.page_url || args.pageUrl || session?.url), paths, mode, ttlMs: 5000,
-      });
-    }
+    if (text(input.action) === 'upload_file') throw new Error('文件上传请使用 browser_file action=upload');
+    return this.runtimeCommand(connection, 'perform-action', input);
+  }
+
+  async browserUpload(connection, args) {
+    const input = this.resolveObservedTarget(connection, { ...args, action: 'upload_file' });
+    if (!this.downloadService?.resolveUploadPaths) throw new Error('AI 工作区文件服务不可用');
+    const requested = Array.isArray(args.paths) ? args.paths : [args.path].filter(Boolean);
+    const paths = this.downloadService.resolveUploadPaths(requested);
+    const mode = text(args.mode) || (paths.length > 1 ? 'open-multiple' : 'open');
+    const session = text(args.page_url || args.pageUrl)
+      ? null
+      : await this.runtimeCommand(connection, 'get-session-data', {});
+    await this.runtime.selectFilesByProcessId(connection.browserProcessId, {
+      pageUrl: text(args.page_url || args.pageUrl || session?.url), paths, mode, ttlMs: 5000,
+    });
     return this.runtimeCommand(connection, 'perform-action', input);
   }
 
@@ -137,18 +167,40 @@ class NativeBrowserAutomation {
     const input = this.resolveObservedTarget(connection, args);
     const selector = text(input.selector);
     if (selector) {
-      return this.runtimeCommand(connection, 'perform-action', {
-        ...input, selector, action: 'wait', timeout_ms: input.timeout_ms ?? input.ms,
-      });
+      const timeoutMs = boundedWaitTimeout(input);
+      const deadline = Date.now() + timeoutMs;
+      let result = null;
+      do {
+        const remaining = Math.max(100, deadline - Date.now());
+        let retryableFailure = false;
+        try {
+          result = await this.runtimeCommand(connection, 'perform-action', {
+            ...input, selector, action: 'wait', timeout_ms: Math.min(750, remaining),
+          });
+          retryableFailure = result?.success === false && result?.errorCode === 'WAIT_TIMEOUT';
+        } catch (error) {
+          if (!RETRYABLE_WAIT_ERRORS.has(String(error?.code || ''))) throw error;
+          result = null;
+          retryableFailure = true;
+        }
+        if (!retryableFailure) return result;
+        if (Date.now() < deadline) await retryDelay(deadline - Date.now());
+      } while (Date.now() < deadline);
+      return waitTimeoutResult(selector, timeoutMs, result || {});
     }
     const waitedMs = Math.min(120000, Math.max(0, Number(args.ms) || 1000));
     await new Promise((resolve) => setTimeout(resolve, waitedMs));
     return { success: true, waitedMs, cardStep: { name: `等待 ${waitedMs}ms`, type: 'wait', timeout: waitedMs } };
   }
 
-  async browserDownload(connection, args) {
+  async browserFile(connection, args) {
+    const action = text(args.action).toLowerCase();
+    if (action === 'upload') {
+      const result = await this.browserUpload(connection, args);
+      return { ...result, action: 'upload' };
+    }
     if (!this.downloadService?.execute) throw new Error('AI 工作区下载服务不可用');
-    if (text(args.action).toLowerCase() !== 'save_session') return this.downloadService.execute(args);
+    if (action !== 'save_session') return this.downloadService.execute(args);
     const response = await this.runtimeCommand(connection, 'get-session-data', {});
     return this.downloadService.execute({ ...args, session: response?.result || response });
   }
@@ -156,19 +208,20 @@ class NativeBrowserAutomation {
   async dispatch(connectionId, tool, args = {}, options = {}) {
     const connection = this.requireConnection(connectionId);
     const input = args && typeof args === 'object' ? args : {};
-    if (tool === 'browser_observe') return this.browserObserve(connection, input);
-    if (tool === 'browser_screenshot') return this.runtimeCommand(connection, 'capture-screenshot', input);
-    if (tool === 'browser_action') return this.browserAction(connection, input);
-    if (tool === 'browser_wait') return this.browserWait(connection, input);
-    if (tool === 'browser_tab') return this.browserTab(connection, input);
-    if (tool === 'browser_download') return this.browserDownload(connection, input);
-    if (tool === 'manage_card' && this.cardService?.execute) {
+    const toolName = normalizeToolName(tool);
+    if (toolName === 'browser_observe') return this.browserObserve(connection, input);
+    if (toolName === 'browser_screenshot') return this.runtimeCommand(connection, 'capture-screenshot', input);
+    if (toolName === 'browser_action') return this.browserAction(connection, input);
+    if (toolName === 'browser_wait') return this.browserWait(connection, input);
+    if (toolName === 'browser_tab') return this.browserTab(connection, input);
+    if (toolName === 'browser_file') return this.browserFile(connection, input);
+    if (toolName === 'manage_card' && this.cardService?.execute) {
       return this.cardService.execute(input, {
         timeoutMs: options.timeoutMs,
         dispatch: (nextTool, nextArgs) => this.dispatch(connectionId, nextTool, nextArgs, options),
       });
     }
-    throw new Error(`未知的 Chromium 原生自动化工具: ${text(tool) || '(空)'}`);
+    throw new Error(`未知的 Chromium 原生自动化工具: ${text(toolName) || '(空)'}`);
   }
 }
 

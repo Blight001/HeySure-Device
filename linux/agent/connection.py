@@ -136,6 +136,8 @@ class Agent:
         @sio.on("device:registered")
         def on_registered(data: Dict[str, Any]) -> None:
             self.state["registered"] = True
+            # 注册完成后再补发，避免刚建立 Socket、服务端尚未恢复设备路由时再次丢结果。
+            self.dispatcher.flush_pending()
             ai = (data or {}).get("aiConfigId")
             if ai in (None, "", 0):
                 logger.info("✅ 已注册（未绑定 AI）——请到网页控制台作坊面板给本服务分配 AI 并勾选工具权限。")

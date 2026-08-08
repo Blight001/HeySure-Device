@@ -154,3 +154,18 @@ test('browser download rejects localhost and private DNS answers before fetching
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('browser file upload only resolves existing files inside AI-Workspace', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-free-upload-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, 'exports'));
+  fs.writeFileSync(path.join(root, 'exports', 'report.txt'), 'report');
+  const service = createBrowserDownloadService({ sandboxDir: root });
+
+  assert.deepEqual(
+    service.resolveUploadPaths(['exports/report.txt']),
+    [fs.realpathSync(path.join(root, 'exports', 'report.txt'))],
+  );
+  assert.throws(() => service.resolveUploadPaths(['../outside.txt']), /超出 AI 工作区/);
+  assert.throws(() => service.resolveUploadPaths(['missing.txt']), /上传文件不存在/);
+});

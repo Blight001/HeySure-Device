@@ -12,8 +12,6 @@ import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -29,6 +27,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import android.widget.PopupMenu
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
@@ -42,17 +41,15 @@ import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import java.security.MessageDigest
 import kotlin.math.abs
 
 /**
  * Full-screen Android host for the shared web digital-society console.
  *
  * The document keeps the configured HeySure server as its real origin, so all
- * existing relative REST, Socket.IO and WebRTC URLs work unchanged. Hashed
- * Vue/Phaser assets are answered from the APK before the network is touched.
- * This gives Android a warm, deterministic UI without maintaining a second set
- * of console components.
+ * existing relative REST, Socket.IO and WebRTC URLs work unchanged. The live
+ * deployment is loaded on explicit navigation; the APK copy remains available
+ * as an offline fallback.
  */
 class ConsoleActivity : AppCompatActivity() {
     private lateinit var settings: Settings
@@ -63,19 +60,8 @@ class ConsoleActivity : AppCompatActivity() {
     private lateinit var agentButton: TextView
     private var loadedSessionKey = ""
     private var fileChooser: ValueCallback<Array<Uri>>? = null
-    private val updateHandler = Handler(Looper.getMainLooper())
-    @Volatile private var liveIndexSignature: String? = null
     @Volatile private var useBundledFallback = false
-    private var updateCheckRunning = false
-    private var agentButtonExpanded = false
     private var agentButtonDockedLeft = false
-
-    private val updateCheck = object : Runnable {
-        override fun run() {
-            checkForWebUpdate()
-            updateHandler.postDelayed(this, WEB_UPDATE_CHECK_INTERVAL_MS)
-        }
-    }
 
     private val filePicker = registerForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments(),
@@ -95,7 +81,9 @@ class ConsoleActivity : AppCompatActivity() {
         if (settings.isLoggedIn) {
             createShell()
             AgentService.start(this)
-            loadConsole(force = true)
+            if (!restoreConsoleState(savedInstanceState)) {
+                loadConsole(force = true)
+            }
             refreshSessionInBackground()
             return
         }
@@ -111,7 +99,6 @@ class ConsoleActivity : AppCompatActivity() {
                 }
                 AgentService.start(this@ConsoleActivity)
                 loadConsole(force = true)
-                startWebUpdateChecks()
             }
             return
         }
@@ -135,7 +122,6 @@ class ConsoleActivity : AppCompatActivity() {
                     AgentService.start(this@ConsoleActivity)
                     loadConsole(force = true)
                     webView.onResume()
-                    startWebUpdateChecks()
                 }
                 return
             }
@@ -145,7 +131,6 @@ class ConsoleActivity : AppCompatActivity() {
         AgentService.start(this)
         loadConsole(force = false)
         webView.onResume()
-        startWebUpdateChecks()
     }
 
     /** Best-effort token refresh so the embedded web console keeps a live JWT. */
@@ -181,13 +166,19 @@ class ConsoleActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
-        updateHandler.removeCallbacks(updateCheck)
         if (::webView.isInitialized) webView.onPause()
         super.onPause()
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        if (::webView.isInitialized) {
+            webView.saveState(outState)
+            outState.putBoolean(STATE_BUNDLED_FALLBACK, useBundledFallback)
+        }
+        super.onSaveInstanceState(outState)
+    }
+
     override fun onDestroy() {
-        updateHandler.removeCallbacks(updateCheck)
         fileChooser?.onReceiveValue(null)
         fileChooser = null
         if (::webView.isInitialized) {
@@ -250,13 +241,7 @@ class ConsoleActivity : AppCompatActivity() {
             background = ContextCompat.getDrawable(this@ConsoleActivity, R.drawable.pill_bg)
             elevation = dp(6).toFloat()
             contentDescription = "展开设备入口"
-            setOnClickListener {
-                if (agentButtonExpanded) {
-                    openAgentSettings(closeConsole = false)
-                } else {
-                    expandAgentButton()
-                }
-            }
+            setOnClickListener { showAgentMenu() }
             installAgentButtonDrag(this)
         }
         root.addView(
@@ -330,9 +315,13 @@ class ConsoleActivity : AppCompatActivity() {
         webView.loadUrl("${baseUrl.trimEnd('/')}/$cacheBuster")
     }
 
-    private fun startWebUpdateChecks() {
-        updateHandler.removeCallbacks(updateCheck)
-        updateHandler.post(updateCheck)
+    /** Preserve the rendered page when Android recreates this Activity in the background. */
+    private fun restoreConsoleState(savedState: Bundle?): Boolean {
+        if (savedState == null || webView.restoreState(savedState) == null) return false
+        useBundledFallback = savedState.getBoolean(STATE_BUNDLED_FALLBACK, false)
+        loadedSessionKey = "${consoleBaseUrl()}\n${settings.authToken}"
+        showLoading(false)
+        return true
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -387,24 +376,37 @@ class ConsoleActivity : AppCompatActivity() {
         }
     }
 
-    private fun expandAgentButton() {
-        agentButtonExpanded = true
-        agentButton.text = "设备设置"
-        agentButton.contentDescription = "打开 Android Agent 设置"
-        agentButton.layoutParams = (agentButton.layoutParams as FrameLayout.LayoutParams).apply {
-            width = dp(AGENT_BUTTON_EXPANDED_WIDTH_DP)
+    private fun showAgentMenu() {
+        // Bring the half-hidden bubble fully into view while its action menu is open.
+        agentButton.x = if (agentButtonDockedLeft) {
+            dp(8).toFloat()
+        } else {
+            (root.width - agentButton.width - dp(8)).coerceAtLeast(0).toFloat()
         }
-        agentButton.post {
-            agentButton.x = if (agentButtonDockedLeft) {
-                dp(8).toFloat()
-            } else {
-                (root.width - agentButton.width - dp(8)).coerceAtLeast(0).toFloat()
+        agentButton.contentDescription = "设备操作菜单"
+
+        PopupMenu(this, agentButton).apply {
+            menu.add(0, MENU_DEVICE_SETTINGS, 0, "设备设置")
+            menu.add(0, MENU_REFRESH_PAGE, 1, "刷新页面")
+            setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    MENU_DEVICE_SETTINGS -> {
+                        openAgentSettings(closeConsole = false)
+                        true
+                    }
+                    MENU_REFRESH_PAGE -> {
+                        loadConsole(force = true)
+                        true
+                    }
+                    else -> false
+                }
             }
+            setOnDismissListener { collapseAgentButton() }
+            show()
         }
     }
 
     private fun collapseAgentButton(dockLeft: Boolean = agentButtonDockedLeft) {
-        agentButtonExpanded = false
         agentButtonDockedLeft = dockLeft
         agentButton.text = "设备"
         agentButton.contentDescription = "展开设备入口"
@@ -422,31 +424,6 @@ class ConsoleActivity : AppCompatActivity() {
                 0f,
                 (root.height - agentButton.height).coerceAtLeast(0).toFloat(),
             )
-        }
-    }
-
-    /** Refresh only when the deployed Vite entry document actually changes. */
-    private fun checkForWebUpdate() {
-        if (updateCheckRunning || !::webView.isInitialized) return
-        updateCheckRunning = true
-        lifecycleScope.launch {
-            val bytes = withContext(Dispatchers.IO) { fetchLiveIndex() }
-            updateCheckRunning = false
-            if (bytes == null || !::webView.isInitialized) return@launch
-
-            val deployedSignature = signatureOf(bytes)
-            val runningSignature = liveIndexSignature
-            when {
-                useBundledFallback -> {
-                    liveIndexSignature = deployedSignature
-                    loadConsole(force = true)
-                }
-                runningSignature == null -> liveIndexSignature = deployedSignature
-                runningSignature != deployedSignature -> {
-                    liveIndexSignature = deployedSignature
-                    loadConsole(force = true)
-                }
-            }
         }
     }
 
@@ -476,7 +453,6 @@ class ConsoleActivity : AppCompatActivity() {
             if (assetPath == "web/index.html" && !useBundledFallback) {
                 val liveBytes = fetchLiveIndex(uri)
                 if (liveBytes != null) {
-                    liveIndexSignature = signatureOf(liveBytes)
                     return htmlResponse(injectNativeSession(liveBytes), "no-store")
                 }
                 useBundledFallback = true
@@ -550,9 +526,8 @@ class ConsoleActivity : AppCompatActivity() {
         }
     }
 
-    private fun fetchLiveIndex(uri: Uri? = null): ByteArray? {
-        val target = uri?.toString()
-            ?: "${consoleBaseUrl()}/?heysure_update_check=${System.currentTimeMillis()}"
+    private fun fetchLiveIndex(uri: Uri): ByteArray? {
+        val target = uri.toString()
         return runCatching {
             (URL(target).openConnection() as HttpURLConnection).run {
                 requestMethod = "GET"
@@ -605,10 +580,6 @@ class ConsoleActivity : AppCompatActivity() {
             )
         }
 
-    private fun signatureOf(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256")
-        .digest(bytes)
-        .joinToString("") { "%02x".format(it) }
-
     private fun injectNativeSession(htmlBytes: ByteArray): ByteArray {
         val html = htmlBytes.toString(Charsets.UTF_8)
         val bootstrap = """
@@ -639,14 +610,15 @@ class ConsoleActivity : AppCompatActivity() {
 
     companion object {
         private const val JS_BRIDGE_NAME = "HeySureAndroid"
-        private const val WEB_UPDATE_CHECK_INTERVAL_MS = 60_000L
         private const val WEB_UPDATE_CONNECT_TIMEOUT_MS = 5_000
         private const val WEB_UPDATE_READ_TIMEOUT_MS = 10_000
         private const val API_GATEWAY_PORT = 3_000
         private const val DEFAULT_WEB_CONSOLE_PORT = 58_150
         private const val AGENT_BUTTON_COLLAPSED_SIZE_DP = 42
-        private const val AGENT_BUTTON_EXPANDED_WIDTH_DP = 92
         private const val AGENT_BUTTON_HIDDEN_EDGE_DP = 14
+        private const val STATE_BUNDLED_FALLBACK = "heysure.web.bundled_fallback"
+        private const val MENU_DEVICE_SETTINGS = 1
+        private const val MENU_REFRESH_PAGE = 2
 
         fun open(context: Context) {
             context.startActivity(Intent(context, ConsoleActivity::class.java).apply {

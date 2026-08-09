@@ -105,6 +105,7 @@ function createCoreServices({ app, fs, path, BrowserWindow, safeStorage, getTabM
     browserDownloadService: createBrowserDownloadService({ sandboxDir: aiSandboxDir }),
     browserRuntimeManager,
     getTabs: () => tabs,
+    getActiveBrowserProfileId: appRuntime.getActiveTabId,
     externalMcpDescriptorPath: path.join(app.getPath('userData'), 'ai-free-mcp-bridge.json'),
     getExternalMcpAccess: () => resolveVipAccess(licenseCache.getSnapshot()),
     isAllowedBrowserProcess: (processId) => browserRuntimeManager.isManagedBrowserProcess(processId),

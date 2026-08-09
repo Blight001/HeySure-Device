@@ -160,6 +160,8 @@ AI 对话和 HeySure 设备端都会发现当前所有已连接浏览器的工�
 
 连接列表可以包含多个浏览器，但每次页面工具只会派发到一个连接。切换成功后，同一轮任务中的后续调用继续使用新目标，直到再次传入 `change_browser`。旧 `browser_id`、`browser_name` 和 `browser` 参数仅保留执行兼容，不再向 AI 的新工具 Schema 暴露。
 
+用户在 AI-FREE 顶部标签栏切换活动独立浏览器时，外部 MCP 的当前控制目标也会同步切换。若 MCP 通过 `change_browser` 显式选择后台浏览器，该目标会持续到用户再次切换活动独立浏览器，或后续调用再次传入 `change_browser`。
+
 软件内 AI 会按当前实际工具目录动态注入 MCP 使用提示：同一时间最多控制一个浏览器；需要操作其他连接时先通过 `change_browser` 切换；页面导航、标签页切换或页面状态变化后重新执行 `browser_observe`，不跨窗口或跨页面复用旧元素引用，并以工具的实际返回结果判断任务是否完成。
 
 `windows_tab list` 返回的 `history_id`、`tab_id` 和栏目 `name` 属于外部软件栏目管理层。显示或聚焦已有栏目应调用 `windows_tab` 的 `open`；`history_id` 和 `tab_id` 不能用于 `change_browser`，栏目名称只有同时出现在 MCP 连接列表时才能用于切换。栏目显示为已打开不代表其原生 Runtime Bridge 已就绪。

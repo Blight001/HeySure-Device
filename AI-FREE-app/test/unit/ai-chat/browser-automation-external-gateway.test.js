@@ -42,6 +42,7 @@ function createFixture(root, overrides = {}) {
     },
     getConnection: (id) => connections.some((item) => item.id === id) ? { ...connections.find((item) => item.id === id), tools: toolDefs } : null,
     listConnections: () => connections,
+    getActiveConnectionId: overrides.getActiveConnectionId,
     getAccess: overrides.getAccess || (() => true),
     logger: { log() {}, warn() {} },
   });
@@ -117,6 +118,39 @@ test('external gateway requires an explicit browser route when multiple windows 
     assert.equal(result.connectionId, 'two');
     const continued = await gateway.callTool('browser_observe', {});
     assert.equal(continued.connectionId, 'two');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('external gateway follows independent browser tab switches without discarding an explicit route', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-free-external-mcp-active-browser-'));
+  let activeConnectionId = 'one';
+  try {
+    const { gateway } = createFixture(root, {
+      connections: [
+        { id: 'one', browserName: '窗口一', online: true },
+        { id: 'two', browserName: '窗口二', online: true },
+      ],
+      getActiveConnectionId: () => activeConnectionId,
+      toolDefs: [{
+        name: 'browser_tab', description: '读取标签页',
+        input_schema: { type: 'object', properties: { action: { type: 'string' } } },
+      }],
+    });
+    assert.equal(gateway.listTools().controlled_browser_id, 'one');
+
+    activeConnectionId = 'two';
+    const switched = await gateway.callTool('browser_tab', { action: 'list' });
+    assert.equal(switched.connectionId, 'two');
+
+    const explicit = await gateway.callTool('browser_tab', { change_browser: 'one', action: 'list' });
+    assert.equal(explicit.connectionId, 'one');
+    const continued = await gateway.callTool('browser_tab', { action: 'list' });
+    assert.equal(continued.connectionId, 'one');
+
+    activeConnectionId = 'one';
+    assert.equal((await gateway.callTool('browser_tab', { action: 'list' })).connectionId, 'one');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

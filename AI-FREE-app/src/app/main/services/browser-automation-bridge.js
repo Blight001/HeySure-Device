@@ -59,6 +59,10 @@ class BrowserAutomationBridgeRuntime {
       dispatch: (...args) => this.dispatch(...args),
       getConnection: (...args) => this.getConnection(...args),
       listConnections: () => this.listConnections(),
+      getActiveConnectionId: () => {
+        const profileId = String(options.getActiveBrowserProfileId?.() || '').trim();
+        return this.listConnections().find((item) => item.profileId === profileId)?.id || '';
+      },
       getAccess: options.getExternalMcpAccess,
       logger: this.logger,
     });

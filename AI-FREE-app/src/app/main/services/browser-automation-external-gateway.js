@@ -110,12 +110,15 @@ class BrowserAutomationExternalGateway {
     this.token = String(options.token || crypto.randomBytes(32).toString('hex'));
     this.getConnections = typeof options.getConnections === 'function' ? options.getConnections : options.listConnections;
     this.getWindowTools = typeof options.getWindowTools === 'function' ? options.getWindowTools : () => null;
+    this.getActiveConnectionId = typeof options.getActiveConnectionId === 'function'
+      ? options.getActiveConnectionId : () => '';
     this.getAccess = typeof options.getAccess === 'function'
       ? options.getAccess
       : (typeof options.hasAccess === 'function' ? options.hasAccess : () => false);
     this.publishedPid = 0;
     this.publishedAccessAllowed = false;
     this.controlledConnectionId = '';
+    this.observedActiveConnectionId = null;
     this.pendingControlBrowserName = '';
   }
 
@@ -154,6 +157,25 @@ class BrowserAutomationExternalGateway {
     }
   }
 
+  syncActiveConnection(connections) {
+    let activeId = '';
+    try {
+      activeId = String(this.getActiveConnectionId?.() || '').trim();
+    } catch (error) {
+      this.logger.warn?.('[ExternalMCP] 读取当前活动浏览器失败:', error?.message || error);
+      return;
+    }
+    if (activeId === this.observedActiveConnectionId) return;
+    if (!activeId) {
+      this.observedActiveConnectionId = '';
+      return;
+    }
+    if (!connections.some((item) => String(item?.id || '') === activeId)) return;
+    this.observedActiveConnectionId = activeId;
+    this.controlledConnectionId = activeId;
+    this.pendingControlBrowserName = '';
+  }
+
   listTools() {
     this.assertAccess();
     const tools = new Map();
@@ -162,6 +184,7 @@ class BrowserAutomationExternalGateway {
       if (normalized.name) tools.set(normalized.name, normalized);
     }
     const connections = this.connections();
+    this.syncActiveConnection(connections);
     for (const connection of connections) this.addConnectionTools(tools, connection);
     const pendingName = this.pendingControlBrowserName.toLocaleLowerCase();
     const pending = pendingName
@@ -190,6 +213,7 @@ class BrowserAutomationExternalGateway {
 
   resolveConnection(args = {}) {
     const items = this.connections();
+    this.syncActiveConnection(items);
     const resolved = resolveBrowserConnection(items, args, this.controlledConnectionId);
     if (resolved.kind === 'found') return resolved.connection;
     if (resolved.kind === 'ambiguous') {

@@ -36,7 +36,22 @@ test('normalizes bounded native observe and action payloads', () => {
     action: 'press_key', key: 'Ctrl+Shift+Enter', alt: true,
   }), {
     action: 'press_key', selector: '', text: '', key: 'Enter', ref: '', direction: 'down', amount: 600,
-    timeoutMs: 10000, ctrl: true, shift: true, alt: true, meta: false,
+    timeoutMs: 10000, ctrl: true, shift: true, alt: true, meta: false, repeat: 1,
+  });
+  assert.deepEqual(normalizeRuntimeAutomation('perform-action', {
+    action: 'drag', x: 40, y: 55, to_x: 220, to_y: 55,
+  }), {
+    action: 'drag', selector: '', text: '', key: '', ref: '', direction: 'down', amount: 600,
+    timeoutMs: 10000, ctrl: false, shift: false, alt: false, meta: false,
+    x: 40, y: 55, toX: 220, toY: 55,
+  });
+  assert.deepEqual(normalizeRuntimeAutomation('perform-action', {
+    action: 'set_selection', selector: '#editor', start: 8, end: 3,
+    selection_direction: 'backward',
+  }), {
+    action: 'set_selection', selector: '#editor', text: '', key: '', ref: '', direction: 'down', amount: 600,
+    timeoutMs: 10000, ctrl: false, shift: false, alt: false, meta: false,
+    start: 8, end: 3, selectionDirection: 'backward',
   });
   assert.deepEqual(normalizeRuntimeAutomation('activate-tab', {
     url: ' https://example.test/page ', id: '2',
@@ -47,6 +62,8 @@ test('rejects unknown native commands and actions', () => {
   assert.throws(() => normalizeRuntimeAutomation('execute-script', {}), /不支持的 Chromium 自动化命令/);
   assert.throws(() => normalizeRuntimeAutomation('perform-action', { action: 'eval' }), /不支持的原生页面动作/);
   assert.throws(() => normalizeRuntimeAutomation('perform-action', { action: 'click', x: 10 }), /必须同时提供/);
+  assert.throws(() => normalizeRuntimeAutomation('perform-action', { action: 'drag', x: 10, y: 10 }), /终点坐标/);
+  assert.throws(() => normalizeRuntimeAutomation('perform-action', { action: 'set_selection' }), /start\/end/);
 });
 
 test('routes native automation only to a live managed Chromium process', async () => {
@@ -170,6 +187,50 @@ test('fork observe filters topmost click owners and bounds text summaries', () =
   assert.match(patch, /topmostFiltered:true/);
   assert.match(patch, /textTruncated/);
   assert.match(patch, /item\.clickX/);
+});
+
+test('fork pointer stays centered and visible while the Runtime Bridge is connected', () => {
+  const patchDirectory = path.join(__dirname, '../../../native/chromium-fork/patches');
+  const series = fs.readFileSync(path.join(patchDirectory, 'series'), 'utf8');
+  const patch = fs.readFileSync(
+    path.join(patchDirectory, '0031-ai-free-idle-pointer.patch'), 'utf8',
+  );
+  assert.match(series, /0030-ai-free-observe-topmost\.patch\s+0031-ai-free-idle-pointer\.patch/);
+  assert.match(patch, /SetAiFreePointerConnected\(browser, true\)/);
+  assert.match(patch, /bounds\.width\(\) \/ 2\.0f/);
+  assert.match(patch, /bounds\.height\(\) \/ 2\.0f/);
+  assert.match(patch, /attach_retry_timer_\.Start/);
+  assert.match(patch, /if \(persistent_\)/);
+  assert.match(patch, /SetAiFreePointerConnected\(browser, false\)/);
+});
+
+test('fork observe supplements closed Shadow DOM controls from Chromium accessibility', () => {
+  const patchDirectory = path.join(__dirname, '../../../native/chromium-fork/patches');
+  const series = fs.readFileSync(path.join(patchDirectory, 'series'), 'utf8');
+  const patch = fs.readFileSync(
+    path.join(patchDirectory, '0032-ai-free-closed-shadow-observe.patch'), 'utf8',
+  );
+  assert.match(series, /0031-ai-free-idle-pointer\.patch\s+0032-ai-free-closed-shadow-observe\.patch/);
+  assert.match(patch, /RequestAXTreeSnapshot/);
+  assert.match(patch, /data\.IsClickable\(\)/);
+  assert.match(patch, /accessibilityFallback/);
+  assert.match(patch, /closedShadowSupported/);
+  assert.match(patch, /IsDuplicate/);
+});
+
+test('fork rich text editing uses native drag, complete key maps and real selections', () => {
+  const patchDirectory = path.join(__dirname, '../../../native/chromium-fork/patches');
+  const series = fs.readFileSync(path.join(patchDirectory, 'series'), 'utf8');
+  const patch = fs.readFileSync(
+    path.join(patchDirectory, '0033-ai-free-rich-text-editing.patch'), 'utf8',
+  );
+  assert.match(series, /0032-ai-free-closed-shadow-observe\.patch\s+0033-ai-free-rich-text-editing\.patch/);
+  assert.match(patch, /DispatchAiFreeAnimatedDrag/);
+  assert.match(patch, /action==='set_selection'/);
+  assert.match(patch, /action==='insert_text'/);
+  assert.match(patch, /value >= 'A' && value <= 'Z'/);
+  assert.match(patch, /0x2E/);
+  assert.match(patch, /repeat/);
 });
 
 test('fork observe highlights stay in the native event-transparent UI layer', () => {

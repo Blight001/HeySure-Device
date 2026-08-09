@@ -81,6 +81,14 @@ test('native automation publishes ready managed Chromium as the browser connecti
   assert.equal(actionProperties.meta.type, 'boolean');
   assert.equal(actionProperties.x.type, 'number');
   assert.equal(actionProperties.y.type, 'number');
+  assert.equal(actionProperties.to_x.type, 'number');
+  assert.equal(actionProperties.to_y.type, 'number');
+  assert.equal(actionProperties.start.type, 'number');
+  assert.equal(actionProperties.end.type, 'number');
+  assert.equal(actionProperties.repeat.type, 'number');
+  assert.equal(actionProperties.action.enum.includes('drag'), true);
+  assert.equal(actionProperties.action.enum.includes('insert_text'), true);
+  assert.equal(actionProperties.action.enum.includes('set_selection'), true);
 });
 
 test('browser_file download uses the active page as the trusted relative URL context', async () => {
@@ -119,6 +127,24 @@ test('observed refs click the validated exposed point instead of re-querying a g
   await service.dispatch('native:profile-a', 'browser_action', { action: 'click', ref: 'e1' });
   assert.deepEqual(calls[1], ['automation', 42, 'perform-action', {
     action: 'click', ref: 'e1', selector: 'button', x: 126, y: 46,
+  }]);
+});
+
+test('explicit text coordinates override an observed ref center while retaining its selector', async () => {
+  const { calls, service, setAutomationHandler } = fixture();
+  setAutomationHandler(async (_pid, command) => ({ result: command === 'observe-page' ? {
+    success: true,
+    items: [{
+      id: 'e1', selector: 'textarea', x: 120, y: 40, width: 300, height: 80,
+      clickX: 126, clickY: 46,
+    }],
+  } : { success: true } }));
+  await service.dispatch('native:profile-a', 'browser_observe', { limit: 5 });
+  await service.dispatch('native:profile-a', 'browser_action', {
+    action: 'click', ref: 'e1', x: 260, y: 75,
+  });
+  assert.deepEqual(calls[1], ['automation', 42, 'perform-action', {
+    action: 'click', ref: 'e1', selector: 'textarea', x: 260, y: 75,
   }]);
 });
 

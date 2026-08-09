@@ -76,12 +76,21 @@ function createTestServer() {
       response.end(`<!doctype html><meta charset="utf-8"><title>COORDINATE_INPUT_READY</title>
         <button style="position:fixed;left:0;top:0">错误按钮</button>
         <button id="publish" style="position:fixed;left:200px;top:150px;width:240px;height:80px"><span>发布</span></button>
+        <xhs-publish-btn id="closed-publish" style="position:fixed;left:500px;top:150px;width:180px;height:80px">
+          <template shadowrootmode="closed">
+            <style>button{width:180px;height:80px;border:0;border-radius:20px;background:#ff2442;color:white}</style>
+            <button type="button" aria-disabled="false">封闭发布</button>
+          </template>
+        </xhs-publish-btn>
         <button id="covered" style="position:fixed;left:20px;top:260px;width:180px;height:60px;z-index:1">被遮挡按钮</button>
         <div id="cover" style="position:fixed;left:20px;top:260px;width:180px;height:60px;z-index:2;background:white">遮罩</div>
         <p id="long-text" style="position:fixed;left:20px;top:340px;width:600px;height:80px">${'这是需要截断的长文本段落。'.repeat(30)}</p>
         <script>
           document.querySelector('#publish').addEventListener('click', (event) => {
             fetch('/input-result?profile=coordinate&trusted=' + event.isTrusted).catch(() => {});
+          });
+          document.querySelector('#closed-publish').addEventListener('click', (event) => {
+            fetch('/input-result?profile=closed-shadow&trusted=' + event.isTrusted).catch(() => {});
           });
         </script>`);
       return;
@@ -97,6 +106,8 @@ function createTestServer() {
           input.addEventListener('keydown', (event) => fetch('/native-event?kind=key&trusted=' +
             event.isTrusted + '&key=' + encodeURIComponent(event.key) + '&ctrl=' + event.ctrlKey +
             '&shift=' + event.shiftKey + '&alt=' + event.altKey + '&meta=' + event.metaKey).catch(() => {}));
+          input.addEventListener('mouseup', (event) => fetch('/native-event?kind=selection&trusted=' +
+            event.isTrusted + '&start=' + input.selectionStart + '&end=' + input.selectionEnd).catch(() => {}));
           addEventListener('wheel', (event) => fetch('/native-event?kind=wheel&trusted=' +
             event.isTrusted).catch(() => {}), { once: true });
           setTimeout(() => {
@@ -307,6 +318,8 @@ app.whenReady().then(async () => {
   });
   assert.equal(topmostObserved.result.topmostFiltered, true);
   assert.equal(topmostObserved.result.textLimit, 40);
+  assert.equal(topmostObserved.result.closedShadowSupported, true);
+  assert.equal(topmostObserved.result.accessibilitySupplementedCount, 1);
   assert.equal(topmostObserved.result.items.some((item) => item.text === '被遮挡按钮'), false);
   const visiblePublishItems = topmostObserved.result.items.filter((item) => item.text === '发布');
   assert.equal(visiblePublishItems.length, 1);
@@ -318,6 +331,27 @@ app.whenReady().then(async () => {
   assert.equal(longTextItem?.kind, 'text');
   assert.equal(longTextItem?.text.length, 40);
   assert.equal(longTextItem?.textTruncated, true);
+  const closedShadowObserved = await manager.dispatchAutomationByProcessId(b.state.pid, 'observe-page', {
+    keyword: '封闭发布', limit: 10, show_highlights: false,
+  });
+  const closedPublishItem = closedShadowObserved.result.items.find((item) => item.text === '封闭发布');
+  assert.equal(closedPublishItem?.tag, 'button');
+  assert.equal(closedPublishItem?.kind, 'interactive');
+  assert.equal(closedPublishItem?.accessibilityFallback, true);
+  assert.equal(closedPublishItem?.selector, undefined);
+  assert.equal(Number.isFinite(closedPublishItem?.clickX), true);
+  assert.equal(Number.isFinite(closedPublishItem?.clickY), true);
+  const closedShadowClicked = await manager.dispatchAutomationByProcessId(
+    b.state.pid, 'perform-action', {
+      action: 'click', ref: closedPublishItem.id,
+      x: closedPublishItem.clickX, y: closedPublishItem.clickY,
+    },
+  );
+  assert.equal(closedShadowClicked.result.targetMode, 'viewport-coordinate');
+  const closedShadowRequest = await waitForRequest(
+    (item) => item.path === '/input-result' && item.profile === 'closed-shadow',
+  );
+  assert.equal(new URLSearchParams(closedShadowRequest.query || '').get('trusted'), 'true');
   const coordinateObserved = await manager.dispatchAutomationByProcessId(b.state.pid, 'observe-page', {
     keyword: '发布', limit: 10, show_highlights: false,
   });
@@ -392,6 +426,54 @@ app.whenReady().then(async () => {
   assert.equal(new URLSearchParams(keyRequest.query).get('key'), 'Enter');
   assert.equal(new URLSearchParams(keyRequest.query).get('ctrl'), 'true');
   assert.equal(new URLSearchParams(keyRequest.query).get('shift'), 'false');
+  const selected = await manager.dispatchAutomationByProcessId(b.state.pid, 'perform-action', {
+    action: 'set_selection', selector: '#native-input', start: 6, end: 8,
+  });
+  assert.equal(selected.result.selectionStart, 6);
+  assert.equal(selected.result.selectionEnd, 8);
+  await manager.dispatchAutomationByProcessId(b.state.pid, 'perform-action', {
+    action: 'press_key', selector: '#native-input', key: 'Backspace',
+  });
+  const deletedSelection = await waitForRequest((item) => item.path === '/native-event'
+    && new URLSearchParams(item.query).get('kind') === 'input'
+    && new URLSearchParams(item.query).get('value') === 'Native');
+  assert.equal(new URLSearchParams(deletedSelection.query).get('trusted'), 'true');
+  await manager.dispatchAutomationByProcessId(b.state.pid, 'perform-action', {
+    action: 'press_key', selector: '#native-input', key: 'Home',
+  });
+  await manager.dispatchAutomationByProcessId(b.state.pid, 'perform-action', {
+    action: 'press_key', selector: '#native-input', key: 'Shift+ArrowRight', repeat: 3,
+  });
+  await manager.dispatchAutomationByProcessId(b.state.pid, 'perform-action', {
+    action: 'insert_text', selector: '#native-input', text: 'XYZ',
+  });
+  const insertedAtSelection = await waitForRequest((item) => item.path === '/native-event'
+    && new URLSearchParams(item.query).get('kind') === 'input'
+    && new URLSearchParams(item.query).get('value') === 'XYZive');
+  assert.equal(new URLSearchParams(insertedAtSelection.query).get('trusted'), 'true');
+  await manager.dispatchAutomationByProcessId(b.state.pid, 'perform-action', {
+    action: 'press_key', selector: '#native-input', key: 'Ctrl+A',
+  });
+  const selectAllKey = await waitForRequest((item) => item.path === '/native-event'
+    && new URLSearchParams(item.query).get('kind') === 'key'
+    && new URLSearchParams(item.query).get('key').toLowerCase() === 'a'
+    && new URLSearchParams(item.query).get('ctrl') === 'true');
+  assert.equal(new URLSearchParams(selectAllKey.query).get('trusted'), 'true');
+  await manager.dispatchAutomationByProcessId(b.state.pid, 'perform-action', {
+    action: 'insert_text', selector: '#native-input', text: 'Mouse selection text',
+  });
+  await waitForRequest((item) => item.path === '/native-event'
+    && new URLSearchParams(item.query).get('kind') === 'input'
+    && new URLSearchParams(item.query).get('value') === 'Mouse selection text');
+  const dragged = await manager.dispatchAutomationByProcessId(b.state.pid, 'perform-action', {
+    action: 'drag', x: 35, y: 45, to_x: 180, to_y: 45,
+  });
+  assert.equal(dragged.result.inputMode, 'chromium-visible-pointer-drag');
+  const mouseSelection = await waitForRequest((item) => item.path === '/native-event'
+    && new URLSearchParams(item.query).get('kind') === 'selection'
+    && Number(new URLSearchParams(item.query).get('end'))
+      > Number(new URLSearchParams(item.query).get('start')));
+  assert.equal(new URLSearchParams(mouseSelection.query).get('trusted'), 'true');
   const scrolled = await manager.dispatchAutomationByProcessId(b.state.pid, 'perform-action', {
     action: 'scroll', direction: 'down', amount: 300,
   });
@@ -481,7 +563,9 @@ app.whenReady().then(async () => {
   console.log('[phase3-acceptance] navigate/reload command responses passed');
   console.log('[phase3-acceptance] trusted local file selection reached the real HTML file input');
   console.log('[phase3-acceptance] native keyboard and wheel events reached the page as trusted input');
+  console.log('[phase3-acceptance] native drag, caret selection, insert text and editing shortcuts passed');
   console.log('[phase3-acceptance] observe returned only topmost click owners and truncated long text');
+  console.log('[phase3-acceptance] closed Shadow DOM controls were observed and clicked as trusted native input');
   console.log('[phase3-acceptance] observed coordinates clicked the topmost target as trusted native input');
   console.log('[phase3-acceptance] native observe highlights were attached outside the page DOM');
   console.log('[phase3-acceptance] visible + HttpOnly cookies reached real Chromium requests');

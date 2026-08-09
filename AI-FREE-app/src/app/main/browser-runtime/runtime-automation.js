@@ -6,7 +6,8 @@ const AUTOMATION_COMMANDS = new Set([
   'observe-page', 'capture-screenshot', 'perform-action', 'get-session-data', 'list-tabs', 'activate-tab',
 ]);
 const ACTIONS = new Set([
-  'click', 'double_click', 'right_click', 'upload_file', 'scroll', 'type', 'press_key', 'wait',
+  'click', 'double_click', 'right_click', 'drag', 'upload_file', 'scroll',
+  'type', 'insert_text', 'set_selection', 'press_key', 'wait',
 ]);
 
 function automationError(code, message) {
@@ -34,16 +35,56 @@ function optionalText(value, maxLength = 8192) {
   return result;
 }
 
-function normalizeActionCoordinates(source) {
-  const hasX = source.x !== undefined && source.x !== null && source.x !== '';
-  const hasY = source.y !== undefined && source.y !== null && source.y !== '';
-  if (!hasX && !hasY) return {};
-  const x = Number(source.x);
-  const y = Number(source.y);
-  if (!hasX || !hasY || !Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) {
-    throw automationError('AUTOMATION_PAYLOAD_INVALID', '页面点击坐标必须同时提供有效的非负 x/y');
+function isProvided(value) {
+  return value !== undefined && value !== null && value !== '';
+}
+
+function firstProvided(...values) {
+  return values.find(isProvided);
+}
+
+function normalizedPoint(xValue, yValue, errorMessage) {
+  const x = Number(xValue);
+  const y = Number(yValue);
+  if (![x, y].every(Number.isFinite) || Math.min(x, y) < 0) {
+    throw automationError('AUTOMATION_PAYLOAD_INVALID', errorMessage);
   }
   return { x: Math.min(x, 1_000_000), y: Math.min(y, 1_000_000) };
+}
+
+function normalizeActionCoordinates(source, action) {
+  const hasX = isProvided(source.x);
+  const hasY = isProvided(source.y);
+  if (!hasX && !hasY) return {};
+  if (!hasX || !hasY) {
+    throw automationError('AUTOMATION_PAYLOAD_INVALID', '页面坐标必须同时提供有效的非负 x/y');
+  }
+  const point = normalizedPoint(source.x, source.y, '页面坐标必须同时提供有效的非负 x/y');
+  if (action !== 'drag') return point;
+  const target = normalizedPoint(
+    firstProvided(source.to_x, source.toX, source.end_x, source.endX),
+    firstProvided(source.to_y, source.toY, source.end_y, source.endY),
+    '拖拽必须提供有效的非负 to_x/to_y 终点坐标',
+  );
+  return { ...point, toX: target.x, toY: target.y };
+}
+
+function normalizeSelection(source) {
+  const start = Number(source.start ?? source.selection_start ?? source.selectionStart);
+  const end = Number(source.end ?? source.selection_end ?? source.selectionEnd ?? start);
+  if (![start, end].every(Number.isFinite) || Math.min(start, end) < 0) {
+    throw automationError('AUTOMATION_PAYLOAD_INVALID', '文本选区必须提供有效的非负 start/end');
+  }
+  const requestedDirection = optionalText(
+    source.selection_direction ?? source.selectionDirection ?? 'forward', 16,
+  ).toLowerCase();
+  const selectionDirection = ['forward', 'backward', 'none'].includes(requestedDirection)
+    ? requestedDirection : 'forward';
+  return {
+    start: boundedInteger(start, 0, 0, 1_000_000),
+    end: boundedInteger(end, 0, 0, 1_000_000),
+    selectionDirection,
+  };
 }
 
 function normalizeObservePayload(source) {
@@ -87,13 +128,16 @@ function normalizeActionPayload(source) {
     throw automationError('AUTOMATION_ACTION_INVALID', `不支持的原生页面动作: ${action || '<empty>'}`);
   }
   const keyboard = normalizeKeyboardInput(source);
-  const coordinates = normalizeActionCoordinates(source);
+  const coordinates = normalizeActionCoordinates(source, action);
+  const selection = action === 'set_selection' ? normalizeSelection(source) : {};
   return {
     action,
     selector: optionalText(source.selector, 4096),
     text: optionalText(source.text ?? source.value, 1024 * 1024),
     ...keyboard,
     ...coordinates,
+    ...selection,
+    ...(action === 'press_key' ? { repeat: boundedInteger(source.repeat, 1, 1, 100) } : {}),
     ref: optionalText(source.ref, 128),
     direction: optionalText(source.direction || 'down', 16),
     amount: boundedInteger(source.amount ?? source.delta_y, 600, -100000, 100000),

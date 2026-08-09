@@ -26,3 +26,6 @@
 0027-ai-free-keyboard-modifiers.patch
 0028-ai-free-observed-coordinate-actions.patch
 0030-ai-free-observe-topmost.patch
+0031-ai-free-idle-pointer.patch
+0032-ai-free-closed-shadow-observe.patch
+0033-ai-free-rich-text-editing.patch

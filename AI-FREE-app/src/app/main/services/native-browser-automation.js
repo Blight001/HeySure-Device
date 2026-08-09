@@ -177,7 +177,16 @@ class NativeBrowserAutomation {
   resolveObservedTarget(connection, args) {
     if (text(args.selector) || !text(args.ref)) return args;
     const target = this.observeTargets.get(connection.id)?.get(text(args.ref));
-    return target ? { ...args, ...target } : args;
+    if (!target) return args;
+    const resolved = { ...target, ...args };
+    if (!text(args.selector) && target.selector) resolved.selector = target.selector;
+    const explicitPoint = nonNegativePoint(args.x, args.y);
+    if (explicitPoint) Object.assign(resolved, explicitPoint);
+    else if (Number.isFinite(target.x) && Number.isFinite(target.y)) {
+      resolved.x = target.x;
+      resolved.y = target.y;
+    }
+    return resolved;
   }
 
   async browserObserve(connection, input) {

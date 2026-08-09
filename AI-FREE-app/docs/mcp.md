@@ -122,6 +122,7 @@ Cookie 属于登录会话数据，不属于 `browser_environment.settings` 的�
 - 框架参数：`frame`、`frame_path`。
 - 文本与标记参数：`include_text`、`text_limit`（默认 120，范围 20–500）、`mark`、`highlight_duration_ms`。超长文本会截断并返回 `textTruncated=true`。
 - 顶层可点击筛选：交互元素必须在当前视口的至少一个候选点通过 Chromium 命中测试；被遮罩完全覆盖、`pointer-events:none`或禁用的元素不返回。按钮内部的 `span/svg/path` 会归并到最近的按钮或链接。
+- Closed Shadow DOM：隔离世界无法访问的 closed shadowRoot 会由 Chromium Accessibility Tree 补充其中可见、可用的交互控件，并返回 `accessibilityFallback=true` 与真实 `clickX/clickY`；这类 item 不伪造 selector，后续应直接使用其 `ref` 点击。
 - Fork 原生 Observe 默认在 Chromium UI 层绘制与元素 `id` 对应的边框标签，不写入网页 DOM、不接收鼠标事件；导航、滚动、窗口隐藏或超时后自动清除。最多绘制 120 个标记。
 - 路由参数：`tab_id`。
 - 下载链接：可见 HTTP/HTTPS 链接会在对应 item 中提供 `downloadUrl`，并汇总到顶层 `downloadLinks`；其中的 `url` 可直接交给 `browser_file`。
@@ -135,13 +136,13 @@ Cookie 属于登录会话数据，不属于 `browser_environment.settings` 的�
 ### `browser_action`
 
 - 作用：操作网页中的元素或坐标位置。
-- `action`：必填，可用值为 `click`、`double_click`、`right_click`、`scroll`、`type`、`press_key`。
-- 元素定位：优先使用 `browser_observe` 返回的 `ref`。原生连接会保存该元素的视口中心坐标，后续点击直接在该坐标注入鼠标事件，由 Chromium 命中测试选择坐标处最上层元素；selector 只用于诊断和坐标缺失时回退。也可显式传入 `x`、`y`。
-- 点击实现：`click`、`double_click`、`right_click` 会经主进程 Runtime Bridge 使用 Chromium Views 层的可见虚拟指针；平滑移动轨迹、按下、抬起和点击反馈均在内核侧完成。覆盖层不进入页面 DOM、不接收事件，也不移动 Windows 全局鼠标；RenderWidgetHost 正常执行坐标命中测试，不会穿透遮挡元素。
-- 输入参数：`text`、`clear_first`、`submit`。
-- 键盘参数：`key` 支持单键或 `Ctrl+Enter` 形式的组合键，也可用 `ctrl`、`shift`、`alt`、`meta` 布尔参数显式指定修饰键。
+- `action`：必填，可用值为 `click`、`double_click`、`right_click`、`drag`、`scroll`、`type`、`insert_text`、`set_selection`、`press_key`。
+- 元素定位：优先使用 `browser_observe` 返回的 `ref`。原生连接会保存该元素的视口中心坐标，后续点击直接在该坐标注入鼠标事件，由 Chromium 命中测试选择坐标处最上层元素；selector 用于字符选区和坐标缺失时回退。显式传入的 `x`、`y` 会覆盖 `ref` 默认中心。
+- 点击实现：Runtime Bridge 与 AI-FREE 建立连接后，Chromium Views 层的虚拟指针会默认悬浮在网页视口中央，并在连接期间常驻；`click`、`double_click`、`right_click` 复用该指针完成平滑移动、按下、抬起和点击反馈，点击结束后停留在最后位置。覆盖层不进入页面 DOM、不接收事件，也不移动 Windows 全局鼠标；RenderWidgetHost 正常执行坐标命中测试，不会穿透遮挡元素。断开 Runtime Bridge 或页面销毁时指针会清除。
+- 鼠标选文：`drag` 使用 `x`、`y` 作为起点，`to_x`、`to_y` 作为终点，真实发送移动、按下、拖动和抬起事件；虚拟指针同步显示拖动过程。
+- 字符级编辑：`set_selection` 使用 UTF-16 `start`、`end` 精确放置光标或选择 input、textarea、contenteditable 文本；`start=end` 表示光标。`type` 保持整段覆盖，`insert_text` 仅替换当前选区或从光标位置插入。
+- 键盘参数：`key` 支持字符键、方向键、Home/End、PageUp/PageDown、Backspace/Delete、Insert、F1–F24，以及 `Ctrl+A`、`Shift+ArrowLeft` 等组合键；也可用 `ctrl`、`shift`、`alt`、`meta` 显式指定修饰键，`repeat` 可重复 1–100 次。
 - 滚动参数：`direction`（`up`、`down`、`top`、`bottom`）、`amount`。
-- 按键参数：`key`、`ctrl`、`shift`、`alt`、`meta`。
 - 其他参数：`force`、`tab_id`。
 
 ### `browser_wait`

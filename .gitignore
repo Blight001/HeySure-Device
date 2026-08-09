@@ -60,3 +60,7 @@ mac/src/asset-path.ts
 *.log
 dist/
 *.tsbuildinfo
+
+# Local standalone experiment; it has no configured remote and is not a
+# reproducible HeySure-Device submodule.
+AI-Control-Exam/

@@ -1,6 +1,6 @@
 {
   "name": "ai-free",
-  "version": "2.6.27",
+  "version": "2.6.28",
   "private": true,
   "description": "Assistant to help creators use AI more conveniently",
   "main": "src/app/main/main.js",

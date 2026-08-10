@@ -177,9 +177,6 @@
     browser_wait: '等待页面',
     windows_tab: '外部软件栏目',
     run_command: '沙盒命令行',
-    get_status: '查看卡片状态',
-    run_card: '运行自动化卡片',
-    write_card: '保存自动化卡片',
   });
 
   const TOOL_ACTION_DISPLAY_NAMES = Object.freeze({

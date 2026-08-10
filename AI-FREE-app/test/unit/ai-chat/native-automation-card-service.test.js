@@ -58,6 +58,40 @@ test('native card validation rejects script conditions before persistence', asyn
   }), /禁止 JavaScript 条件/);
 });
 
+test('native card can invoke an existing MCP tool with nested input substitution', async () => {
+  const { service } = fixture();
+  const written = await service.execute({
+    action: 'write',
+    cardData: {
+      name: '调用已有 MCP',
+      steps: [{
+        type: 'mcp', tool: 'run_command',
+        arguments: { command: 'echo {message}', metadata: { label: '{message}' } },
+      }],
+    },
+  });
+  const calls = [];
+  const result = await service.execute({
+    action: 'run', id: written.item.id, inputs: { message: 'hello' },
+  }, {
+    dispatch: async (tool, args) => { calls.push([tool, args]); return { success: true }; },
+  });
+
+  assert.equal(result.success, true);
+  assert.deepEqual(calls, [[
+    'run_command',
+    { command: 'echo hello', metadata: { label: 'hello' } },
+  ]]);
+});
+
+test('native card rejects an MCP step without an object argument payload', async () => {
+  const { service } = fixture();
+  await assert.rejects(() => service.execute({
+    action: 'write',
+    cardData: { name: 'invalid', steps: [{ type: 'mcp', tool: 'run_command', arguments: [] }] },
+  }), /arguments 必须是对象/);
+});
+
 test('native card stops when a native tool returns a structured failure', async () => {
   const { service } = fixture();
   const written = await service.execute({

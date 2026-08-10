@@ -59,6 +59,7 @@ test('浏览器连接列表关联运行中 Profile 名称并保留外部浏览�
         { id: 'managed', browserProcessId: 100, name: '插件名称' },
         { id: 'external', browserProcessId: 999, name: '外部 Chrome' },
       ],
+      listAutomationMcpTools: () => [{ name: 'browser_action' }],
     },
     browserRuntimeManager: { listStates: () => [{ profileId: 'p1', pid: 100 }] },
     getTabs: () => [{ id: 'p1', runtimeType: 'chromium', fixedTitle: '运营浏览器' }],
@@ -68,6 +69,7 @@ test('浏览器连接列表关联运行中 Profile 名称并保留外部浏览�
   assert.equal(result.connections[0].name, '运营浏览器');
   assert.equal(result.connections[0].pluginName, '插件名称');
   assert.equal(result.connections[1].name, '外部 Chrome');
+  assert.deepEqual(result.mcpTools, [{ name: 'browser_action' }]);
 });
 
 test('自动化卡片读取和选择返回稳定摘要，不泄露完整卡片步骤', async () => {

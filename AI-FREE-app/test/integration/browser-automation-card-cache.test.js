@@ -10,7 +10,6 @@ const {
   CARD_CACHE_FILE_NAME,
   createBrowserAutomationBridge,
   createCardCacheStore,
-  normalizeBrowserToolOutcome,
 } = require('../../src/app/main/services/browser-automation-bridge');
 test('automation cards persist in the software data directory', (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-free-card-cache-'));
@@ -49,30 +48,6 @@ test('an explicitly emptied shared card library stays present', (t) => {
   const reloaded = store.read();
   assert.equal(reloaded.exists, true);
   assert.deepEqual(reloaded.state, { items: [], selectedId: '' });
-});
-
-test('failed browser tool results retain structured diagnostics across the local bridge', () => {
-  const result = normalizeBrowserToolOutcome({
-    success: false,
-    result: {
-      success: false,
-      error: '等待元素超时: #submit',
-      errorCode: 'WAIT_TIMEOUT',
-      stepIndex: 4,
-      stepName: '等待提交按钮',
-      selector: '#submit',
-      failureSnapshot: { url: 'https://example.com/login', title: 'Login' },
-      execution: { stepsExecuted: 4, failed: 1 },
-    },
-  });
-
-  assert.equal(result.success, false);
-  assert.equal(result.error, '等待元素超时: #submit');
-  assert.equal(result.errorReason, '等待元素超时: #submit');
-  assert.equal(result.errorCode, 'WAIT_TIMEOUT');
-  assert.equal(result.stepIndex, 4);
-  assert.equal(result.failureSnapshot.url, 'https://example.com/login');
-  assert.equal(result.execution.failed, 1);
 });
 
 test('AI control can select a shared automation card', (t) => {

@@ -1,6 +1,6 @@
 # AI-FREE MCP 工具清单
 
-更新时间：2026-08-08
+更新时间：2026-08-10
 
 本文档记录当前软件实际向 AI 提供的 MCP 工具。常规浏览器对话提供 9 个工具；只有最近用户消息明确涉及环境、指纹、代理、时区等配置时，才额外注入体积较大的 `browser_environment` schema，避免每轮重复传输。
 
@@ -94,6 +94,8 @@ Cookie 属于登录会话数据，不属于 `browser_environment.settings` 的�
 - 脚本限制：MCP 不公开 `external_script`，也不允许 `condition_mode=js`；写入、局部编辑和运行历史卡片时都会拒绝任意页面脚本。
 - 失败语义：原生步骤返回 `success=false`/`ok=false` 时卡片立即失败并停止；需要把业务校验作为断言时，在 `condition` 步骤设置 `fail_on_false=true`。
 - 流程终点：存在 `flow` 时严格按连线执行，没有出边的节点就是终点，不会继续落入 `steps` 数组中的后续步骤。
+- 通用 MCP 节点：卡片步骤可使用 `{ "type": "mcp", "tool": "已有工具名", "arguments": {...} }`，直接复用运行时当前工具目录；`arguments` 内的字符串支持运行输入变量替换。
+- 路由与安全：浏览器 MCP 默认使用工作台选择的窗口，也可在 `arguments.change_browser` 指定其它在线连接。为防止无限递归，卡片内禁止调用 `manage_card`。
 
 ### `browser_file`
 
@@ -180,4 +182,3 @@ AI 对话和 HeySure 设备端都会发现当前所有已连接浏览器的工�
   [`automation-tool-contract.js`](../src/app/main/services/automation-tool-contract.js)
   中的 Schema、浏览器路由、超时、路由参数清理和错误规范化规则；三端仅保留各自的传输与鉴权适配。
 - 旧 `software_window`、`sandbox_files` 和 `browser_download` 名称只在执行层保留兼容，不再出现在公开工具目录；新调用分别使用 `windows_tab`、`run_command` 和 `browser_file`。
-- `write_card`、`get_status`、`run_card`、`capture_cookies` 仍保留为扩展内部的旧协议兼容别名，但不在当前公开 MCP 工具目录中，不应由新调用使用。

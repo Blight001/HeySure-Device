@@ -96,13 +96,15 @@ journalctl -u heysure-linux-agent -f   # 看到「✅ 已注册」即成功
 
 改完 `.env` 后 `sudo systemctl restart heysure-linux-agent` 生效。
 
-## 手动 / 开发运行
+## 服务管理菜单
 
 ```bash
 cd device/linux
 cp .env.example .env && vi .env
-./run.sh                    # 建 .venv、装依赖、前台运行（Ctrl-C 退出）
+./run.sh                    # 启动/停止/重启/状态/自启/开放端口
 ```
+
+首次选择“启动服务”时，如果 systemd 服务尚未安装，脚本会调用 `install.sh` 完成安装。
 
 ## 配置项（环境变量）
 
@@ -194,7 +196,7 @@ device/linux/
       console.py       console.*：常驻 PTY 会话，供 AI 做多轮交互（可开关）
   requirements.txt
   .env.example
-  run.sh               开发/手动运行
+  run.sh               systemd 服务管理菜单
   install.sh           生产部署（venv + systemd）
   systemd/heysure-linux-agent.service
 ```

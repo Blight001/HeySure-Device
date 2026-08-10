@@ -9,15 +9,14 @@ function createAiSupportService(deps = {}) {
   const modelService = createAiModelService(deps);
   const cardService = createAutomationCardService({
     bridge: deps.browserAutomationBridge,
-    now: deps.now,
-    logger: deps.logger,
   });
 
   function getBrowserConnections() {
     const connections = deps.browserAutomationBridge?.listConnections?.() || [];
     const tabs = deps.getTabs?.() || [];
     const runtimeStates = deps.browserRuntimeManager?.listStates?.() || [];
-    return { ok: true, connections: enrichBrowserConnectionNames(connections, tabs, runtimeStates) };
+    const mcpTools = deps.browserAutomationBridge?.listAutomationMcpTools?.() || [];
+    return { ok: true, connections: enrichBrowserConnectionNames(connections, tabs, runtimeStates), mcpTools };
   }
 
   async function redeemGiftCode(input = {}) {

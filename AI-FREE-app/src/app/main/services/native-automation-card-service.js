@@ -5,11 +5,12 @@ const crypto = require('crypto');
 const ACTIONS = new Set(['rules', 'list', 'get', 'write', 'patch_step', 'insert_step', 'delete_step', 'move_step', 'delete', 'run']);
 const STEP_TYPES = new Set([
   'navigate', 'click', 'type', 'wait', 'condition', 'save_cookies',
-  'clear_current_page_cache', 'get_credits', 'screenshot',
+  'clear_current_page_cache', 'get_credits', 'screenshot', 'mcp',
 ]);
 const RULES = `原生自动化卡片格式：cardData 至少包含 name、website 或首个 navigate，以及非空 steps。
-步骤 type 仅允许 navigate/click/type/wait/condition/save_cookies/clear_current_page_cache/get_credits/screenshot。
+步骤 type 允许 navigate/click/type/wait/condition/save_cookies/clear_current_page_cache/get_credits/screenshot/mcp。
 click/type/wait 使用 selector；type 可用 variable 与 inputs 覆盖 text；condition 支持 selector_exists/selector_missing/text_exists/text_missing/url_matches，可用 fail_on_false=true 把未满足条件作为卡片失败。
+通用 MCP 步骤格式为 {type:"mcp",tool:"已有工具名",arguments:{...}}；arguments 支持 {变量名} 替换，但禁止递归调用 manage_card。
 可选 flow={start,nodes,edges}，边 label 使用 next/default/true/false；有 flow 时没有出边的节点即为流程终点。MCP 不允许任意 JavaScript。`;
 
 function text(value) { return String(value == null ? '' : value).trim(); }
@@ -24,8 +25,15 @@ function validateCard(card) {
     if (type === 'condition' && text(step.condition_mode || step.condition).toLowerCase() === 'js') {
       throw new Error('原生自动化卡片禁止 JavaScript 条件');
     }
+    if (type === 'mcp') {
+      if (!text(step.tool)) throw new Error(`steps[${index}] 的 MCP 步骤缺少 tool`);
+      const args = step.arguments ?? step.args ?? {};
+      if (!args || typeof args !== 'object' || Array.isArray(args)) {
+        throw new Error(`steps[${index}].arguments 必须是对象`);
+      }
+    }
   });
-  if (!text(card.website) && text(card.steps[0]?.type).toLowerCase() !== 'navigate') {
+  if (!text(card.website) && !['navigate', 'mcp'].includes(text(card.steps[0]?.type).toLowerCase())) {
     throw new Error('卡片缺少 website 或入口 navigate 步骤');
   }
 }
@@ -62,11 +70,15 @@ function substitute(value, inputs) {
   ));
 }
 
+function materializeValue(value, inputs) {
+  if (typeof value === 'string') return substitute(value, inputs);
+  if (Array.isArray(value)) return value.map((item) => materializeValue(item, inputs));
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, materializeValue(item, inputs)]));
+}
+
 function materializeStep(step, inputs) {
-  const result = {};
-  for (const [key, value] of Object.entries(step || {})) {
-    result[key] = typeof value === 'string' ? substitute(value, inputs) : value;
-  }
+  const result = materializeValue(step || {}, inputs);
   if (text(result.type).toLowerCase() === 'type') {
     const variable = text(result.variable);
     if (variable && inputs[variable] !== undefined) result.text = String(inputs[variable]);
@@ -134,6 +146,7 @@ async function executeStep(step, dispatch) {
   if (type === 'save_cookies') return dispatch('browser_file', { ...step, action: 'save_session' });
   if (type === 'screenshot') return dispatch('browser_screenshot', step);
   if (type === 'get_credits') return dispatch('browser_observe', { keyword: step.selector || step.text, limit: 10, mark: false });
+  if (type === 'mcp') return dispatch(text(step.tool), step.arguments ?? step.args ?? {});
   if (type === 'clear_current_page_cache') {
     throw new Error('当前 Chromium 原生协议尚未开放清理当前站点数据命令');
   }

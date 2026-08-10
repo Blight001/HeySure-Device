@@ -108,14 +108,6 @@ function createCoreServices({ app, fs, path, BrowserWindow, safeStorage, getTabM
     getActiveBrowserProfileId: appRuntime.getActiveTabId,
     externalMcpDescriptorPath: path.join(app.getPath('userData'), 'ai-free-mcp-bridge.json'),
     getExternalMcpAccess: () => resolveVipAccess(licenseCache.getSnapshot()),
-    isAllowedBrowserProcess: (processId) => browserRuntimeManager.isManagedBrowserProcess(processId),
-    dispatchRuntimeInput: (processId, input) => browserRuntimeManager.dispatchInputByProcessId(processId, input),
-    dispatchRuntimeAutomation: (processId, command, input) => (
-      browserRuntimeManager.dispatchAutomationByProcessId(processId, command, input)
-    ),
-    dispatchRuntimeFileSelection: (processId, selection) => (
-      browserRuntimeManager.selectFilesByProcessId(processId, selection)
-    ),
   });
   licenseCache.subscribe?.(() => {
     try { browserAutomationBridge.refreshExternalMcpAccess(); } catch (error) {

@@ -93,6 +93,7 @@ class NativeBrowserAutomation {
   constructor(options = {}) {
     this.runtime = options.browserRuntimeManager;
     this.getTabs = options.getTabs;
+    this.executeCardTool = options.executeCardTool;
     this.downloadService = options.browserDownloadService;
     this.cardService = options.cardService || null;
     this.observeTargets = new Map();
@@ -260,7 +261,9 @@ class NativeBrowserAutomation {
     if (toolName === 'manage_card' && this.cardService?.execute) {
       return this.cardService.execute(input, {
         timeoutMs: options.timeoutMs,
-        dispatch: (nextTool, nextArgs) => this.dispatch(connectionId, nextTool, nextArgs, options),
+        dispatch: (nextTool, nextArgs) => this.executeCardTool
+          ? this.executeCardTool(connectionId, nextTool, nextArgs, options)
+          : this.dispatch(connectionId, nextTool, nextArgs, options),
       });
     }
     throw new Error(`未知的 Chromium 原生自动化工具: ${text(toolName) || '(空)'}`);

@@ -1,5 +1,5 @@
 (() => {
-  const state = { cards: [], connections: [], selectedId: '', cardData: null, busy: false, initialized: false };
+  const state = { cards: [], connections: [], mcpTools: [], selectedId: '', cardData: null, busy: false, initialized: false };
 
   function element(id) { return document.getElementById(id); }
 
@@ -57,6 +57,14 @@
     select.replaceChildren(option('', state.connections.length ? '请选择浏览器窗口' : '暂无原生浏览器连接'), ...options);
     if (state.connections.some((item) => item.id === previous)) select.value = previous;
     else if (state.connections.length === 1) select.value = state.connections[0].id;
+  }
+
+  function applyAutomationCatalog(result) {
+    const source = result?.ok ? result : {};
+    state.connections = Array.isArray(source.connections) ? source.connections : [];
+    state.mcpTools = Array.isArray(source.mcpTools) ? source.mcpTools : [];
+    window.AppShellAutomationCanvas?.setMcpTools?.(state.mcpTools);
+    renderConnections();
   }
 
   function cardButton(card) {
@@ -136,12 +144,11 @@
       ]);
       state.cards = Array.isArray(cards?.items) ? cards.items : [];
       state.selectedId = cards?.selectedId || state.selectedId;
-      state.connections = connections?.ok && Array.isArray(connections.connections) ? connections.connections : [];
+      applyAutomationCatalog(connections);
       renderCards();
-      renderConnections();
       if (state.selectedId && state.cards.some((item) => item.id === state.selectedId)) await loadCardNow(state.selectedId);
       else newCard(false);
-      setStatus(`已加载 ${state.cards.length} 张卡片，${state.connections.length} 个原生浏览器连接。`);
+      setStatus(`已加载 ${state.cards.length} 张卡片，${state.connections.length} 个原生浏览器连接，${state.mcpTools.length} 个可调用 MCP。`);
     } catch (error) { setStatus(error.message); }
     finally { state.busy = false; }
   }
@@ -176,9 +183,8 @@
     state.busy = true;
     try {
       const connectionId = element('automation-browser-select').value;
-      if (!connectionId) throw new Error('请先选择一个已连接的原生浏览器窗口');
       const item = await saveCard(false);
-      setStatus('卡片正在通过 Chromium 原生控制运行…');
+      setStatus('卡片正在调用当前 MCP 流程…');
       const result = await invoke({ action: 'run', id: item.id, connectionId, inputs: parseJson('automation-run-inputs', {}) });
       window.AppShellAutomationCanvas?.markExecution?.(result.execution);
       setStatus(result);

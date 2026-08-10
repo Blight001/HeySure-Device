@@ -225,7 +225,7 @@
             <form id="automation-editor" class="automation-editor" novalidate>
               <section class="automation-canvas-section" aria-labelledby="automation-canvas-title">
                 <header class="automation-canvas-header">
-                  <div><strong id="automation-canvas-title">流程画布</strong><small>拖动节点与端点，编辑原生自动化流程</small></div>
+                  <div><strong id="automation-canvas-title">流程画布</strong><small>拖动节点与端点，组合原生步骤和已有 MCP</small></div>
                   <div class="automation-canvas-controls">
                     <button id="automation-canvas-layout" type="button">自动排版</button>
                     <button id="automation-canvas-zoom-out" type="button" aria-label="缩小画布">−</button>
@@ -242,6 +242,7 @@
                   <button type="button" data-canvas-add="get_credits">获取积分</button>
                   <button type="button" data-canvas-add="save_cookies">保存会话</button>
                   <button type="button" data-canvas-add="screenshot">截图</button>
+                  <button type="button" data-canvas-add="mcp">调用 MCP</button>
                 </div>
                 <div class="automation-canvas-shell">
                   <div id="automation-flow-canvas" class="automation-flow-canvas" tabindex="0" aria-label="自动化流程画布">
@@ -263,6 +264,8 @@
                       </div>
                       <label>名称<input data-node-field="name" type="text"></label>
                       <label>类型<select data-node-field="type"></select></label>
+                      <label data-node-types="mcp">MCP 工具<select data-node-field="tool"></select></label>
+                      <label data-node-types="mcp">MCP 参数 JSON<textarea data-node-field="arguments" rows="6" spellcheck="false">{}</textarea></label>
                       <label>选择器<input data-node-field="selector" type="text" placeholder="#submit / 文本"></label>
                       <label>URL / 匹配文本<input data-node-field="url" type="text"></label>
                       <label>输入文本<input data-node-field="text" type="text"></label>

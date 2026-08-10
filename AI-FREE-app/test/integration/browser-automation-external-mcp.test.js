@@ -20,7 +20,7 @@ async function reservePort() {
   return port;
 }
 
-test('automation bridge exposes authenticated external MCP before extension authentication', async () => {
+test('automation bridge exposes authenticated external MCP without a legacy extension connection', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-free-bridge-external-mcp-'));
   const descriptorPath = path.join(root, 'ai-free-mcp-bridge.json');
   const port = await reservePort();

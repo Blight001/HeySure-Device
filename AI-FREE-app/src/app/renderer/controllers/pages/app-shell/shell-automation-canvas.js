@@ -3,7 +3,7 @@
   const TYPES = [
     ['navigate', '访问网页'], ['click', '点击元素'], ['type', '输入内容'],
     ['wait', '等待条件'], ['condition', '判断分支'], ['get_credits', '获取积分'],
-    ['save_cookies', '保存会话'], ['screenshot', '截图'],
+    ['save_cookies', '保存会话'], ['screenshot', '截图'], ['mcp', '调用 MCP'],
   ];
   const CONDITIONS = [
     ['selector_exists', '元素存在'], ['selector_missing', '元素不存在'],
@@ -12,7 +12,7 @@
   const state = {
     card: { steps: [], flow: { start: '', nodes: [], edges: [] } },
     selectedNode: '', selectedEdge: '', scale: 1, x: 0, y: 0,
-    connection: null, onChange: null, bound: false,
+    connection: null, onChange: null, bound: false, mcpTools: [],
   };
 
   function element(id) { return document.getElementById(id); }
@@ -108,7 +108,7 @@
   }
 
   function nodeMeta(step) {
-    return [step.url, step.selector, step.text, step.variable, step.condition_mode]
+    return [step.tool, step.url, step.selector, step.text, step.variable, step.condition_mode]
       .map(text).find(Boolean) || '未配置参数';
   }
 
@@ -156,11 +156,19 @@
     fields.hidden = !step;
     if (!step) return;
     element('automation-node-title').textContent = `节点 #${index + 1}`;
+    const toolSelect = fields.querySelector('[data-node-field="tool"]');
+    const toolOptions = state.mcpTools.map((tool) => [tool.name, tool.description ? `${tool.name} — ${tool.description}` : tool.name]);
+    if (step.tool && !toolOptions.some(([name]) => name === step.tool)) toolOptions.unshift([step.tool, `${step.tool}（当前不可用）`]);
+    fillSelect(toolSelect, toolOptions.length ? toolOptions : [['', '暂无可用 MCP 工具']]);
     for (const control of fields.querySelectorAll('[data-node-field]')) {
       const key = control.dataset.nodeField;
       if (key === 'raw') control.value = JSON.stringify(step, null, 2);
+      else if (key === 'arguments') control.value = JSON.stringify(step.arguments || {}, null, 2);
       else control.value = step[key] ?? '';
     }
+    fields.querySelectorAll('[data-node-types]').forEach((label) => {
+      label.hidden = !String(label.dataset.nodeTypes || '').split(',').includes(step.type);
+    });
   }
 
   function render() {
@@ -230,6 +238,10 @@
     const step = { id: `step_${Date.now()}_${Math.random().toString(16).slice(2, 6)}`, name: labels[type] || type, type };
     if (type === 'wait') step.timeout = 1000;
     if (type === 'condition') step.condition_mode = 'selector_exists';
+    if (type === 'mcp') {
+      step.tool = state.mcpTools[0]?.name || '';
+      step.arguments = {};
+    }
     return step;
   }
 
@@ -349,6 +361,12 @@
         const parsed = JSON.parse(control.value);
         state.card.steps[index] = { ...parsed, id: state.selectedNode };
       } catch (_) { return; }
+    } else if (key === 'arguments') {
+      try {
+        const parsed = JSON.parse(control.value || '{}');
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
+        state.card.steps[index].arguments = parsed;
+      } catch (_) { return; }
     } else if (key === 'timeout') {
       state.card.steps[index][key] = control.value === '' ? '' : Number(control.value);
     } else state.card.steps[index][key] = control.value;
@@ -392,6 +410,12 @@
   }
 
   function configure(options = {}) { state.onChange = options.onChange; bind(); }
+  function setMcpTools(tools = []) {
+    state.mcpTools = (Array.isArray(tools) ? tools : [])
+      .map((tool) => ({ name: text(tool?.name), description: text(tool?.description) }))
+      .filter((tool) => tool.name);
+    render();
+  }
   function show(card) {
     state.card = normalizeCard(card); state.selectedNode = ''; state.selectedEdge = ''; notify(); render();
   }
@@ -404,5 +428,5 @@
     }
   }
 
-  window.AppShellAutomationCanvas = Object.freeze({ configure, markExecution, show });
+  window.AppShellAutomationCanvas = Object.freeze({ configure, markExecution, setMcpTools, show });
 })();

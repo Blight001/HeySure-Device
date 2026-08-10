@@ -83,7 +83,14 @@ for (const [channel, response] of /** @type {Array<[string, any]>} */ ([
     }],
   }],
   ['get-proxy-traffic-quota', { ok: false }],
-  ['ai-control-get-browser-connections', { ok: true, connections: [] }],
+  ['ai-control-get-browser-connections', {
+    ok: true,
+    connections: [],
+    mcpTools: [
+      { name: 'run_command', description: '运行命令' },
+      { name: 'browser_action', description: '页面操作' },
+    ],
+  }],
   ['ai-control-get-automation-cards', { ok: true, cards: [], selectedId: '' }],
   ['ai-control-history-list', { ok: true, sessions: [] }],
   ['ai-control-get-models', { ok: true, models: [], quota: null }],
@@ -235,6 +242,17 @@ app.whenReady().then(async () => {
       clientY: (targetBounds?.top || 0) + (targetBounds?.height || 0) / 2,
     }));
     await new Promise((resolve) => setTimeout(resolve, 20));
+    document.querySelector('[data-canvas-add="mcp"]')?.click();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const mcpNode = Array.from(document.querySelectorAll('.automation-flow-node')).at(-1);
+    mcpNode?.click();
+    const mcpTool = document.querySelector('[data-node-field="tool"]');
+    const mcpArguments = document.querySelector('[data-node-field="arguments"]');
+    const mcpToolOptions = Array.from(mcpTool?.options || []).map((item) => item.value);
+    mcpTool.value = 'run_command';
+    mcpTool.dispatchEvent(new Event('change', { bubbles: true }));
+    mcpArguments.value = '{"command":"echo {message}"}';
+    mcpArguments.dispatchEvent(new Event('change', { bubbles: true }));
     document.getElementById('automation-card-name').value = '画布验收卡片';
     document.getElementById('automation-editor').requestSubmit();
     await new Promise((resolve) => setTimeout(resolve, 30));
@@ -304,12 +322,15 @@ app.whenReady().then(async () => {
       basicInfoInitiallyClosed,
       basicFieldsMovedToDialog,
       basicInfoDialogVisible,
-      canvasAddedNode: initialCanvasNodeCount === 1 && document.querySelectorAll('.automation-flow-node').length === 2,
+      canvasAddedNode: initialCanvasNodeCount === 1 && document.querySelectorAll('.automation-flow-node').length === 3,
       canvasConditionPorts: conditionNode?.querySelectorAll('.automation-flow-port.is-true, .automation-flow-port.is-false').length === 2,
       canvasEdgeVisible: document.querySelectorAll('.automation-flow-edge').length >= 1,
       canvasManualBranch: Array.from(document.querySelectorAll('.automation-flow-edge-label'))
         .some((label) => label.textContent === 'false'),
       canvasInspectorEdited: canvasSteps.some((step) => step.name === '验收判断节点' && step.type === 'condition'),
+      canvasMcpConfigured: mcpToolOptions.includes('run_command')
+        && canvasSteps.some((step) => step.type === 'mcp' && step.tool === 'run_command'
+          && step.arguments?.command === 'echo {message}'),
       removedNetworkHeading: !document.getElementById('network-tools-title') && !panel.querySelector('.settings-network-tools-hint'),
       overflowY: getComputedStyle(document.getElementById('browser-empty-state')).overflowY,
     };
@@ -350,6 +371,7 @@ app.whenReady().then(async () => {
     || !result.canvasEdgeVisible
     || !result.canvasManualBranch
     || !result.canvasInspectorEdited
+    || !result.canvasMcpConfigured
     || !result.nodeToggleVisible
     || !result.nodePanelCollapsedByDefault
     || !result.nodePanelVisible
@@ -389,6 +411,9 @@ app.whenReady().then(async () => {
   const savedCanvas = automationOperations.find((input) => input.action === 'write')?.cardData;
   if (!savedCanvas?.flow?.nodes?.length || !savedCanvas.flow.edges?.some((edge) => edge.label === 'false')) {
     throw new Error('流程画布没有通过软件 IPC 保存 nodes/edges 数据');
+  }
+  if (!savedCanvas.steps?.some((step) => step.type === 'mcp' && step.tool === 'run_command')) {
+    throw new Error('流程画布没有保存已选 MCP 工具节点');
   }
   const browserHistoryInteractionResult = await win.webContents.executeJavaScript(`(async () => {
     const getMain = () => document.querySelector('[data-history-id="shared-browser"] .browser-history-main');

@@ -51,7 +51,7 @@ function loginResponse(token = 'test-token') {
 }
 
 test('AI 服务器登录默认使用 HeySure 地址且校验必填字段', () => {
-  assert.equal(DEFAULT_HEYSURE_SERVER, 'http://49.234.181.190:3000');
+  assert.equal(DEFAULT_HEYSURE_SERVER, 'http://49.234.181.190:58150');
   assert.equal(normalizeLoginConfig({ account: 'user', password: 'secret' }).server, DEFAULT_HEYSURE_SERVER);
   assert.throws(() => normalizeLoginConfig({ account: '', password: 'secret' }), /请输入账号/);
   assert.throws(() => normalizeLoginConfig({ account: 'user', password: '', server: 'ftp://invalid' }), /HTTP/);
@@ -196,10 +196,12 @@ test('首次登录安全记忆凭据，重启后仅会员自动连接，主动�
   assert.equal(skipped.reason, 'vip_required');
   assert.equal(loginCount, 1);
 
+  saved.server = 'http://49.234.181.190:3000';
   const restarted = createService(true, new FakeSocket());
   const automatic = await restarted.startAutomatically();
   assert.equal(automatic.ok, true);
   assert.equal(automatic.status.remembered, true);
+  assert.equal(saved.server, DEFAULT_HEYSURE_SERVER);
   assert.equal(loginCount, 2);
   assert.equal(restarted.logout().ok, true);
   assert.equal(saved, null);

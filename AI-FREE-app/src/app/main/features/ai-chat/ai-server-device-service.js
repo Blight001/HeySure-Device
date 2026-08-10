@@ -6,7 +6,8 @@ const {
   normalizeToolSchema,
 } = require('../../services/automation-tool-contract');
 
-const DEFAULT_HEYSURE_SERVER = 'http://49.234.181.190:3000';
+const DEFAULT_HEYSURE_SERVER = 'http://49.234.181.190:58150';
+const LEGACY_DEFAULT_HEYSURE_SERVER = 'http://49.234.181.190:3000';
 const REGISTER_INTERVAL_MS = 3000;
 const LOGIN_TIMEOUT_MS = 10000;
 const MAX_COMPLETED_TASKS = 200;
@@ -45,6 +46,11 @@ function protocolToolName(sourceName) {
     .replace(/[^a-z0-9]+/g, '+')
     .replace(/^\++|\++$/g, '');
   return action ? `aifree.${action}` : '';
+}
+
+function migrateSavedLoginConfig(saved) {
+  if (String(saved?.server || '').replace(/\/+$/, '') !== LEGACY_DEFAULT_HEYSURE_SERVER) return saved;
+  return { ...saved, server: DEFAULT_HEYSURE_SERVER };
 }
 
 function legacyProtocolToolName(sourceName) {
@@ -440,7 +446,8 @@ class AiServerDeviceService {
     if (!environment.skipped) return environment;
     const saved = this.credentialStore?.load?.();
     if (!saved) return { ok: true, skipped: true, reason: 'no_credentials', status: this.status() };
-    return this.login(saved, { remember: false });
+    const migrated = migrateSavedLoginConfig(saved);
+    return this.login(migrated, { remember: migrated !== saved });
   }
 
   stop() {

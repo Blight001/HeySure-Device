@@ -97,7 +97,7 @@ for (const [channel, response] of /** @type {Array<[string, any]>} */ ([
   ['get-ai-server-device-status', {
     ok: true,
     status: {
-      phase: 'idle', server: 'http://49.234.181.190:3000', account: '',
+      phase: 'idle', server: 'http://49.234.181.190:58150', account: '',
       serviceName: 'AI-FREE', connected: false, registered: false,
       serviceId: '', toolCount: 0, aiConfigId: null, message: '尚未连接 AI 服务器',
     },

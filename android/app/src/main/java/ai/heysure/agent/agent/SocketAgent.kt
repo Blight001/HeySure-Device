@@ -43,6 +43,9 @@ class SocketAgent(
     private val onConfirmationRequested: (JSONObject) -> Unit = {},
     private val onConfirmationSnapshot: (JSONObject) -> Unit = {},
     private val onConfirmationResolved: (JSONObject) -> Unit = {},
+    private val onUserNotificationCreated: (JSONObject) -> Unit = {},
+    private val onUserNotificationSnapshot: (JSONObject) -> Unit = {},
+    private val onUserNotificationRead: (JSONObject) -> Unit = {},
     /** Fired once per auth rejection so the host can silent-relogin (Windows parity). */
     private val onAuthFailure: (reason: String) -> Unit = {},
 ) {
@@ -219,6 +222,15 @@ class SocketAgent(
         s.on("workflow:confirmation_resolved") { args ->
             (args.firstOrNull() as? JSONObject)?.let(onConfirmationResolved)
         }
+        s.on("user:notification_created") { args ->
+            (args.firstOrNull() as? JSONObject)?.let(onUserNotificationCreated)
+        }
+        s.on("user:notification_snapshot") { args ->
+            (args.firstOrNull() as? JSONObject)?.let(onUserNotificationSnapshot)
+        }
+        s.on("user:notification_read") { args ->
+            (args.firstOrNull() as? JSONObject)?.let(onUserNotificationRead)
+        }
         // Remote-control WebRTC signaling (controller → device). The handful of
         // SDP/ICE messages are forwarded to the RemoteControlManager; media and
         // input then flow peer-to-peer, off the socket.
@@ -258,7 +270,7 @@ class SocketAgent(
             put("os", "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
             put("capabilities", JSONArray(capabilities()))
             put("toolDefs", toolDefs())
-            put("version", "2.0.0")
+            put("version", "2.1.0")
             put("token", settings.authToken)
             put("lifecycle", "registered")
             // Server classifies this as a mobile endpoint; routing treats it as a

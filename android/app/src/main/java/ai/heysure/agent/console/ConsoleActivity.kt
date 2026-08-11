@@ -292,7 +292,7 @@ class ConsoleActivity : AppCompatActivity() {
             displayZoomControls = false
             setSupportZoom(false)
             offscreenPreRaster = true
-            userAgentString = "$userAgentString HeySureAndroid/2.0"
+            userAgentString = "$userAgentString HeySureAndroid/2.1"
         }
         CookieManager.getInstance().apply {
             setAcceptCookie(true)

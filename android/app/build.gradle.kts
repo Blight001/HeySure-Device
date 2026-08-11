@@ -59,8 +59,8 @@ android {
         applicationId = "ai.heysure.agent"
         minSdk = 26          // Android 8.0: AccessibilityService.dispatchGesture()
         targetSdk = 34
-        versionCode = 2
-        versionName = "2.0.1"
+        versionCode = 3
+        versionName = "2.1.0"
     }
 
     signingConfigs {

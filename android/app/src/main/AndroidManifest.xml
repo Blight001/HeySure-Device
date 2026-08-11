@@ -48,6 +48,12 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="heysure" android:host="workflow-confirmation" />
+            </intent-filter>
         </activity>
 
         <!-- Owns the Socket.IO client + task dispatch loop; survives the UI being

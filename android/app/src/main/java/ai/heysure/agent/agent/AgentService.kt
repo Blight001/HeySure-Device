@@ -6,6 +6,7 @@ import ai.heysure.agent.capture.ScreenCaptureManager
 import ai.heysure.agent.executor.TaskExecutor
 import ai.heysure.agent.executor.ToolCatalog
 import ai.heysure.agent.remote.RemoteControlManager
+import ai.heysure.agent.notifications.WorkflowConfirmationNotifier
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -37,6 +38,7 @@ class AgentService : Service() {
     private lateinit var capture: ScreenCaptureManager
     private var agent: SocketAgent? = null
     private var remoteControl: RemoteControlManager? = null
+    private lateinit var confirmationNotifier: WorkflowConfirmationNotifier
     private var wakeLock: PowerManager.WakeLock? = null
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     @Volatile private var recoveringAuth = false
@@ -51,6 +53,7 @@ class AgentService : Service() {
         instance = this
         settings = Settings(this)
         capture = ScreenCaptureManager(applicationContext)
+        confirmationNotifier = WorkflowConfirmationNotifier(applicationContext)
         createChannel()
     }
 
@@ -74,6 +77,7 @@ class AgentService : Service() {
                 }
             }
             ACTION_STOP -> {
+                confirmationNotifier.cancelAll()
                 stopAgent()
                 stopSelf()
                 return START_NOT_STICKY
@@ -212,6 +216,9 @@ class AgentService : Service() {
             },
             onLog = { msg -> logListener?.invoke(msg) },
             onRcSignal = { event, data -> rc.onSignal(event, data) },
+            onConfirmationRequested = { payload -> confirmationNotifier.show(payload) },
+            onConfirmationSnapshot = { payload -> confirmationNotifier.replaceSnapshot(payload) },
+            onConfirmationResolved = { payload -> confirmationNotifier.resolve(payload) },
             onAuthFailure = { reason -> recoverAuth(reason) },
         ).also { it.connect() }
     }

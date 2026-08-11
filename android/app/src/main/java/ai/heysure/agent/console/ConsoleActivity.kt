@@ -11,6 +11,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
 import android.view.MotionEvent
@@ -62,6 +63,11 @@ class ConsoleActivity : AppCompatActivity() {
     private var fileChooser: ValueCallback<Array<Uri>>? = null
     @Volatile private var useBundledFallback = false
     private var agentButtonDockedLeft = false
+    private var requestedWorkflowRunId = ""
+
+    private val notificationPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { /* A denied notification permission leaves in-app confirmation available. */ }
 
     private val filePicker = registerForActivityResult(
         ActivityResultContracts.OpenMultipleDocuments(),
@@ -73,6 +79,10 @@ class ConsoleActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         settings = Settings(this)
+        requestedWorkflowRunId = workflowRunId(intent)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
         window.statusBarColor = Color.rgb(9, 9, 11)
         window.navigationBarColor = Color.rgb(9, 9, 11)
 
@@ -81,7 +91,7 @@ class ConsoleActivity : AppCompatActivity() {
         if (settings.isLoggedIn) {
             createShell()
             AgentService.start(this)
-            if (!restoreConsoleState(savedInstanceState)) {
+            if (requestedWorkflowRunId.isNotBlank() || !restoreConsoleState(savedInstanceState)) {
                 loadConsole(force = true)
             }
             refreshSessionInBackground()
@@ -168,6 +178,15 @@ class ConsoleActivity : AppCompatActivity() {
     override fun onPause() {
         if (::webView.isInitialized) webView.onPause()
         super.onPause()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val runId = workflowRunId(intent)
+        if (runId.isBlank()) return
+        requestedWorkflowRunId = runId
+        if (::webView.isInitialized && settings.isLoggedIn) loadConsole(force = true)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -306,20 +325,25 @@ class ConsoleActivity : AppCompatActivity() {
 
     private fun loadConsole(force: Boolean) {
         val baseUrl = consoleBaseUrl()
-        val sessionKey = "$baseUrl\n${settings.authToken}"
+        val sessionKey = "$baseUrl\n${settings.authToken}\n$requestedWorkflowRunId"
         if (!force && sessionKey == loadedSessionKey) return
         loadedSessionKey = sessionKey
         useBundledFallback = false
         showLoading(true)
-        val cacheBuster = if (force) "?heysure_refresh=${System.currentTimeMillis()}" else ""
-        webView.loadUrl("${baseUrl.trimEnd('/')}/$cacheBuster")
+        val target = Uri.parse("${baseUrl.trimEnd('/')}/").buildUpon().apply {
+            if (requestedWorkflowRunId.isNotBlank()) {
+                appendQueryParameter(WORKFLOW_CONFIRMATION_QUERY, requestedWorkflowRunId)
+            }
+            if (force) appendQueryParameter("heysure_refresh", System.currentTimeMillis().toString())
+        }.build()
+        webView.loadUrl(target.toString())
     }
 
     /** Preserve the rendered page when Android recreates this Activity in the background. */
     private fun restoreConsoleState(savedState: Bundle?): Boolean {
         if (savedState == null || webView.restoreState(savedState) == null) return false
         useBundledFallback = savedState.getBoolean(STATE_BUNDLED_FALLBACK, false)
-        loadedSessionKey = "${consoleBaseUrl()}\n${settings.authToken}"
+        loadedSessionKey = "${consoleBaseUrl()}\n${settings.authToken}\n$requestedWorkflowRunId"
         showLoading(false)
         return true
     }
@@ -595,6 +619,16 @@ class ConsoleActivity : AppCompatActivity() {
         return html.replace("</head>", "$bootstrap\n</head>").toByteArray(Charsets.UTF_8)
     }
 
+    private fun workflowRunId(source: Intent?): String {
+        val extra = source?.getStringExtra(EXTRA_WORKFLOW_RUN_ID).orEmpty().trim()
+        val deepLink = source?.data
+            ?.takeIf { it.scheme == "heysure" && it.host == "workflow-confirmation" }
+            ?.lastPathSegment.orEmpty().trim()
+        return (extra.ifBlank { deepLink }).takeIf { value ->
+            value.length in 1..160 && value.all { it.isLetterOrDigit() || it == '_' || it == '-' }
+        }.orEmpty()
+    }
+
     private inner class AndroidBridge {
         @JavascriptInterface
         fun openDeviceSettings() = runOnUiThread { openAgentSettings(closeConsole = false) }
@@ -619,6 +653,8 @@ class ConsoleActivity : AppCompatActivity() {
         private const val STATE_BUNDLED_FALLBACK = "heysure.web.bundled_fallback"
         private const val MENU_DEVICE_SETTINGS = 1
         private const val MENU_REFRESH_PAGE = 2
+        private const val WORKFLOW_CONFIRMATION_QUERY = "workflow_confirmation"
+        const val EXTRA_WORKFLOW_RUN_ID = "workflowRunId"
 
         fun open(context: Context) {
             context.startActivity(Intent(context, ConsoleActivity::class.java).apply {

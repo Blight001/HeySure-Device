@@ -40,6 +40,9 @@ class SocketAgent(
     private val onStatus: (DeviceStatus, String?) -> Unit,
     private val onLog: (String) -> Unit,
     private val onRcSignal: (event: String, data: JSONObject) -> Unit = { _, _ -> },
+    private val onConfirmationRequested: (JSONObject) -> Unit = {},
+    private val onConfirmationSnapshot: (JSONObject) -> Unit = {},
+    private val onConfirmationResolved: (JSONObject) -> Unit = {},
     /** Fired once per auth rejection so the host can silent-relogin (Windows parity). */
     private val onAuthFailure: (reason: String) -> Unit = {},
 ) {
@@ -206,6 +209,15 @@ class SocketAgent(
         s.on("task:dispatch") { args ->
             val task = args.firstOrNull() as? JSONObject ?: return@on
             scope.launch { handleTask(task) }
+        }
+        s.on("workflow:confirmation_requested") { args ->
+            (args.firstOrNull() as? JSONObject)?.let(onConfirmationRequested)
+        }
+        s.on("workflow:confirmation_snapshot") { args ->
+            (args.firstOrNull() as? JSONObject)?.let(onConfirmationSnapshot)
+        }
+        s.on("workflow:confirmation_resolved") { args ->
+            (args.firstOrNull() as? JSONObject)?.let(onConfirmationResolved)
         }
         // Remote-control WebRTC signaling (controller → device). The handful of
         // SDP/ICE messages are forwarded to the RemoteControlManager; media and

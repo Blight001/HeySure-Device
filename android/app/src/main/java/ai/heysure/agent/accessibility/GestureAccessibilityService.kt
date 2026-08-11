@@ -97,7 +97,7 @@ class GestureAccessibilityService : AccessibilityService() {
 
         fun require(): GestureAccessibilityService =
             instance ?: throw IllegalStateException(
-                "无障碍服务未开启：请在 系统设置 > 无障碍 中启用 HeySure 安卓端",
+                "无障碍服务未开启：请在 系统设置 > 无障碍 中启用 HeySure",
             )
     }
 }

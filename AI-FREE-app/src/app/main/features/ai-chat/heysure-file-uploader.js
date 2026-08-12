@@ -5,8 +5,8 @@ const path = require('path');
 const { resolveInside } = require('../../services/ai-sandbox-file-tools');
 
 const FILE_REF_RE = /^file_[a-f0-9]{32}$/;
-const MAX_FILE_BYTES = 30 * 1024 * 1024;
-const UPLOAD_TIMEOUT_MS = 120000;
+const MAX_FILE_BYTES = 250 * 1024 * 1024;
+const UPLOAD_TIMEOUT_MS = 10 * 60 * 1000;
 const DOWNLOAD_ACTIONS = new Set(['download', 'download_element']);
 
 function attachmentUploadUrl(server) {
@@ -43,10 +43,10 @@ function createHeySureFileUploader(options = {}) {
     const sourcePath = resolveSandboxFile(sandboxDir, localPath);
     const stat = await fs.promises.stat(sourcePath);
     if (stat.size <= 0) throw new Error('不能上传空文件');
-    if (stat.size > MAX_FILE_BYTES) throw new Error('文件超过 HeySure 30 MB 上传上限');
-    const data = await fs.promises.readFile(sourcePath);
+    if (stat.size > MAX_FILE_BYTES) throw new Error('文件超过 HeySure 250 MB 工作区传输上限');
     const form = new FormData();
-    form.append('file', new Blob([data]), path.basename(sourcePath));
+    const fileBlob = await fs.openAsBlob(sourcePath);
+    form.append('file', fileBlob, path.basename(sourcePath));
     form.append('ai_config_id', String(Number(aiConfigId)));
     form.append('ai_kind', 'assistant');
     form.append('session_id', String(sessionId || 'default'));

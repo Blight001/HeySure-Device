@@ -8,8 +8,8 @@ const { sanitizeFileName } = require('../../services/browser-download-service');
 
 const FILE_REF_RE = /^file_[a-f0-9]{32}$/;
 const MAX_FILES = 5;
-const MAX_FILE_BYTES = 30 * 1024 * 1024;
-const FETCH_TIMEOUT_MS = 120000;
+const MAX_FILE_BYTES = 250 * 1024 * 1024;
+const FETCH_TIMEOUT_MS = 10 * 60 * 1000;
 const INCOMING_TTL_MS = 24 * 60 * 60 * 1000;
 
 function augmentHeySureBrowserFileTool(sourceName, tool) {
@@ -60,33 +60,28 @@ function responseFileName(response, fallback) {
   }
 }
 
-async function readBoundedResponse(response) {
+async function writeBoundedResponse(response, targetPath) {
   const declared = Number(response.headers.get('content-length') || 0);
-  if (declared > MAX_FILE_BYTES) throw new Error('服务器文件超过 30 MB 设备传输上限');
-  if (!response.body?.getReader) {
-    const data = Buffer.from(await response.arrayBuffer());
-    if (data.length > MAX_FILE_BYTES) throw new Error('服务器文件超过 30 MB 设备传输上限');
-    return data;
-  }
-  const reader = response.body.getReader();
-  const chunks = [];
+  if (declared > MAX_FILE_BYTES) throw new Error('服务器文件超过 250 MB 设备传输上限');
+  const handle = await fs.promises.open(targetPath, 'wx');
+  const digest = crypto.createHash('sha256');
   let total = 0;
   try {
+    const reader = response.body?.getReader?.();
+    if (!reader) throw new Error('HeySure 文件响应缺少可读取的数据流');
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      total += value.byteLength;
-      if (total > MAX_FILE_BYTES) throw new Error('服务器文件超过 30 MB 设备传输上限');
-      chunks.push(Buffer.from(value));
+      const chunk = Buffer.from(value);
+      total += chunk.length;
+      if (total > MAX_FILE_BYTES) throw new Error('服务器文件超过 250 MB 设备传输上限');
+      digest.update(chunk);
+      await handle.write(chunk);
     }
   } finally {
-    reader.releaseLock?.();
+    await handle.close();
   }
-  return Buffer.concat(chunks, total);
-}
-
-function sha256(data) {
-  return crypto.createHash('sha256').update(data).digest('hex');
+  return { total, digest: digest.digest('hex') };
 }
 
 function cleanupExpiredIncoming(incomingRoot, currentTaskDir, now = Date.now()) {
@@ -135,13 +130,12 @@ async function downloadFile({ fetchImpl, link, targetPath, signal }) {
   if (response.headers.get('x-heysure-file-ref') !== fileRef) throw new Error('HeySure 文件引用回执不一致');
   const expectedHash = String(response.headers.get('x-heysure-file-sha256') || '').toLowerCase();
   if (!/^[a-f0-9]{64}$/.test(expectedHash) || expectedHash !== linkHash) throw new Error('HeySure 文件响应缺少有效 SHA-256');
-  const data = await readBoundedResponse(response);
-  if (sha256(data) !== expectedHash) throw new Error('HeySure 文件 SHA-256 校验失败');
   const fileName = responseFileName(response, `${fileRef}.bin`);
   const finalPath = path.join(path.dirname(targetPath), `${path.basename(targetPath)}-${fileName}`);
   const tempPath = `${finalPath}.${process.pid}.${crypto.randomBytes(5).toString('hex')}.part`;
   try {
-    await fs.promises.writeFile(tempPath, data, { flag: 'wx' });
+    const written = await writeBoundedResponse(response, tempPath);
+    if (written.digest !== expectedHash) throw new Error('HeySure 文件 SHA-256 校验失败');
     await fs.promises.rm(finalPath, { force: true });
     await fs.promises.rename(tempPath, finalPath);
   } finally {

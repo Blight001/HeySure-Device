@@ -18,10 +18,10 @@ function fileResponse(data, overrides = {}) {
   return new Response(data, {
     status: overrides.status || 200,
     headers: {
-      'content-length': String(data.length),
+      'content-length': String(overrides.contentLength || data.length),
       'x-heysure-file-ref': REF,
       'x-heysure-file-sha256': digest,
-      'x-heysure-file-name': encodeURIComponent('报告.txt'),
+      'x-heysure-file-name': encodeURIComponent(overrides.fileName || '报告.txt'),
     },
   });
 }
@@ -65,6 +65,27 @@ test('HeySure 文件经鉴权下载、SHA-256 校验并物化到任务目录', a
   assert.equal(requests[1].options.headers.Authorization, undefined);
   assert.equal(path.relative(sandboxDir, paths[0]), path.join('Incoming', 'task-1', '1-报告.txt'));
   assert.deepEqual(fs.readFileSync(paths[0]), data);
+});
+
+test('视频等非图片文件可超过旧 30 MB 限制并保持原扩展名', async (t) => {
+  const sandboxDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aifree-materialize-video-'));
+  t.after(() => fs.rmSync(sandboxDir, { recursive: true, force: true }));
+  const data = Buffer.from('streamed-video-fixture');
+  const digest = crypto.createHash('sha256').update(data).digest('hex');
+  const materialize = createHeySureFileMaterializer({
+    sandboxDir,
+    fetch: async (_url, options) => options.method === 'POST'
+      ? linkResponse(digest)
+      : fileResponse(data, { contentLength: 31 * 1024 * 1024, fileName: 'clip.mp4' }),
+  });
+
+  const [videoPath] = await materialize({
+    server: 'https://heysure.example', token: 'token', aiConfigId: 19,
+    taskId: 'video-task', refs: [REF],
+  });
+
+  assert.equal(path.extname(videoPath), '.mp4');
+  assert.deepEqual(fs.readFileSync(videoPath), data);
 });
 
 test('校验失败会拒绝文件并清理当前任务的部分落地内容', async (t) => {

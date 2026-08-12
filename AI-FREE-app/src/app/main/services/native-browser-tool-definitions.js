@@ -18,7 +18,7 @@ const NATIVE_BROWSER_TOOL_DEFINITIONS = Object.freeze([
   },
   {
     name: 'browser_file', destructive: true,
-    description: '通过 AI 工作区安全下载 URL 或页面中的图片元素、向当前页面上传本地文件，或保存当前浏览器会话。download_element 会按 ref/selector/坐标定位 img，并由当前 Chromium Profile 原生下载 currentSrc。',
+    description: '通过 AI 工作区安全下载 URL 或页面中的图片元素、向当前页面上传任意常规文件（图片、视频、音频、文档、压缩包等），或保存当前浏览器会话。上传仍受目标网页 input 的 accept 规则约束；download_element 会按 ref/selector/坐标定位 img，并由当前 Chromium Profile 原生下载 currentSrc。',
     input_schema: objectSchema({
       action: { type: 'string', enum: ['download', 'download_element', 'upload', 'save_session', 'info'] },
       url: { type: 'string', description: '下载用绝对 URL 或相对于当前页面的 URL' },
@@ -27,8 +27,8 @@ const NATIVE_BROWSER_TOOL_DEFINITIONS = Object.freeze([
       selector: { type: 'string' }, ref: { type: 'string' },
       x: { type: 'number', description: 'download_element 的视口 X 坐标；ref 会自动解析为元素暴露点' },
       y: { type: 'number', description: 'download_element 的视口 Y 坐标；ref 会自动解析为元素暴露点' },
-      path: { type: 'string' },
-      paths: { type: 'array', items: { type: 'string' } }, mode: { type: 'string' }, page_url: { type: 'string' },
+      path: { type: 'string', description: 'AI-Workspace 内任意类型的单个文件路径' },
+      paths: { type: 'array', items: { type: 'string' }, description: 'AI-Workspace 内任意类型的多个文件路径' }, mode: { type: 'string' }, page_url: { type: 'string' },
     }, ['action']),
   },
   {

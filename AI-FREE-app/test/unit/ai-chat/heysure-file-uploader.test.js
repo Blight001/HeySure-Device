@@ -59,6 +59,37 @@ test('HeySure uploader posts a bounded workspace file and validates file_ref', a
   assert.equal(calls[0].init.body.get('file').name, 'cat.jpg');
 });
 
+test('HeySure uploader streams videos larger than the old 30 MB image-oriented limit', async (t) => {
+  const root = temporaryWorkspace(t);
+  const video = path.join(root, 'clip.mp4');
+  fs.writeFileSync(video, 'video');
+  fs.truncateSync(video, 31 * 1024 * 1024);
+  let uploadedFile;
+  const upload = createHeySureFileUploader({
+    sandboxDir: root,
+    fetch: async (_url, init) => {
+      uploadedFile = init.body.get('file');
+      return {
+        ok: true, status: 200,
+        json: async () => ({
+          file_ref: `file_${'c'.repeat(32)}`,
+          workspace_path: 'Uploads/clip.mp4', mime_type: 'video/mp4',
+          can_send_to_user: false,
+        }),
+      };
+    },
+  });
+
+  const result = await upload({
+    server: 'https://heysure.example', token: 'secret', aiConfigId: 7,
+    localPath: video, sessionId: 'chat-video',
+  });
+
+  assert.equal(uploadedFile.name, 'clip.mp4');
+  assert.equal(uploadedFile.size, 31 * 1024 * 1024);
+  assert.equal(result.mime_type, 'video/mp4');
+});
+
 test('download result gains file_ref and a view-image next action', async () => {
   const fileRef = `file_${'b'.repeat(32)}`;
   const result = await attachHeySureDownloadedFile({

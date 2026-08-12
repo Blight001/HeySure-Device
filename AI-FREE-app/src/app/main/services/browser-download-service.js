@@ -9,6 +9,7 @@ const { resolvePublicDownloadHost, secureDownloadFetch } = require('./browser-do
 const DEFAULT_MAX_BYTES = 250 * 1024 * 1024;
 const MAX_ALLOWED_BYTES = 1024 * 1024 * 1024;
 const MAX_REDIRECTS = 5;
+const NATIVE_DOWNLOAD_POLL_MS = 100;
 
 function normalizeUrl(value, baseUrl = undefined) {
   const parsed = new URL(String(value || '').trim(), baseUrl);
@@ -182,6 +183,35 @@ async function commitTempFile(tempPath, targetPath, overwrite) {
   await fs.promises.rm(tempPath, { force: true });
 }
 
+async function hashFile(targetPath) {
+  const hash = crypto.createHash('sha256');
+  for await (const chunk of fs.createReadStream(targetPath)) hash.update(chunk);
+  return hash.digest('hex');
+}
+
+async function waitForNativeDownload(targetPath, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  let stableSize = -1;
+  let stableChecks = 0;
+  do {
+    const partialExists = fs.existsSync(`${targetPath}.crdownload`);
+    if (!partialExists && fs.existsSync(targetPath)) {
+      const stat = await fs.promises.stat(targetPath);
+      stableChecks = stat.isFile() && stat.size === stableSize ? stableChecks + 1 : 0;
+      stableSize = stat.size;
+      if (stat.isFile() && stableChecks >= 1) return stat;
+    }
+    await new Promise((resolve) => setTimeout(resolve, NATIVE_DOWNLOAD_POLL_MS));
+  } while (Date.now() < deadline);
+  throw new Error('Chromium 元素下载超时');
+}
+
+function nativeDownloadName(input) {
+  if (input.filename) return sanitizeFileName(input.filename);
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  return sanitizeFileName(`image-element-${timestamp}.bin`);
+}
+
 async function writeJsonAtomic(targetPath, value, overwrite) {
   const tempPath = path.join(path.dirname(targetPath), `.${path.basename(targetPath)}.${process.pid}.${crypto.randomBytes(5).toString('hex')}.part`);
   try {
@@ -238,8 +268,34 @@ function createBrowserDownloadService(options = {}) {
     return { success: true, action: 'save_session', file_name: path.basename(targetPath), relative_path: path.relative(sandboxDir, targetPath), absolute_path: targetPath, cookie_count: Array.isArray(input.session.cookies) ? input.session.cookies.length : 0 };
   }
 
+  async function downloadElement(input, trigger) {
+    if (typeof trigger !== 'function') throw new Error('Chromium 元素下载通道不可用');
+    const timeoutMs = Math.min(300000, Math.max(1000, Number(input.timeout_ms) || 120000));
+    const maxBytes = Math.min(MAX_ALLOWED_BYTES, Math.max(1, Number(input.max_bytes) || DEFAULT_MAX_BYTES));
+    const directory = resolveTargetDirectory(sandboxDir, input.directory);
+    const targetPath = availableTarget(directory.target, nativeDownloadName(input), input.overwrite === true);
+    const stagingPath = path.join(directory.target, `.${path.basename(targetPath)}.${process.pid}.${crypto.randomBytes(5).toString('hex')}.native-download`);
+    try {
+      const nativeResult = await trigger(stagingPath);
+      if (nativeResult?.success === false) throw new Error(nativeResult.error || 'Chromium 未能启动元素下载');
+      const stat = await waitForNativeDownload(stagingPath, timeoutMs);
+      if (stat.size > maxBytes) throw new Error(`下载文件超过大小限制 ${maxBytes} bytes`);
+      const sha256 = await hashFile(stagingPath);
+      await commitTempFile(stagingPath, targetPath, input.overwrite === true);
+      return {
+        ...nativeResult, success: true, action: 'download_element',
+        file_name: path.basename(targetPath), relative_path: path.relative(sandboxDir, targetPath),
+        absolute_path: targetPath, size: stat.size, sha256,
+      };
+    } finally {
+      await fs.promises.rm(stagingPath, { force: true }).catch(() => {});
+      await fs.promises.rm(`${stagingPath}.crdownload`, { force: true }).catch(() => {});
+    }
+  }
+
   return {
     resolveUploadPaths: (values) => resolveUploadFiles(sandboxDir, values),
+    downloadElement,
     execute: async (input = {}, context = {}) => {
       const action = String(input.action || 'download').trim().toLowerCase();
       if (action === 'info') return { success: true, action, workspace_path: sandboxDir };

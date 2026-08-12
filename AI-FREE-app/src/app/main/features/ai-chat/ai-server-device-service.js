@@ -5,6 +5,10 @@ const {
   normalizeToolError,
   normalizeToolSchema,
 } = require('../../services/automation-tool-contract');
+const {
+  augmentHeySureBrowserFileTool,
+  prepareHeySureBrowserFileArgs,
+} = require('./heysure-file-materializer');
 
 const DEFAULT_HEYSURE_SERVER = 'http://49.234.181.190:58150';
 const LEGACY_DEFAULT_HEYSURE_SERVER = 'http://49.234.181.190:3000';
@@ -74,12 +78,12 @@ function normalizeToolCatalog(listed = {}) {
     // underscore route executable for tasks already queued during an upgrade.
     const legacyName = legacyProtocolToolName(sourceName);
     if (legacyName && legacyName !== name && !routes.has(legacyName)) routes.set(legacyName, sourceName);
-    tools.push({
+    tools.push(augmentHeySureBrowserFileTool(sourceName, {
       name,
       description: String(source.description || `调用 AI-FREE 的 ${sourceName} MCP 工具`).trim(),
       input_schema: normalizeToolSchema(source),
       destructive: source.destructive === true,
-    });
+    }));
   }
   return { tools, routes };
 }
@@ -126,6 +130,7 @@ class AiServerDeviceService {
     this.computeDeviceId = options.computeDeviceId || (() => 'device');
     this.getTools = options.getTools || (() => ({ tools: [] }));
     this.callTool = options.callTool || (() => { throw new Error('MCP 执行器尚未就绪'); });
+    this.materializeFileRefs = options.materializeFileRefs || null;
     this.credentialStore = options.credentialStore || null;
     this.hasVipAccess = options.hasVipAccess || (() => false);
     this.onStatus = options.onStatus || (() => {});
@@ -366,7 +371,13 @@ class AiServerDeviceService {
     try {
       const sourceName = this.routes.get(tool);
       if (!sourceName) throw new Error(`未知或当前不可用的 MCP 工具: ${tool}`);
-      const result = await this.callTool(sourceName, task.args || {});
+      const toolArgs = await prepareHeySureBrowserFileArgs({
+        sourceName, args: task.args, task,
+        materialize: this.materializeFileRefs,
+        server: this.credentials?.server,
+        token: this.token,
+      });
+      const result = await this.callTool(sourceName, toolArgs);
       const payload = {
         taskId, deviceId: this.serviceId, success: true, tool,
         result, summary: taskSummary(tool, result),

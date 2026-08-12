@@ -193,3 +193,22 @@ test('browser file upload only resolves existing files inside AI-Workspace', (t)
   assert.throws(() => service.resolveUploadPaths(['../outside.txt']), /超出 AI 工作区/);
   assert.throws(() => service.resolveUploadPaths(['missing.txt']), /上传文件不存在/);
 });
+
+test('browser element download atomically commits Chromium bytes inside AI-Workspace', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-free-element-download-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const service = createBrowserDownloadService({ sandboxDir: root });
+  let nativeTarget = '';
+  const result = await service.downloadElement({
+    action: 'download_element', directory: 'grok', filename: 'generated.webp',
+  }, async (targetPath) => {
+    nativeTarget = targetPath;
+    fs.writeFileSync(targetPath, Buffer.from('original-image-bytes'));
+    return { success: true, resourceUrl: 'https://cdn.example.test/generated.webp', tag: 'img' };
+  });
+  assert.equal(fs.readFileSync(result.absolute_path, 'utf8'), 'original-image-bytes');
+  assert.equal(result.relative_path, path.join('grok', 'generated.webp'));
+  assert.equal(result.resourceUrl, 'https://cdn.example.test/generated.webp');
+  assert.equal(fs.existsSync(nativeTarget), false);
+  assert.equal(result.sha256.length, 64);
+});

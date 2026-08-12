@@ -276,16 +276,17 @@ fn rc_inject_input(event: rc::RcInputEvent) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn rc_capture_frame(quality: u8) -> tauri::ipc::Response {
+async fn rc_capture_frame(quality: u8, max_dimension: u32) -> tauri::ipc::Response {
     // Capture is blocking (GDI + JPEG encode); keep it off the async runtime's
     // worker so it never stalls other IPC. Raw JPEG bytes are returned via
     // tauri::ipc::Response so the WebView receives an ArrayBuffer (no base64
     // inflation); an empty buffer signals "frame unavailable" to the caller.
-    let bytes = tokio::task::spawn_blocking(move || rc::capture_primary_jpeg(quality))
-        .await
-        .ok()
-        .flatten()
-        .unwrap_or_default();
+    let bytes =
+        tokio::task::spawn_blocking(move || rc::capture_primary_jpeg(quality, max_dimension))
+            .await
+            .ok()
+            .flatten()
+            .unwrap_or_default();
     tauri::ipc::Response::new(bytes)
 }
 

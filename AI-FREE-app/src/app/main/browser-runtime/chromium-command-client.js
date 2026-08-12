@@ -7,7 +7,7 @@ const MAX_MESSAGE_BYTES = 4 * 1024 * 1024;
 const ALLOWED_COMMANDS = new Set([
   'navigate', 'reload', 'open-tabs', 'list-tabs', 'activate-tab', 'dispatch-input', 'close-browser',
   'set-cookies', 'set-storage', 'clear-session', 'select-files',
-  'observe-page', 'capture-screenshot', 'perform-action', 'get-session-data',
+  'observe-page', 'capture-screenshot', 'perform-action', 'download-element', 'get-session-data',
 ]);
 
 function runtimeBridgeError(code, message) {

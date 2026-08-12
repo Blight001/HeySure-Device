@@ -3,7 +3,8 @@
 const { findProfileIdByProcessId } = require('./runtime-input');
 
 const AUTOMATION_COMMANDS = new Set([
-  'observe-page', 'capture-screenshot', 'perform-action', 'get-session-data', 'list-tabs', 'activate-tab',
+  'observe-page', 'capture-screenshot', 'perform-action', 'download-element',
+  'get-session-data', 'list-tabs', 'activate-tab',
 ]);
 const ACTIONS = new Set([
   'click', 'double_click', 'right_click', 'drag', 'upload_file', 'scroll',
@@ -153,6 +154,20 @@ function normalizeTabTarget(source) {
   };
 }
 
+function normalizeDownloadElementPayload(source) {
+  const coordinates = normalizeActionCoordinates(source, 'download_element');
+  const selector = optionalText(source.selector, 4096);
+  if (!selector && !isProvided(coordinates.x)) {
+    throw automationError('AUTOMATION_PAYLOAD_INVALID', '元素下载必须提供 selector、ref 解析结果或 x/y 坐标');
+  }
+  const targetPath = optionalText(source.target_path ?? source.targetPath, 32768).trim();
+  if (!targetPath) throw automationError('AUTOMATION_PAYLOAD_INVALID', '元素下载缺少工作区目标路径');
+  return {
+    selector, ref: optionalText(source.ref, 128), ...coordinates,
+    targetPath, timeoutMs: boundedInteger(source.timeout_ms ?? source.timeout, 120000, 1000, 300000),
+  };
+}
+
 function normalizeKeyboardInput(source) {
   const parts = optionalText(source.key, 64).split('+').map((part) => part.trim()).filter(Boolean);
   const key = parts.length > 1 ? parts.pop() : (parts[0] || '');
@@ -175,6 +190,7 @@ function normalizeRuntimeAutomation(command, source = {}) {
   if (name === 'observe-page') return normalizeObservePayload(input);
   if (name === 'capture-screenshot') return normalizeScreenshotPayload(input);
   if (name === 'perform-action') return normalizeActionPayload(input);
+  if (name === 'download-element') return normalizeDownloadElementPayload(input);
   if (name === 'activate-tab') return normalizeTabTarget(input);
   return {};
 }
@@ -183,7 +199,7 @@ async function dispatchRuntimeAutomation(runtime, profileId, command, source) {
   const payload = normalizeRuntimeAutomation(command, source);
   return runtime.enqueueProfileOperation(profileId, () => (
     runtime.getReadyInstance(profileId).commandClient.send(command, payload, {
-      timeoutMs: command === 'perform-action' ? payload.timeoutMs + 2000 : 15000,
+      timeoutMs: ['perform-action', 'download-element'].includes(command) ? payload.timeoutMs + 2000 : 15000,
     })
   ));
 }

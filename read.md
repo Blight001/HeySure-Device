@@ -484,7 +484,7 @@ ConPTY，Linux/macOS openpty）→ 持续读输出发 `rt:data`，退出发 `rt:
 
 ```
 控制端（web） → 服务器 → 服务
-    rc:start   {deviceId, token}
+    rc:start   {deviceId, token, qualityPreset?}   smooth | balanced | clear
     rc:answer  {sessionId, sdp}
     rc:ice     {sessionId, candidate}
     rc:stop    {sessionId}

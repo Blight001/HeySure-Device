@@ -80,7 +80,8 @@ export const native = {
   // no getDisplayMedia / screen-share prompt). Returns an ArrayBuffer; a
   // zero-length buffer means capture was unavailable this tick. Raw bytes (vs a
   // base64 data URL) avoid ~33% IPC inflation and the slow string decode path.
-  rcCaptureFrame: (quality: number) => invoke<ArrayBuffer>('rc_capture_frame', { quality }),
+  rcCaptureFrame: (quality: number, maxDimension: number) =>
+    invoke<ArrayBuffer>('rc_capture_frame', { quality, maxDimension }),
   // 命令行远程（PTY）：为 rt:* 交互式终端提供本机 shell。data 字段是 PTY 字节的
   // base64。输出经 Tauri 事件 pty://data / pty://exit 异步推回（见 onPtyData/onPtyExit）。
   ptyOpen: (spec: { sessionId: string; shell?: string; cols?: number; rows?: number; cwd?: string }) =>

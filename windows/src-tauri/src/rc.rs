@@ -40,9 +40,10 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 /// Capture the primary monitor and return raw ``image/jpeg`` bytes, or ``None`` if
 /// capture is unavailable (no desktop session, locked screen, …). ``quality`` is
-/// the JPEG quality 1–100. Never panics — a failed frame is just a dropped frame,
-/// the stream continues with the previous one.
-pub fn capture_primary_jpeg(quality: u8) -> Option<Vec<u8>> {
+/// the JPEG quality 1–100; ``max_dimension`` optionally downsizes before JPEG
+/// encoding to reduce CPU, IPC and network pressure. Never panics — a failed
+/// frame is just a dropped frame, the stream continues with the previous one.
+pub fn capture_primary_jpeg(quality: u8, max_dimension: u32) -> Option<Vec<u8>> {
     let monitors = xcap::Monitor::all().ok()?;
     let monitor = monitors
         .iter()
@@ -60,6 +61,14 @@ pub fn capture_primary_jpeg(quality: u8) -> Option<Vec<u8>> {
     let mon_top = monitor.y().unwrap_or(0);
     draw_cursor_overlay(&mut rgba, mon_left, mon_top);
 
+    let rgba = if max_dimension > 0 && rgba.width().max(rgba.height()) > max_dimension {
+        let scale = max_dimension as f64 / rgba.width().max(rgba.height()) as f64;
+        let width = ((rgba.width() as f64 * scale).round() as u32).max(1);
+        let height = ((rgba.height() as f64 * scale).round() as u32).max(1);
+        image::imageops::resize(&rgba, width, height, image::imageops::FilterType::Triangle)
+    } else {
+        rgba
+    };
     let (width, height) = (rgba.width(), rgba.height());
     // JPEG has no alpha channel — drop it before encoding.
     let rgb = image::DynamicImage::ImageRgba8(rgba).to_rgb8();

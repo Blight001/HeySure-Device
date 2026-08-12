@@ -56,6 +56,13 @@ test('normalizes bounded native observe and action payloads', () => {
   assert.deepEqual(normalizeRuntimeAutomation('activate-tab', {
     url: ' https://example.test/page ', id: '2',
   }), { url: 'https://example.test/page', index: 2 });
+  assert.deepEqual(normalizeRuntimeAutomation('download-element', {
+    ref: 'e2', selector: 'img', x: 160.5, y: 55.25,
+    target_path: 'C:\\AI-Workspace\\.image.native-download', timeout_ms: 999999,
+  }), {
+    ref: 'e2', selector: 'img', x: 160.5, y: 55.25,
+    targetPath: 'C:\\AI-Workspace\\.image.native-download', timeoutMs: 300000,
+  });
 });
 
 test('rejects unknown native commands and actions', () => {
@@ -64,6 +71,8 @@ test('rejects unknown native commands and actions', () => {
   assert.throws(() => normalizeRuntimeAutomation('perform-action', { action: 'click', x: 10 }), /必须同时提供/);
   assert.throws(() => normalizeRuntimeAutomation('perform-action', { action: 'drag', x: 10, y: 10 }), /终点坐标/);
   assert.throws(() => normalizeRuntimeAutomation('perform-action', { action: 'set_selection' }), /start\/end/);
+  assert.throws(() => normalizeRuntimeAutomation('download-element', { selector: 'img' }), /目标路径/);
+  assert.throws(() => normalizeRuntimeAutomation('download-element', { target_path: 'C:\\image.png' }), /必须提供 selector/);
 });
 
 test('routes native automation only to a live managed Chromium process', async () => {
@@ -86,7 +95,8 @@ test('routes native automation only to a live managed Chromium process', async (
 test('fork automation commands are allowlisted without an automation extension', () => {
   assert.equal(ALLOWED_COMMANDS.has('open-tabs'), true);
   for (const command of [
-    'observe-page', 'capture-screenshot', 'perform-action', 'get-session-data', 'list-tabs', 'activate-tab',
+    'observe-page', 'capture-screenshot', 'perform-action', 'download-element',
+    'get-session-data', 'list-tabs', 'activate-tab',
   ]) {
     assert.equal(ALLOWED_COMMANDS.has(command), true);
   }

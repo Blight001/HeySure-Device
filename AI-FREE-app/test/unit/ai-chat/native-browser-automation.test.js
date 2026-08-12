@@ -47,6 +47,10 @@ function fixture() {
         return { success: true, action: args.action };
       },
       resolveUploadPaths: (paths) => paths,
+      downloadElement: async (args, trigger) => ({
+        ...(await trigger('C:\\AI-Workspace\\.image.native-download')),
+        success: true, action: args.action, absolute_path: 'C:\\AI-Workspace\\image.png',
+      }),
     },
   });
   return {
@@ -100,6 +104,24 @@ test('browser_file download uses the active page as the trusted relative URL con
   assert.equal(downloads[0].args.page_url, 'http://127.0.0.1:4173/');
   assert.equal(downloads[0].args.referer, 'http://127.0.0.1:4173/');
   assert.deepEqual(downloads[0].context, { pageUrl: 'http://127.0.0.1:4173/' });
+});
+
+test('browser_file download_element resolves an observed image and uses the Chromium download command', async () => {
+  const { calls, service, setAutomationHandler } = fixture();
+  setAutomationHandler(async (_pid, command) => ({ result: command === 'observe-page' ? {
+    success: true,
+    items: [{ id: 'e2', kind: 'media', tag: 'img', selector: 'img', x: 20, y: 30, width: 400, height: 300 }],
+  } : { success: true, resourceUrl: 'https://cdn.example.test/original.webp', tag: 'img' } }));
+  await service.dispatch('native:profile-a', 'browser_observe', { filter: 'media' });
+  const result = await service.dispatch('native:profile-a', 'browser_file', {
+    action: 'download_element', ref: 'e2', filename: 'original.webp',
+  });
+  assert.equal(result.absolute_path, 'C:\\AI-Workspace\\image.png');
+  assert.deepEqual(calls[1], ['automation', 42, 'download-element', {
+    action: 'download_element', ref: 'e2', filename: 'original.webp',
+    selector: 'img', x: 220, y: 180,
+    target_path: 'C:\\AI-Workspace\\.image.native-download',
+  }]);
 });
 
 test('observe and action dispatch directly to the Chromium runtime bridge', async () => {

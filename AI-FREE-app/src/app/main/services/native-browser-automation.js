@@ -234,6 +234,13 @@ class NativeBrowserAutomation {
       const result = await this.browserUpload(connection, args);
       return { ...result, action: 'upload' };
     }
+    if (action === 'download_element') {
+      if (!this.downloadService?.downloadElement) throw new Error('Chromium 元素下载服务不可用');
+      const target = this.resolveObservedTarget(connection, args);
+      return this.downloadService.downloadElement(args, (targetPath) => this.runtimeCommand(
+        connection, 'download-element', { ...target, target_path: targetPath },
+      ));
+    }
     if (!this.downloadService?.execute) throw new Error('AI 工作区下载服务不可用');
     if (action === 'download') {
       const response = await this.runtimeCommand(connection, 'get-session-data', {});

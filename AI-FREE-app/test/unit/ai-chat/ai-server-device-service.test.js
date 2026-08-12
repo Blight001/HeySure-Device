@@ -95,6 +95,23 @@ test('aifree 目录保留软件内置 MCP 的完整 schema 和一对一执行路
   }
 });
 
+test('HeySure 的 browser_file schema 额外暴露成员工作区 file_ref 输入', () => {
+  const catalog = normalizeToolCatalog({ tools: [{
+    name: 'browser_file',
+    description: '上传文件',
+    inputSchema: {
+      type: 'object',
+      properties: { action: { type: 'string' }, path: { type: 'string' } },
+      required: ['action'],
+    },
+  }] });
+  const schema = catalog.tools[0].input_schema;
+  assert.equal(schema.properties.file_ref.pattern, '^file_[a-f0-9]{32}$');
+  assert.equal(schema.properties.file_refs.maxItems, 5);
+  assert.deepEqual(schema.required, ['action']);
+  assert.match(catalog.tools[0].description, /HeySure.*file_ref/);
+});
+
 test('登录后注册 custom 设备并将派发任务恰好回一个终态', async () => {
   const socket = new FakeSocket();
   const calls = [];
@@ -137,6 +154,47 @@ test('登录后注册 custom 设备并将派发任务恰好回一个终态', asy
   assert.deepEqual(calls, [{ name: 'browser_action', args: { action: 'click' } }]);
   assert.equal(socket.sent.filter((entry) => entry.event === 'task:result').length, 1);
   assert.equal(service.status().registered, true);
+  service.stop();
+});
+
+test('HeySure browser_file 任务先物化 file_refs 再以本机 paths 调用 MCP', async () => {
+  const socket = new FakeSocket();
+  const calls = [];
+  const materialized = [];
+  const refs = [`file_${'a'.repeat(32)}`, `file_${'b'.repeat(32)}`];
+  const service = createAiServerDeviceService({
+    hasVipAccess: () => true,
+    fetch: async () => loginResponse(),
+    createSocket: () => socket,
+    getTools: () => ({ tools: [{
+      name: 'browser_file', description: '上传文件',
+      inputSchema: { type: 'object', properties: { action: { type: 'string' } }, required: ['action'] },
+    }] }),
+    materializeFileRefs: async (input) => {
+      materialized.push(input);
+      return ['C:/AI-Workspace/Incoming/task-refs/1-a.txt', 'C:/AI-Workspace/Incoming/task-refs/2-b.txt'];
+    },
+    callTool: async (name, args) => { calls.push({ name, args }); return { success: true }; },
+  });
+  await service.login({ server: 'https://heysure.example', account: 'alice', password: 'secret' });
+  await tick();
+  await socket.serverEmit('task:dispatch', {
+    taskId: 'task-refs', aiConfigId: 19, tool: 'aifree.browser+file',
+    args: { action: 'upload', file_refs: refs, selector: 'input[type=file]' },
+  });
+  await tick();
+
+  assert.deepEqual(materialized[0].refs, refs);
+  assert.equal(materialized[0].server, 'https://heysure.example');
+  assert.equal(materialized[0].aiConfigId, 19);
+  assert.deepEqual(calls, [{
+    name: 'browser_file',
+    args: {
+      action: 'upload', selector: 'input[type=file]',
+      paths: ['C:/AI-Workspace/Incoming/task-refs/1-a.txt', 'C:/AI-Workspace/Incoming/task-refs/2-b.txt'],
+    },
+  }]);
+  assert.equal(socket.sent.filter((entry) => entry.event === 'task:result').length, 1);
   service.stop();
 });
 

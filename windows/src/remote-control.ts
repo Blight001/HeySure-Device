@@ -23,6 +23,43 @@ import { fetchIceServers } from './api'
 
 type SignalSender = (event: string, payload: any) => void
 type RcLogger = (level: 'info' | 'warn' | 'error', message: string, data?: any) => void
+type RcQualityPreset = 'smooth' | 'balanced' | 'clear'
+
+interface RcQualityProfile {
+  fps: number
+  jpegQuality: number
+  maxDimension: number
+  maxBitrate: number
+  degradationPreference: RTCDegradationPreference
+  contentHint: string
+}
+
+const QUALITY_PROFILES: Record<RcQualityPreset, RcQualityProfile> = {
+  smooth: {
+    fps: 24,
+    jpegQuality: 55,
+    maxDimension: 1280,
+    maxBitrate: 2_000_000,
+    degradationPreference: 'maintain-framerate',
+    contentHint: 'motion',
+  },
+  balanced: {
+    fps: 20,
+    jpegQuality: 68,
+    maxDimension: 1600,
+    maxBitrate: 4_000_000,
+    degradationPreference: 'balanced',
+    contentHint: 'detail',
+  },
+  clear: {
+    fps: 20,
+    jpegQuality: 82,
+    maxDimension: 0,
+    maxBitrate: 12_000_000,
+    degradationPreference: 'maintain-resolution',
+    contentHint: 'detail',
+  },
+}
 
 // Fallback when the server config can't be resolved (STUN-only — no relay).
 const RC_ICE_SERVERS_FALLBACK: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
@@ -30,21 +67,8 @@ const RC_ICE_SERVERS_FALLBACK: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com
 let rcServerUrl = ''
 let rcToken = ''
 
-// Native screen-capture pacing. The frame path is capture(GDI)+JPEG-encode in
-// Rust → raw-bytes IPC → createImageBitmap+draw in the WebView. Moving off the
-// base64 data-URL path (no ~33% inflation, no string marshaling, and
-// createImageBitmap decodes faster/off-thread vs Image.decode) lets us run the
-// capture loop meaningfully faster than the old ~10fps ceiling.
-const CAPTURE_FPS = 20
-const FRAME_INTERVAL_MS = Math.round(1000 / CAPTURE_FPS)
-// JPEG quality of the *source* frame before WebRTC re-encodes it. 55 was visibly
-// soft on text; 82 keeps text/edges crisp at a modest byte cost (the bytes never
-// leave the machine — this hop is in-process IPC, not the network).
-const JPEG_QUALITY = 82
-// Cap the WebRTC video encoder well above the VP8 default so full-screen content
-// isn't starved into a blurry low-bitrate stream. WebRTC still adapts *down*
-// under real bandwidth pressure — this only lifts the artificial ceiling.
-const MAX_VIDEO_BITRATE = 12_000_000
+let rcQualityPreset: RcQualityPreset = 'balanced'
+let rcQualityProfile = QUALITY_PROFILES.balanced
 
 let rcPc: RTCPeerConnection | null = null
 let rcStream: MediaStream | null = null
@@ -76,15 +100,25 @@ async function drawFrame(): Promise<void> {
   if (!rcCanvas || !rcCtx) return
   let buf: ArrayBuffer
   try {
-    buf = await native.rcCaptureFrame(JPEG_QUALITY)
+    buf = await native.rcCaptureFrame(rcQualityProfile.jpegQuality, rcQualityProfile.maxDimension)
   } catch {
     return // transient capture failure — keep the previous frame
   }
   const bitmap = await decodeFrame(buf)
   if (!bitmap) return // empty/undecodable frame — keep the previous one
   if (!rcCanvas || !rcCtx) { bitmap.close(); return } // session ended mid-decode
-  // Later frames are scaled to the canvas set from the first frame, so a
-  // mid-session resolution change never disrupts the video track dimensions.
+  if (rcCanvas.width !== bitmap.width || rcCanvas.height !== bitmap.height) {
+    rcCanvas.width = bitmap.width
+    rcCanvas.height = bitmap.height
+    signal('rc:ready', {
+      sessionId: rcSessionId,
+      width: bitmap.width,
+      height: bitmap.height,
+      rotation: 0,
+    })
+  }
+  // The canvas follows the selected capture size; normalized pointer input is
+  // resolution-independent, so quality changes do not shift click positions.
   rcCtx.drawImage(bitmap, 0, 0, rcCanvas.width, rcCanvas.height)
   bitmap.close() // release the decoded frame promptly — one per tick adds up
 }
@@ -97,7 +131,8 @@ function scheduleCapture(): void {
     const t0 = performance.now()
     await drawFrame()
     if (!rcCapturing) return
-    const delay = Math.max(0, FRAME_INTERVAL_MS - (performance.now() - t0))
+    const frameIntervalMs = Math.round(1000 / rcQualityProfile.fps)
+    const delay = Math.max(0, frameIntervalMs - (performance.now() - t0))
     rcFrameTimer = setTimeout(() => { void tick() }, delay)
   }
   void tick()
@@ -151,13 +186,31 @@ async function tuneVideoEncoder(connection: RTCPeerConnection): Promise<void> {
   try {
     const params = sender.getParameters()
     if (!params.encodings || params.encodings.length === 0) params.encodings = [{}]
-    params.encodings[0].maxBitrate = MAX_VIDEO_BITRATE
-    params.encodings[0].maxFramerate = CAPTURE_FPS
-    params.degradationPreference = 'maintain-resolution'
+    params.encodings[0].maxBitrate = rcQualityProfile.maxBitrate
+    params.encodings[0].maxFramerate = rcQualityProfile.fps
+    params.degradationPreference = rcQualityProfile.degradationPreference
     await sender.setParameters(params)
   } catch (err: any) {
     log('warn', `视频编码参数设置失败（保持默认）：${err?.message || err}`)
   }
+}
+
+function normalizeQualityPreset(value: unknown): RcQualityPreset {
+  return value === 'smooth' || value === 'clear' ? value : 'balanced'
+}
+
+async function applyQualityPreset(value: unknown): Promise<void> {
+  const preset = normalizeQualityPreset(value)
+  rcQualityPreset = preset
+  rcQualityProfile = QUALITY_PROFILES[preset]
+  for (const track of rcStream?.getVideoTracks() || []) {
+    track.contentHint = rcQualityProfile.contentHint
+  }
+  if (rcPc) await tuneVideoEncoder(rcPc)
+  log(
+    'info',
+    `画面档位：${preset}（${rcQualityProfile.maxDimension || '原始分辨率'} / ${rcQualityProfile.fps} FPS / ${Math.round(rcQualityProfile.maxBitrate / 1_000_000)} Mbps）`,
+  )
 }
 
 async function rcStartSession(sessionId: string): Promise<void> {
@@ -171,7 +224,7 @@ async function rcStartSession(sessionId: string): Promise<void> {
   // into the WebRTC video track.
   let firstBuf: ArrayBuffer | null = null
   try {
-    firstBuf = await native.rcCaptureFrame(JPEG_QUALITY)
+    firstBuf = await native.rcCaptureFrame(rcQualityProfile.jpegQuality, rcQualityProfile.maxDimension)
   } catch (err: any) {
     log('error', `屏幕捕获失败：${err?.message || err}`)
   }
@@ -209,11 +262,13 @@ async function rcStartSession(sessionId: string): Promise<void> {
   const height = canvas.height
   // captureStream samples the canvas as we repaint it; start the paced loop that
   // keeps drawing fresh native frames into it.
-  rcStream = canvas.captureStream(CAPTURE_FPS)
+  // No fixed captureStream cap: the self-paced paint loop and sender parameters
+  // own the live frame-rate limit, which lets a preset change take effect now.
+  rcStream = canvas.captureStream()
   // contentHint 'detail' tells the WebRTC encoder this is a screen/text source:
   // preserve spatial sharpness over motion smoothness (the default camera-motion
   // heuristic smears static text — the main cause of the "blurry" complaint).
-  for (const track of rcStream.getVideoTracks()) track.contentHint = 'detail'
+  for (const track of rcStream.getVideoTracks()) track.contentHint = rcQualityProfile.contentHint
   rcCapturing = true
   scheduleCapture()
   log('info', `已捕获主屏 ${width}×${height}（原生捕获，无屏幕共享），建立 WebRTC 连接中…`)
@@ -250,6 +305,10 @@ async function rcStartSession(sessionId: string): Promise<void> {
     } catch {
       return // ignore malformed input frames
     }
+    if (payload.kind === 'quality') {
+      void applyQualityPreset(payload.preset)
+      return
+    }
     // Fire-and-forget: a bad event must not tear down the session.
     void native.rcInjectInput(payload).catch(() => {})
   }
@@ -281,6 +340,8 @@ export async function handleRemoteControlSignal(
   if (conn?.token) rcToken = conn.token
 
   if (event === 'rc:start') {
+    rcQualityPreset = normalizeQualityPreset(data?.qualityPreset)
+    rcQualityProfile = QUALITY_PROFILES[rcQualityPreset]
     await rcStartSession(sessionId)
     return
   }

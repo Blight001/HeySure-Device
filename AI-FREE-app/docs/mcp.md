@@ -103,7 +103,7 @@ Cookie 属于登录会话数据，不属于 `browser_environment.settings` 的�
 - 默认目录：`download` 写入安装目录下的 `AI-Workspace` 根目录；`save_session` 默认写入 `AI-Workspace/sessions`。
 - 子目录：`directory` 只接受 AI 工作区内相对路径，例如 `downloads/models`；拒绝绝对路径、`..` 逃逸和指向工作区外的链接目录。
 - 下载参数：`url`、`filename`、`media_type`、`transport`、`use_cookies`、`overwrite`、`timeout_ms`、`max_bytes`、`tab_id`。媒体下载应将 `browser_observe` 返回的 `category` 传给 `media_type`；`transport` 可取 `auto`、`browser`、`software`。
-- 上传参数：`path` 或 `paths` 指定本地文件，使用 `selector` 或 `ref` 定位页面文件输入控件；多文件可设置 `mode=open-multiple`。
+- 上传参数：本机调用使用 `path` 或 `paths` 指定 AI 工作区文件；HeySure 远程调用还可使用当前数字成员服务器工作区的 `file_ref` 或 `file_refs`。AI-FREE 会通过 HeySure 创建默认 5 分钟临时链接，下载并校验后物化到本机 `AI-Workspace/Incoming/<task_id>/`。两类参数不能混用。使用 `selector` 或 `ref` 定位页面文件输入控件；多文件可设置 `mode=open-multiple`。
 - 会话参数：`filename`、`directory`、`overwrite`、`tab_id`。保存结果只返回路径和 Cookie 数量，不把 Cookie 原文放入聊天结果。
 - Cookie 规则：`use_cookies` 默认开启，但只发送与目标 URL 域名、路径、Secure 属性和有效期匹配的 Cookie；重定向后会重新匹配，不向其它域泄漏。
 - 网络边界：禁止 localhost、`.local`、IPv4/IPv6 私网、链路本地、组播和保留地址。每次重定向都重新解析，并将实际连接固定到已审核 IP，防止 DNS 重绑定。

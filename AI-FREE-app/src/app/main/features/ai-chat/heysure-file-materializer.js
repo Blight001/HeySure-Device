@@ -17,7 +17,7 @@ function augmentHeySureBrowserFileTool(sourceName, tool) {
   const schema = tool.input_schema || { type: 'object', properties: {} };
   return {
     ...tool,
-    description: `${tool.description} HeySure 远程调用 upload 时也可传服务器工作区 file_ref/file_refs。`,
+    description: `${tool.description} HeySure 远程调用 upload 时也可传服务器工作区 file_ref/file_refs；download/download_element 默认将结果上传到成员工作区并返回 file_ref。`,
     input_schema: {
       ...schema,
       properties: {
@@ -28,6 +28,7 @@ function augmentHeySureBrowserFileTool(sourceName, tool) {
           items: { type: 'string', pattern: '^file_[a-f0-9]{32}$' },
           description: 'HeySure 当前成员工作区的多个文件引用',
         },
+        save_to_server: { type: 'boolean', description: '下载后是否上传到 HeySure 成员工作区，默认 true' },
       },
     },
   };

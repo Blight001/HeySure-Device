@@ -14,6 +14,7 @@ const { createBrowserAutomationBridge } = require('../services/browser-automatio
 const { createBrowserDownloadService } = require('../services/browser-download-service');
 const { createAiServerDeviceService } = require('../features/ai-chat/ai-server-device-service');
 const { createHeySureFileMaterializer } = require('../features/ai-chat/heysure-file-materializer');
+const { createHeySureFileUploader } = require('../features/ai-chat/heysure-file-uploader');
 const { createAiServerDeviceCredentialStore } = require('../features/ai-chat/ai-server-device-credential-store');
 const { createLicenseStore } = require('../services/license-store');
 const { createServerResolver } = require('../services/server-resolver');
@@ -204,6 +205,7 @@ function createCoreServices({ app, fs, path, BrowserWindow, safeStorage, getTabM
     getTools: () => browserAutomationBridge.listExternalMcpTools(),
     callTool: (...args) => browserAutomationBridge.callExternalMcpTool(...args),
     materializeFileRefs: createHeySureFileMaterializer({ sandboxDir: aiSandboxDir }),
+    uploadWorkspaceFile: createHeySureFileUploader({ sandboxDir: aiSandboxDir }),
     onStatus: (status) => sendToSide('ai-server-device-status', status),
     credentialStore: aiServerCredentialStore,
     hasVipAccess: () => resolveVipAccess(licenseCache.getSnapshot()).isVip,

@@ -9,6 +9,7 @@ const {
   augmentHeySureBrowserFileTool,
   prepareHeySureBrowserFileArgs,
 } = require('./heysure-file-materializer');
+const { attachHeySureDownloadedFile } = require('./heysure-file-uploader');
 
 const DEFAULT_HEYSURE_SERVER = 'http://49.234.181.190:58150';
 const LEGACY_DEFAULT_HEYSURE_SERVER = 'http://49.234.181.190:3000';
@@ -131,6 +132,7 @@ class AiServerDeviceService {
     this.getTools = options.getTools || (() => ({ tools: [] }));
     this.callTool = options.callTool || (() => { throw new Error('MCP 执行器尚未就绪'); });
     this.materializeFileRefs = options.materializeFileRefs || null;
+    this.uploadWorkspaceFile = options.uploadWorkspaceFile;
     this.credentialStore = options.credentialStore || null;
     this.hasVipAccess = options.hasVipAccess || (() => false);
     this.onStatus = options.onStatus || (() => {});
@@ -377,7 +379,14 @@ class AiServerDeviceService {
         server: this.credentials?.server,
         token: this.token,
       });
-      const result = await this.callTool(sourceName, toolArgs);
+      const localResult = await this.callTool(sourceName, toolArgs);
+      const result = await attachHeySureDownloadedFile({
+        sourceName, args: task.args, result: localResult,
+        upload: this.uploadWorkspaceFile,
+        server: this.credentials?.server, token: this.token,
+        aiConfigId: task.aiConfigId ?? this.state.aiConfigId,
+        sessionId: task.sessionId,
+      });
       const payload = {
         taskId, deviceId: this.serviceId, success: true, tool,
         result, summary: taskSummary(tool, result),

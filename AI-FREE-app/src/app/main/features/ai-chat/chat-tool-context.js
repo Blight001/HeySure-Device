@@ -48,7 +48,7 @@ function selectedWindowTools(windowTools, initialMessages) {
 
 function appendDownloadWorkflow(workflow, available) {
   if (!available.has('browser_observe') || !available.has('browser_file')) return;
-  workflow.push('用户要求下载页面上可见的图片元素时，先用 browser_observe filter:"media" 获取 ref，再调用 browser_file action=download_element 并传 ref（可选 filename），由当前 Chromium Profile 直接保存 img.currentSrc；不要找下载按钮或用截图代替。普通文件链接则从 item.downloadUrl/downloadLinks[].url 取得真实地址后调用 action=download；不得根据链接文字猜测地址');
+  workflow.push('用户要求下载页面上可见的图片元素时，先主动调用 browser_observe filter:"media" 获取 ref，再调用 browser_file action=download_element 并传 ref（可选 filename），由当前 Chromium Profile 直接保存 img.currentSrc；不要找下载按钮或用截图代替。普通文件链接则从 item.downloadUrl/downloadLinks[].url 取得真实地址后调用 action=download，下载图片/视频/音频链接时把条目的 category 传给 media_type，使用当前 Chromium 登录态和网络环境；不得根据链接文字猜测地址');
 }
 
 function appendOptionalWorkflows(workflow, available) {

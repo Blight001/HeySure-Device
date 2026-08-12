@@ -243,6 +243,21 @@ test('fork rich text editing uses native drag, complete key maps and real select
   assert.match(patch, /repeat/);
 });
 
+test('fork element download uses the current profile DownloadManager and a workspace-only path', () => {
+  const patchDirectory = path.join(__dirname, '../../../native/chromium-fork/patches');
+  const series = fs.readFileSync(path.join(patchDirectory, 'series'), 'utf8');
+  const patch = fs.readFileSync(
+    path.join(patchDirectory, '0034-ai-free-download-element.patch'), 'utf8',
+  );
+  assert.match(series, /0033-ai-free-rich-text-editing\.patch\s+0034-ai-free-download-element\.patch/);
+  assert.match(patch, /image\.currentSrc\|\|image\.src/);
+  assert.match(patch, /CreateDownloadForWebContentsMainFrame/);
+  assert.match(patch, /GetSwitchValuePath/);
+  assert.match(patch, /download-default-directory/);
+  assert.match(patch, /set_file_path/);
+  assert.doesNotMatch(patch, /capture-screenshot/);
+});
+
 test('fork observe highlights stay in the native event-transparent UI layer', () => {
   const patchDirectory = path.join(__dirname, '../../../native/chromium-fork/patches');
   const series = fs.readFileSync(path.join(patchDirectory, 'series'), 'utf8');

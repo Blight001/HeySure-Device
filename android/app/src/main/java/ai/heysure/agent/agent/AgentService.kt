@@ -8,6 +8,7 @@ import ai.heysure.agent.executor.ToolCatalog
 import ai.heysure.agent.remote.RemoteControlManager
 import ai.heysure.agent.notifications.WorkflowConfirmationNotifier
 import ai.heysure.agent.notifications.UserMessageNotifier
+import ai.heysure.agent.notifications.HuaweiPushRegistration
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -191,6 +192,7 @@ class AgentService : Service() {
     private fun ensureAgent() {
         if (agent != null) return
         if (!settings.isLoggedIn) return
+        HuaweiPushRegistration.requestAndSync(applicationContext)
         val catalog = ToolCatalog(capture)
         val executor = TaskExecutor(catalog)
         // The manager's signal sender reads `agent` lazily, so it resolves once

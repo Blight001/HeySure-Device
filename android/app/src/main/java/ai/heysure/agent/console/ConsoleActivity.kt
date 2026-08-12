@@ -1,6 +1,7 @@
 package ai.heysure.agent.console
 
 import ai.heysure.agent.MainActivity
+import ai.heysure.agent.BuildConfig
 import ai.heysure.agent.R
 import ai.heysure.agent.agent.AgentService
 import ai.heysure.agent.agent.ServerApi
@@ -292,7 +293,7 @@ class ConsoleActivity : AppCompatActivity() {
             displayZoomControls = false
             setSupportZoom(false)
             offscreenPreRaster = true
-            userAgentString = "$userAgentString HeySureAndroid/2.1.1"
+            userAgentString = "$userAgentString HeySureAndroid/${BuildConfig.VERSION_NAME}"
         }
         CookieManager.getInstance().apply {
             setAcceptCookie(true)

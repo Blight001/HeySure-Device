@@ -23,6 +23,11 @@
     <uses-permission android:name="android.permission.WRITE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
 
+    <!-- HMS Core is discovered through package visibility on Android 11+. -->
+    <queries>
+        <package android:name="com.huawei.hwid" />
+    </queries>
+
     <application
         android:allowBackup="true"
         android:usesCleartextTraffic="true"
@@ -30,6 +35,10 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.HeySureAgent">
+
+        <meta-data
+            android:name="com.huawei.hms.client.appid"
+            android:value="appid=${huaweiPushAppId}" />
 
         <activity
             android:name=".MainActivity"
@@ -63,6 +72,16 @@
             android:name=".agent.AgentService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+
+        <!-- Huawei's system process can start this service after the app process
+             has been removed, primarily to rotate and re-register the push token. -->
+        <service
+            android:name=".notifications.HuaweiPushService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.huawei.push.action.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
 
         <!-- Performs tap/swipe/back/home via dispatchGesture + global actions.
              The user must enable it once in Settings > Accessibility. -->

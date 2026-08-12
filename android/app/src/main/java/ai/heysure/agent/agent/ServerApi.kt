@@ -152,6 +152,36 @@ object ServerApi {
         }
     }
 
+    fun registerHuaweiPushEndpoint(
+        serverUrl: String,
+        token: String,
+        deviceId: String,
+        pushToken: String,
+        appVersion: String,
+    ) {
+        val base = normalizeBaseUrl(serverUrl)
+        val body = JSONObject()
+            .put("provider", "huawei")
+            .put("push_token", pushToken)
+            .put("app_version", appVersion)
+        requestJson(
+            "$base/api/user-notifications/push-endpoints/${encodePath(deviceId)}",
+            method = "PUT",
+            body = body,
+            token = token,
+        )
+    }
+
+    fun unregisterHuaweiPushEndpoint(serverUrl: String, token: String, deviceId: String) {
+        val base = normalizeBaseUrl(serverUrl)
+        requestJson(
+            "$base/api/user-notifications/push-endpoints/${encodePath(deviceId)}?provider=huawei",
+            method = "DELETE",
+            body = null,
+            token = token,
+        )
+    }
+
     private fun getJson(urlStr: String, token: String?): JSONObject {
         val conn = (URL(urlStr).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
@@ -170,17 +200,27 @@ object ServerApi {
         }
     }
 
-    private fun postJson(urlStr: String, body: JSONObject, token: String?): JSONObject {
+    private fun postJson(urlStr: String, body: JSONObject, token: String?): JSONObject =
+        requestJson(urlStr, "POST", body, token)
+
+    private fun requestJson(
+        urlStr: String,
+        method: String,
+        body: JSONObject?,
+        token: String?,
+    ): JSONObject {
         val conn = (URL(urlStr).openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
+            requestMethod = method
             connectTimeout = 10_000
             readTimeout = 15_000
-            doOutput = true
-            setRequestProperty("Content-Type", "application/json")
+            doOutput = body != null
+            if (body != null) setRequestProperty("Content-Type", "application/json")
             token?.let { setRequestProperty("Authorization", "Bearer $it") }
         }
         try {
-            conn.outputStream.use { it.write(body.toString().toByteArray()) }
+            body?.let { value ->
+                conn.outputStream.use { it.write(value.toString().toByteArray()) }
+            }
             val ok = conn.responseCode in 200..299
             val stream = if (ok) conn.inputStream else conn.errorStream
             val text = stream?.bufferedReader()?.use(BufferedReader::readText).orEmpty()
@@ -193,4 +233,7 @@ object ServerApi {
             conn.disconnect()
         }
     }
+
+    private fun encodePath(value: String): String =
+        java.net.URLEncoder.encode(value, Charsets.UTF_8.name()).replace("+", "%20")
 }

@@ -6,6 +6,8 @@ Android App 同时承担两个彼此独立、可并行运行的角色：
    `web/` 的 Vue + Phaser 生产构建，不在 Android 工程中复制控制台 UI 组件。
 2. **设备 Agent**：登录后连接后端并注册为 endpoint，接收任务后执行点击、滑动、
    长按、系统导航、文本输入、截屏和录屏；切换到控制台或退到后台时仍由前台服务保活。
+3. **华为后台消息兜底**：接入 HMS Push Kit。即使 App 进程被系统清理，也由华为系统长连接
+   接收数字成员消息；在线时仍保留 Socket.IO 实时通知。
 
 启动 App 默认进入数字社会控制台。首次使用或登录态失效时自动进入原生 Agent 登录/授权页；
 控制台的「设备」入口是可拖拽气泡：松手后吸附最近的左右边缘并半收起；点击展开
@@ -110,6 +112,23 @@ gradle wrapper                   # 生成 gradlew / gradle-wrapper.jar（需本�
 # Windows 也可直接：
 build-apk.bat debug
 ```
+
+### 华为 Push Kit 构建配置
+
+先在 AppGallery Connect 创建 Android 应用（包名固定为 `ai.heysure.agent`）、启用 Push Kit，
+并登记实际 APK 签名证书的 SHA-256。构建机只需要非敏感 App ID：
+
+```bash
+# 环境变量或 Gradle property 二选一
+HEYSURE_HUAWEI_PUSH_APP_ID=你的AppID
+```
+
+服务端在根目录 `.env` 配置 `HEYSURE_HUAWEI_PUSH_CLIENT_ID` 和
+`HEYSURE_HUAWEI_PUSH_CLIENT_SECRET`。Client Secret 只能保存在服务端，禁止写进 Android
+工程、APK、日志或聊天内容。未配置时 HMS 推送会安全停用，登录、Socket.IO 和前台服务照常工作。
+
+发布版必须使用稳定 release keystore；更换签名后需同步更新 AppGallery Connect 的证书指纹，
+否则手机能安装但无法取得有效 Push Token。
 
 Gradle 任务关系为 `preBuild → syncHeySureWeb → buildHeySureWeb → npm run build`。当 `web/`
 源码和配置没有变化时会命中 Gradle up-to-date，不会重复构建；缺少 `deploy/web/node_modules` 时会先

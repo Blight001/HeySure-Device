@@ -270,7 +270,7 @@ class SocketAgent(
             put("os", "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
             put("capabilities", JSONArray(capabilities()))
             put("toolDefs", toolDefs())
-            put("version", "2.1.1")
+            put("version", ai.heysure.agent.BuildConfig.VERSION_NAME)
             put("token", settings.authToken)
             put("lifecycle", "registered")
             // Server classifies this as a mobile endpoint; routing treats it as a

@@ -9,6 +9,7 @@ import ai.heysure.agent.agent.ServerApi
 import ai.heysure.agent.agent.Settings
 import ai.heysure.agent.accessibility.GestureAccessibilityService
 import ai.heysure.agent.console.ConsoleActivity
+import ai.heysure.agent.notifications.HuaweiPushRegistration
 import ai.heysure.agent.databinding.ActivityMainBinding
 import android.content.Context
 import android.content.Intent
@@ -252,6 +253,11 @@ class MainActivity : AppCompatActivity() {
     private fun doLogout() {
         permissionDialog?.dismiss()
         permissionDialog = null
+        HuaweiPushRegistration.unregisterAsync(
+            serverUrl = settings.serverUrl,
+            authToken = settings.authToken,
+            deviceId = settings.deviceId,
+        )
         settings.clearSession()
         startService(Intent(this, AgentService::class.java).apply { action = AgentService.ACTION_STOP })
         renderStatus(DeviceStatus.DISCONNECTED, null)

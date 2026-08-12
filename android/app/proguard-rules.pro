@@ -12,3 +12,6 @@
 -dontwarn org.json.**
 
 -keepattributes *Annotation*, Signature, InnerClasses, EnclosingMethod
+# HMS Push Kit service entry points are instantiated by HMS Core.
+-keep class ai.heysure.agent.notifications.HuaweiPushService { *; }
+-keep class com.huawei.hms.** { *; }

@@ -13,6 +13,9 @@ val npmCommand = if (System.getProperty("os.name").startsWith("Windows", ignoreC
 } else {
     "npm"
 }
+val huaweiPushAppId = providers.gradleProperty("HEYSURE_HUAWEI_PUSH_APP_ID").orNull
+    ?: System.getenv("HEYSURE_HUAWEI_PUSH_APP_ID")
+    ?: ""
 
 val installWebDependencies by tasks.registering(Exec::class) {
     group = "heysure"
@@ -59,8 +62,10 @@ android {
         applicationId = "ai.heysure.agent"
         minSdk = 26          // Android 8.0: AccessibilityService.dispatchGesture()
         targetSdk = 34
-        versionCode = 4
-        versionName = "2.1.1"
+        versionCode = 5
+        versionName = "2.2.0"
+        buildConfigField("String", "HUAWEI_PUSH_APP_ID", "\"${huaweiPushAppId.replace("\"", "\\\"")}\"")
+        manifestPlaceholders["huaweiPushAppId"] = huaweiPushAppId
     }
 
     signingConfigs {
@@ -106,6 +111,7 @@ android {
     }
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 
     sourceSets.getByName("main").assets.srcDir(generatedWebAssetsDir)
@@ -122,6 +128,7 @@ dependencies {
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     implementation("androidx.lifecycle:lifecycle-service:2.8.4")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation("com.huawei.hms:push:6.13.0.301")
 
     // Same Socket.IO protocol the Electron/extension shells speak, so the server
     // needs no separate transport for Android. Exclude the bundled org.json so we

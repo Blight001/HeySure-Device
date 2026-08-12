@@ -55,6 +55,11 @@ class Settings(context: Context) {
         get() = prefs.getString(KEY_USER_PASSWORD, "") ?: ""
         set(value) = prefs.edit().putString(KEY_USER_PASSWORD, value).apply()
 
+    /** HMS Push Kit registration token. It is not an auth credential. */
+    var huaweiPushToken: String
+        get() = prefs.getString(KEY_HUAWEI_PUSH_TOKEN, "") ?: ""
+        set(value) = prefs.edit().putString(KEY_HUAWEI_PUSH_TOKEN, value).apply()
+
     /** Default true so cold starts keep account/password for silent re-login. */
     var rememberLogin: Boolean
         get() = prefs.getBoolean(KEY_REMEMBER_LOGIN, true)
@@ -171,6 +176,7 @@ class Settings(context: Context) {
         const val KEY_USER_AVATAR = "userAvatar"
         const val KEY_USER_ACCOUNT = "userAccount"
         const val KEY_USER_PASSWORD = "userPassword"
+        const val KEY_HUAWEI_PUSH_TOKEN = "huaweiPushToken"
         const val KEY_REMEMBER_LOGIN = "rememberLogin"
         const val KEY_DEVICE_ID = "deviceId"
         const val KEY_KEEP_AWAKE = "keepScreenAwake"

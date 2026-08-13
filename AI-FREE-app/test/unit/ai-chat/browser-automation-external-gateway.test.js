@@ -44,11 +44,33 @@ function createFixture(root, overrides = {}) {
     listConnections: () => connections,
     getActiveConnectionId: overrides.getActiveConnectionId,
     getAccess: overrides.getAccess || (() => true),
+    overviewTool: overrides.overviewTool,
+    getBrowserOverview: overrides.getBrowserOverview,
     logger: { log() {}, warn() {} },
   });
   gateway.configure({ getConnections: () => connections, getWindowTools: () => softwareTools });
   return { calls, connections, gateway };
 }
+
+test('browser overview is globally callable without a selected or open browser window', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-free-external-mcp-overview-'));
+  try {
+    const overview = { success: true, action: 'overview', browser_records: [], open_browsers: [] };
+    const { gateway } = createFixture(root, {
+      connections: [],
+      overviewTool: {
+        name: 'browser_control', description: '读取完整状态',
+        input_schema: { type: 'object', properties: { action: { type: 'string' } } },
+      },
+      getBrowserOverview: async () => overview,
+    });
+
+    assert.equal(gateway.listTools().tools.some((tool) => tool.name === 'browser_control'), true);
+    assert.deepEqual(await gateway.callTool('browser_control', { action: 'overview' }), overview);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test('external gateway without a descriptor path does not create a cwd temp file', () => {
   const gateway = createBrowserAutomationExternalGateway({ getAccess: () => true });

@@ -101,6 +101,17 @@ function sanitizeDispatchArgs(source = {}) {
   return args;
 }
 
+function addOverviewTool(tools, tool) {
+  if (!tool) return;
+  const overview = addBrowserRouting(tool);
+  tools.set(overview.name, overview);
+}
+
+function isOverviewCall(toolName, args) {
+  return toolName === 'browser_control'
+    && String(args.action || '').trim().toLowerCase() === 'overview';
+}
+
 class BrowserAutomationExternalGateway {
   constructor(options = {}) {
     this.options = options;
@@ -179,6 +190,7 @@ class BrowserAutomationExternalGateway {
   listTools() {
     this.assertAccess();
     const tools = new Map();
+    addOverviewTool(tools, this.options.overviewTool);
     for (const tool of this.getWindowTools?.()?.tools || []) {
       const normalized = normalizeSoftwareTool(tool);
       if (normalized.name) tools.set(normalized.name, normalized);
@@ -228,6 +240,9 @@ class BrowserAutomationExternalGateway {
     this.assertAccess();
     const toolName = String(name || '').trim();
     const args = rawArgs && typeof rawArgs === 'object' && !Array.isArray(rawArgs) ? { ...rawArgs } : {};
+    if (isOverviewCall(toolName, args)) {
+      return this.options.getBrowserOverview(sanitizeDispatchArgs(args));
+    }
     const windowTools = this.getWindowTools?.();
     if (windowTools?.has?.(toolName)) {
       const result = await windowTools.execute(toolName, args);

@@ -288,6 +288,24 @@ test('fork observe classifies obfuscated media and returns direct image links', 
   assert.match(patch, /item\.downloadUrl=downloadable/);
   assert.match(patch, /kind:i\.kind/);
   assert.match(patch, /mediaType:i\.mediaType/);
+  assert.match(patch, /requiresFileUpload:true/);
+});
+
+test('fork takeover makes mutations explicit and globally suppresses blocking dialogs', () => {
+  const patchDirectory = path.join(__dirname, '../../../native/chromium-fork/patches');
+  const series = fs.readFileSync(path.join(patchDirectory, 'series'), 'utf8');
+  const patch = fs.readFileSync(
+    path.join(patchDirectory, '0037-ai-free-mcp-modal-guard.patch'), 'utf8',
+  );
+  assert.match(series, /0036-ai-free-observe-media-links\.patch\s+0037-ai-free-mcp-modal-guard\.patch/);
+  assert.match(patch, /SetAiFreeTakeover/);
+  assert.match(patch, /BROWSER_TAKEOVER_REQUIRED/);
+  assert.match(patch, /TakeoverBorder/);
+  assert.match(patch, /purple-glow/);
+  assert.match(patch, /SetCanProcessEventsWithinSubtree\(false\)/);
+  assert.match(patch, /HandleJavaScriptDialog\(web_contents\(\), false, nullptr\)/);
+  assert.match(patch, /selection->takeover_active\(\)/);
+  assert.doesNotMatch(patch, /^\+.*RunJavaScriptDialog/m);
 });
 
 test('fork observe highlights stay in the native event-transparent UI layer', () => {

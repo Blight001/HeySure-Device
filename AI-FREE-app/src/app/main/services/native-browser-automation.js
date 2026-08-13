@@ -2,11 +2,13 @@
 
 const path = require('path');
 const { fileURLToPath } = require('url');
+const { createBrowserOverview } = require('./browser-overview-service');
 const { NATIVE_BROWSER_TOOL_DEFINITIONS } = require('./native-browser-tool-definitions');
 
 const CONNECTION_PREFIX = 'native:';
 const READY_STATUSES = new Set(['ready', 'hidden']);
 const RETRYABLE_WAIT_ERRORS = new Set(['INPUT_TARGET_UNAVAILABLE', 'WEB_CONTENTS_UNAVAILABLE']);
+const FILE_CHOOSER_ACTIONS = new Set(['click', 'double_click']);
 
 function text(value) { return String(value == null ? '' : value).trim(); }
 
@@ -26,13 +28,97 @@ function observedCenter(item) {
   return nonNegativePoint(x + (width / 2), y + (height / 2));
 }
 
+function observedMetadata(item) {
+  const tag = text(item?.tag).toLowerCase();
+  const inputType = text(item?.inputType).toLowerCase();
+  const requiresFileUpload = item?.requiresFileUpload === true
+    || (tag === 'input' && inputType === 'file');
+  return {
+    ...(tag ? { observedTag: tag } : {}),
+    ...(inputType ? { observedInputType: inputType } : {}),
+    ...(requiresFileUpload ? { requiresFileUpload: true } : {}),
+  };
+}
+
 function observedTarget(item) {
   const id = text(item?.id);
   if (!id) return null;
   const selector = text(item?.selector);
   const point = observedCenter(item);
   if (!selector && !point) return null;
-  return [id, { ...(selector ? { selector } : {}), ...(point || {}) }];
+  return [id, {
+    ...(selector ? { selector } : {}), ...(point || {}),
+    ...observedMetadata(item),
+  }];
+}
+
+function runtimeTarget(target) {
+  const {
+    observedTag: _observedTag,
+    observedInputType: _observedInputType,
+    requiresFileUpload: _requiresFileUpload,
+    ...input
+  } = target;
+  return input;
+}
+
+function selectorTargetsFileInput(value) {
+  const selector = text(value).toLowerCase();
+  return /(^|[\s,>+~])input[^,]*\[type\s*=\s*["']?file["']?\s*\]/.test(selector);
+}
+
+function fileUploadRequired(input) {
+  if (!FILE_CHOOSER_ACTIONS.has(text(input.action).toLowerCase())) return null;
+  if (input.requiresFileUpload !== true && !selectorTargetsFileInput(input.selector)) return null;
+  return {
+    success: false,
+    action: text(input.action).toLowerCase(),
+    errorCode: 'FILE_UPLOAD_REQUIRED',
+    error: '已阻止打开系统文件选择窗口；此操作需要先附带文件。请调用 browser_file action=upload，并提供 AI-Workspace 内的 path 或 paths 以及当前 selector/ref。',
+    requiresFile: true,
+    suggestedTool: 'browser_file',
+    suggestedAction: 'upload',
+    selector: text(input.selector),
+    ref: text(input.ref),
+  };
+}
+
+function isReadOnlyTool(tool, args) {
+  const action = text(args.action).toLowerCase();
+  if (['browser_observe', 'browser_screenshot', 'browser_wait', 'browser_control'].includes(tool)) return true;
+  if (tool === 'browser_tab') return action === 'list';
+  if (tool === 'browser_file') return ['info', 'save_session'].includes(action);
+  if (tool === 'manage_card') return ['rules', 'list', 'get'].includes(action);
+  return false;
+}
+
+function takeoverRequired(tool, args) {
+  return {
+    success: false,
+    errorCode: 'BROWSER_TAKEOVER_REQUIRED',
+    error: '浏览器当前为只读模式。请先调用 browser_control action=acquire 正式接管页面；完成后调用 action=release。',
+    requestedTool: tool,
+    requestedAction: text(args.action).toLowerCase(),
+    takeoverActive: false,
+    suggestedTool: 'browser_control',
+    suggestedAction: 'acquire',
+  };
+}
+
+function runtimeUpdateRequired(action) {
+  return {
+    success: false,
+    action,
+    errorCode: 'BROWSER_RUNTIME_UPDATE_REQUIRED',
+    error: '当前浏览器仍是旧版 Chromium Runtime，不支持正式接管。服务器重启不会更新本地浏览器内核；请重新构建并替换 resources/chromium 后，完全退出并重启 AI-FREE-app。',
+    takeoverActive: false,
+    readOnly: true,
+  };
+}
+
+function isOldTakeoverRuntime(value) {
+  return text(value?.code || value?.errorCode) === 'COMMAND_NOT_ALLOWED'
+    || text(value?.message || value?.error).includes('Runtime Bridge 命令不在白名单');
 }
 
 function normalizeToolName(value) {
@@ -113,7 +199,10 @@ class NativeBrowserAutomation {
     this.executeCardTool = options.executeCardTool;
     this.downloadService = options.browserDownloadService;
     this.cardService = options.cardService || null;
+    this.workspaceDir = options.workspaceDir;
+    this.getBrowserRecords = options.getBrowserRecords;
     this.observeTargets = new Map();
+    this.takeoverConnections = new Set();
   }
 
   listConnections() {
@@ -141,7 +230,11 @@ class NativeBrowserAutomation {
 
   async runtimeCommand(connection, command, input = {}) {
     const response = await this.runtime.dispatchAutomationByProcessId(connection.browserProcessId, command, input);
-    return response?.result || response || {};
+    const result = response?.result || response || {};
+    if (result?.errorCode === 'BROWSER_TAKEOVER_REQUIRED') {
+      this.takeoverConnections.delete(connection.id);
+    }
+    return result;
   }
 
   async browserTab(connection, args) {
@@ -158,6 +251,7 @@ class NativeBrowserAutomation {
         ? await this.runtimeCommand(connection, 'activate-tab', target)
         : (await this.runtimeCommand(connection, 'list-tabs')).activeTab;
       await this.runtime.focus(profileId, 'chromium');
+      this.takeoverConnections.delete(connection.id);
       return { success: true, action, ...switched };
     }
     if (action === 'reload') {
@@ -169,6 +263,7 @@ class NativeBrowserAutomation {
     else if (action === 'navigate') {
       await this.runtime.openTabs(profileId, 'chromium', [url]);
       await this.runtime.focus(profileId, 'chromium');
+      this.takeoverConnections.delete(connection.id);
     }
     else throw new Error(`browser_tab 不支持的原生操作: ${action || '(空)'}`);
     return { success: true, action, id: profileId, url, cardStep: { name: `打开 ${new URL(url).hostname}`, type: 'navigate', url } };
@@ -177,11 +272,56 @@ class NativeBrowserAutomation {
   async browserAction(connection, args) {
     const input = this.resolveObservedTarget(connection, args);
     if (text(input.action) === 'upload_file') throw new Error('文件上传请使用 browser_file action=upload');
-    return this.runtimeCommand(connection, 'perform-action', input);
+    const blocked = fileUploadRequired(input);
+    if (blocked) return blocked;
+    return this.runtimeCommand(connection, 'perform-action', runtimeTarget(input));
+  }
+
+  async browserControl(connection, args) {
+    const action = text(args.action || 'status').toLowerCase();
+    if (action === 'overview') return this.browserOverview(args);
+    let result;
+    try {
+      result = await this.runtimeCommand(connection, 'automation-takeover', { action });
+    } catch (error) {
+      if (!isOldTakeoverRuntime(error)) throw error;
+      this.takeoverConnections.delete(connection.id);
+      return runtimeUpdateRequired(action);
+    }
+    if (isOldTakeoverRuntime(result)) {
+      this.takeoverConnections.delete(connection.id);
+      return runtimeUpdateRequired(action);
+    }
+    if (result?.takeoverActive === true) this.takeoverConnections.add(connection.id);
+    else this.takeoverConnections.delete(connection.id);
+    return result;
+  }
+
+  browserOverview(args = {}) {
+    const connections = this.listConnections();
+    return createBrowserOverview({
+      connections,
+      records: this.getBrowserRecords?.() || [],
+      workspaceDir: this.workspaceDir,
+      listTabs: (connection) => this.runtimeCommand(connection, 'list-tabs'),
+    }, args);
+  }
+
+  dispatchBasicTool(connection, tool, input) {
+    if (tool === 'browser_observe') return this.browserObserve(connection, input);
+    if (tool === 'browser_screenshot') return this.runtimeCommand(connection, 'capture-screenshot', input);
+    if (tool === 'browser_action') return this.browserAction(connection, input);
+    if (tool === 'browser_wait') return this.browserWait(connection, input);
+    if (tool === 'browser_tab') return this.browserTab(connection, input);
+    if (tool === 'browser_file') return this.browserFile(connection, input);
+    if (tool === 'browser_control') return this.browserControl(connection, input);
+    return null;
   }
 
   async browserUpload(connection, args) {
-    const input = this.resolveObservedTarget(connection, { ...args, action: 'upload_file' });
+    const input = runtimeTarget(this.resolveObservedTarget(
+      connection, { ...args, action: 'upload_file' },
+    ));
     if (!this.downloadService?.resolveUploadPaths) throw new Error('AI 工作区文件服务不可用');
     const requested = Array.isArray(args.paths) ? args.paths : [args.path].filter(Boolean);
     const paths = this.downloadService.resolveUploadPaths(requested);
@@ -250,7 +390,7 @@ class NativeBrowserAutomation {
 
   async browserDownloadElement(connection, args) {
     if (!this.downloadService?.downloadElement) throw new Error('Chromium 元素下载服务不可用');
-    const target = this.resolveObservedTarget(connection, args);
+    const target = runtimeTarget(this.resolveObservedTarget(connection, args));
     return this.downloadService.downloadElement(args, (targetPath) => this.runtimeCommand(
       connection, 'download-element', { ...target, target_path: targetPath },
     ));
@@ -291,12 +431,11 @@ class NativeBrowserAutomation {
     const connection = this.requireConnection(connectionId);
     const input = args && typeof args === 'object' ? args : {};
     const toolName = normalizeToolName(tool);
-    if (toolName === 'browser_observe') return this.browserObserve(connection, input);
-    if (toolName === 'browser_screenshot') return this.runtimeCommand(connection, 'capture-screenshot', input);
-    if (toolName === 'browser_action') return this.browserAction(connection, input);
-    if (toolName === 'browser_wait') return this.browserWait(connection, input);
-    if (toolName === 'browser_tab') return this.browserTab(connection, input);
-    if (toolName === 'browser_file') return this.browserFile(connection, input);
+    if (!isReadOnlyTool(toolName, input) && !this.takeoverConnections.has(connection.id)) {
+      return takeoverRequired(toolName, input);
+    }
+    const basicResult = this.dispatchBasicTool(connection, toolName, input);
+    if (basicResult) return basicResult;
     if (toolName === 'manage_card' && this.cardService?.execute) {
       return this.cardService.execute(input, {
         timeoutMs: options.timeoutMs,

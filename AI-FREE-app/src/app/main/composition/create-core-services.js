@@ -23,6 +23,7 @@ const { createRuntimeHelpers } = require('../services/runtime-helpers');
 const { createExtensionManager } = require('../services/extension-manager');
 const { getHardwareFingerprint } = require('../utils/hardware-js');
 const { resolveVipAccess } = require('../utils/vip-access');
+const { readBrowserHistorySafe, serializeBrowserHistory } = require('../features/browser/browser-history-service');
 const { extractValidationState, getValidationFailureMessage } = require('../utils/license-response');
 const { postJson, getJson, httpGetUniversal } = require('../lib/http');
 const { normalizeValidationRuntimeConfig } = require('../lib/http-client');
@@ -106,6 +107,10 @@ function createCoreServices({ app, fs, path, BrowserWindow, safeStorage, getTabM
     cardCacheDir: resolveAutomationCardCacheDir(app),
     browserDownloadService: createBrowserDownloadService({ sandboxDir: aiSandboxDir }),
     browserRuntimeManager,
+    workspaceDir: aiSandboxDir,
+    getBrowserRecords: () => serializeBrowserHistory(readBrowserHistorySafe(), {
+      getTabs: () => tabs, getActiveTabId: appRuntime.getActiveTabId,
+    }),
     getTabs: () => tabs,
     getActiveBrowserProfileId: appRuntime.getActiveTabId,
     externalMcpDescriptorPath: path.join(app.getPath('userData'), 'ai-free-mcp-bridge.json'),

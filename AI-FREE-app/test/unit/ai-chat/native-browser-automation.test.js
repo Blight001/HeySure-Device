@@ -28,6 +28,9 @@ function fixture() {
       if (args[1] === 'activate-tab') {
         return { result: { id: '1', index: 1, active: true, title: '目标页面', url: args[2].url } };
       }
+      if (args[1] === 'automation-takeover') return { result: {
+        success: true, action: args[2].action, takeoverActive: args[2].action !== 'release',
+      } };
       return { result: { success: true, command: args[1] } };
     },
     focus: async (...args) => calls.push(['focus', ...args]),
@@ -53,6 +56,7 @@ function fixture() {
       }),
     },
   });
+  service.takeoverConnections.add('native:profile-a');
   return {
     calls,
     downloads,
@@ -70,7 +74,7 @@ test('native automation publishes ready managed Chromium as the browser connecti
   assert.equal(connections[0].name, '工作浏览器');
   assert.equal(connections[0].platform, 'ai-free-chromium-native');
   const tools = service.getConnection(connections[0].id).tools;
-  assert.equal(tools.length, 7);
+  assert.equal(tools.length, 8);
   assert.equal(tools.some((tool) => tool.name === 'browser_file'), true);
   assert.equal(tools.some((tool) => tool.name === 'browser_download'), false);
   assert.equal(
@@ -136,6 +140,45 @@ test('observe and action dispatch directly to the Chromium runtime bridge', asyn
   ]);
 });
 
+test('browser control explicitly acquires, reports and releases Chromium takeover', async () => {
+  const { calls, service, setAutomationHandler } = fixture();
+  let takeoverActive = false;
+  service.takeoverConnections.delete('native:profile-a');
+  setAutomationHandler(async (_pid, command, args) => {
+    if (command !== 'automation-takeover') return { result: { success: true } };
+    if (args.action === 'acquire') takeoverActive = true;
+    if (args.action === 'release') takeoverActive = false;
+    return { result: { success: true, action: args.action, takeoverActive } };
+  });
+
+  const acquired = await service.dispatch('native:profile-a', 'browser_control', { action: 'acquire' });
+  const status = await service.dispatch('native:profile-a', 'browser_control', { action: 'status' });
+  const released = await service.dispatch('native:profile-a', 'browser_control', { action: 'release' });
+  assert.equal(acquired.takeoverActive, true);
+  assert.equal(status.takeoverActive, true);
+  assert.equal(released.takeoverActive, false);
+  assert.equal(takeoverActive, false);
+  assert.deepEqual(calls.map((call) => call[3].action), ['acquire', 'status', 'release']);
+});
+
+test('all MCP mutations stay read-only before explicit browser takeover', async () => {
+  const { calls, service } = fixture();
+  service.takeoverConnections.delete('native:profile-a');
+
+  const action = await service.dispatch('native:profile-a', 'browser_action', {
+    action: 'click', selector: '#submit',
+  });
+  const navigation = await service.dispatch('native:profile-a', 'browser_tab', {
+    action: 'navigate', url: 'https://example.com/',
+  });
+  const observed = await service.dispatch('native:profile-a', 'browser_observe', { limit: 5 });
+
+  assert.equal(action.errorCode, 'BROWSER_TAKEOVER_REQUIRED');
+  assert.equal(navigation.errorCode, 'BROWSER_TAKEOVER_REQUIRED');
+  assert.equal(observed.success, true);
+  assert.deepEqual(calls, [['automation', 42, 'observe-page', { limit: 5 }]]);
+});
+
 test('observed refs click the validated exposed point instead of re-querying a generic selector', async () => {
   const { calls, service, setAutomationHandler } = fixture();
   setAutomationHandler(async (_pid, command) => ({ result: command === 'observe-page' ? {
@@ -150,6 +193,40 @@ test('observed refs click the validated exposed point instead of re-querying a g
   assert.deepEqual(calls[1], ['automation', 42, 'perform-action', {
     action: 'click', ref: 'e1', selector: 'button', x: 126, y: 46,
   }]);
+});
+
+test('observed file inputs are blocked before Chromium can open a system chooser', async () => {
+  const { calls, service, setAutomationHandler } = fixture();
+  setAutomationHandler(async (_pid, command) => ({ result: command === 'observe-page' ? {
+    success: true,
+    items: [{
+      id: 'e-file', tag: 'input', inputType: 'file', requiresFileUpload: true,
+      selector: 'input[name="attachment"]', x: 20, y: 30, width: 120, height: 30,
+    }],
+  } : { success: true } }));
+
+  await service.dispatch('native:profile-a', 'browser_observe', { limit: 20 });
+  const result = await service.dispatch('native:profile-a', 'browser_action', {
+    action: 'click', ref: 'e-file',
+  });
+
+  assert.equal(result.success, false);
+  assert.equal(result.errorCode, 'FILE_UPLOAD_REQUIRED');
+  assert.equal(result.requiresFile, true);
+  assert.equal(result.suggestedTool, 'browser_file');
+  assert.match(result.error, /path 或 paths/);
+  assert.equal(calls.filter((call) => call[2] === 'perform-action').length, 0);
+});
+
+test('explicit file input selectors are blocked without a prior observation', async () => {
+  const { calls, service } = fixture();
+  const result = await service.dispatch('native:profile-a', 'browser_action', {
+    action: 'click', selector: 'form input.accepted[type="file"]',
+  });
+
+  assert.equal(result.errorCode, 'FILE_UPLOAD_REQUIRED');
+  assert.equal(result.suggestedAction, 'upload');
+  assert.deepEqual(calls, []);
 });
 
 test('explicit text coordinates override an observed ref center while retaining its selector', async () => {
@@ -222,6 +299,23 @@ test('browser_tab switch activates the matching Chromium tab instead of only foc
     ['automation', 42, 'activate-tab', { url, index: -1 }],
     ['focus', 'profile-a', 'chromium'],
   ]);
+});
+
+test('browser_control explains that an old Chromium runtime must be rebuilt instead of reporting permission denial', async () => {
+  const { service, setAutomationHandler } = fixture();
+  setAutomationHandler(async () => {
+    const error = new Error('Runtime Bridge 命令不在白名单');
+    error.code = 'COMMAND_NOT_ALLOWED';
+    throw error;
+  });
+
+  const result = await service.dispatch('native:profile-a', 'browser_control', { action: 'acquire' });
+
+  assert.equal(result.success, false);
+  assert.equal(result.errorCode, 'BROWSER_RUNTIME_UPDATE_REQUIRED');
+  assert.equal(result.takeoverActive, false);
+  assert.equal(result.readOnly, true);
+  assert.match(result.error, /服务器重启不会更新本地浏览器内核/);
 });
 
 test('browser_file owns uploads and browser_action rejects the removed upload action', async () => {

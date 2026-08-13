@@ -4,7 +4,7 @@ const { findProfileIdByProcessId } = require('./runtime-input');
 
 const AUTOMATION_COMMANDS = new Set([
   'observe-page', 'capture-screenshot', 'perform-action', 'download-element',
-  'get-session-data', 'list-tabs', 'activate-tab',
+  'get-session-data', 'list-tabs', 'activate-tab', 'automation-takeover',
 ]);
 const ACTIONS = new Set([
   'click', 'double_click', 'right_click', 'drag', 'upload_file', 'scroll',
@@ -192,14 +192,22 @@ function normalizeRuntimeAutomation(command, source = {}) {
   if (name === 'perform-action') return normalizeActionPayload(input);
   if (name === 'download-element') return normalizeDownloadElementPayload(input);
   if (name === 'activate-tab') return normalizeTabTarget(input);
+  if (name === 'automation-takeover') {
+    const action = optionalText(input.action || 'status', 16).toLowerCase();
+    if (!['status', 'acquire', 'release'].includes(action)) {
+      throw automationError('AUTOMATION_TAKEOVER_ACTION_INVALID', `不支持的接管操作: ${action}`);
+    }
+    return { action };
+  }
   return {};
 }
 
 async function dispatchRuntimeAutomation(runtime, profileId, command, source) {
   const payload = normalizeRuntimeAutomation(command, source);
+  const timeoutMs = Number('timeoutMs' in payload ? payload.timeoutMs : 10000) || 10000;
   return runtime.enqueueProfileOperation(profileId, () => (
     runtime.getReadyInstance(profileId).commandClient.send(command, payload, {
-      timeoutMs: ['perform-action', 'download-element'].includes(command) ? payload.timeoutMs + 2000 : 15000,
+      timeoutMs: ['perform-action', 'download-element'].includes(command) ? timeoutMs + 2000 : 15000,
     })
   ));
 }

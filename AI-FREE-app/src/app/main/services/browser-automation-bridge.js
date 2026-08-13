@@ -4,6 +4,7 @@ const { createBrowserAutomationExternalGateway } = require('./browser-automation
 const { createAutomationCardMcpRouter } = require('./automation-card-mcp-router');
 const { createNativeAutomationCardService } = require('./native-automation-card-service');
 const { createNativeBrowserAutomation } = require('./native-browser-automation');
+const { NATIVE_BROWSER_TOOL_DEFINITIONS } = require('./native-browser-tool-definitions');
 
 const DEFAULT_PORT = 18765;
 
@@ -24,6 +25,7 @@ class BrowserAutomationBridgeRuntime {
     this.nativeAutomation = createNativeBrowserAutomation({
       browserRuntimeManager: options.browserRuntimeManager, browserDownloadService: options.browserDownloadService,
       cardService: this.nativeCardService, getTabs: options.getTabs,
+      workspaceDir: options.workspaceDir, getBrowserRecords: options.getBrowserRecords,
       executeCardTool: (...args) => this.cardMcpRouter.execute(...args),
     });
     this.server = null;
@@ -38,6 +40,8 @@ class BrowserAutomationBridgeRuntime {
       },
       getAccess: options.getExternalMcpAccess,
       logger: this.logger,
+      overviewTool: NATIVE_BROWSER_TOOL_DEFINITIONS.find((tool) => tool.name === 'browser_control'),
+      getBrowserOverview: (args) => this.nativeAutomation.browserOverview(args),
     });
   }
 

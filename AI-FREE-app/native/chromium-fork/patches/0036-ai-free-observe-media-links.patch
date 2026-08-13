@@ -21,7 +21,7 @@ diff --git a/chrome/browser/ui/views/frame/ai_free_page_automation.cc b/chrome/b
      const roots=[{root:document,offsetX:0,offsetY:0}]; const seen=new Set();
      for(let ri=0;ri<roots.length;ri++){
        const context=roots[ri],root=context.root;if(seen.has(root))continue;seen.add(root);
-@@ -97,22 +101,23 @@ std::string ObserveScript(const base::DictValue& command) {
+@@ -97,22 +101,24 @@ std::string ObserveScript(const base::DictValue& command) {
          if(el.shadowRoot)roots.push({root:el.shadowRoot,offsetX:context.offsetX,offsetY:context.offsetY});
          if(el.tagName==='IFRAME'){try{if(el.contentDocument)roots.push({root:el.contentDocument,offsetX:r.left+el.clientLeft,offsetY:r.top+el.clientTop});}catch(_){}}
          if(!visible(el,r))continue;
@@ -39,7 +39,9 @@ diff --git a/chrome/browser/ui/views/frame/ai_free_page_automation.cc b/chrome/b
          if(keyword&&!rawText.toLowerCase().includes(keyword))continue;if(tagFilter&&tag!==tagFilter)continue;if(kindFilter&&kind!==kindFilter)continue;
          matched++;if(items.length>=limit)continue;
          const clip=(value,max=textLimit)=>String(value||'').slice(0,max);
-         const item={id:'e'+matched,kind,tag,selector:selector(el),text:rawText.slice(0,textLimit),textTruncated:rawText.length>textLimit,name:clip(el.getAttribute('name')),placeholder:clip(el.getAttribute('placeholder')),ariaLabel:clip(el.getAttribute('aria-label')),value:/password/i.test(el.type||'')?'':clip(el.value),disabled:!!el.disabled,x:Math.round(r.left),y:Math.round(r.top),width:Math.round(r.width),height:Math.round(r.height)};
+-        const item={id:'e'+matched,kind,tag,selector:selector(el),text:rawText.slice(0,textLimit),textTruncated:rawText.length>textLimit,name:clip(el.getAttribute('name')),placeholder:clip(el.getAttribute('placeholder')),ariaLabel:clip(el.getAttribute('aria-label')),value:/password/i.test(el.type||'')?'':clip(el.value),disabled:!!el.disabled,x:Math.round(r.left),y:Math.round(r.top),width:Math.round(r.width),height:Math.round(r.height)};
++        const inputType=tag==='input'?String(el.type||'').toLowerCase():'';
++        const item={id:'e'+matched,kind,tag,selector:selector(el),text:rawText.slice(0,textLimit),textTruncated:rawText.length>textLimit,name:clip(el.getAttribute('name')),placeholder:clip(el.getAttribute('placeholder')),ariaLabel:clip(el.getAttribute('aria-label')),value:/password/i.test(el.type||'')?'':clip(el.value),disabled:!!el.disabled,...(inputType?{inputType}:{}),...(inputType==='file'?{requiresFileUpload:true}:{}),x:Math.round(r.left),y:Math.round(r.top),width:Math.round(r.width),height:Math.round(r.height)};
 -        if(kind==='interactive'){item.clickX=Math.round(point.x*100)/100;item.clickY=Math.round(point.y*100)/100;}
 +        if(clickable){item.interactive=true;item.clickX=Math.round(point.x*100)/100;item.clickY=Math.round(point.y*100)/100;}
 +        if(kind==='media'){item.mediaType=media.type;item.mediaUrls=media.urls.slice(0,10);if(item.mediaUrls.length)item.mediaUrl=item.mediaUrls[0];const downloadable=item.mediaUrls.find(url=>/^https?:/i.test(url));if(downloadable)item.downloadUrl=downloadable;if(tag==='img'){item.naturalWidth=Number(el.naturalWidth)||0;item.naturalHeight=Number(el.naturalHeight)||0;}const linked=absoluteUrl(el.closest?.('a[href]')?.href);if(linked&&/^https?:/i.test(linked))item.linkedUrl=linked;}

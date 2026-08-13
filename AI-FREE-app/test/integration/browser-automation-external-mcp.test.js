@@ -50,7 +50,7 @@ test('automation bridge exposes authenticated external MCP without a legacy exte
     const listedResponse = await fetch(`${descriptor.endpoint}/mcp/v1/tools`, { headers });
     assert.equal(listedResponse.status, 200);
     const listed = await listedResponse.json();
-    assert.deepEqual(listed.tools.map((tool) => tool.name), ['software_window']);
+    assert.deepEqual(listed.tools.map((tool) => tool.name), ['browser_control', 'software_window']);
 
     const calledResponse = await fetch(`${descriptor.endpoint}/mcp/v1/call`, {
       method: 'POST',

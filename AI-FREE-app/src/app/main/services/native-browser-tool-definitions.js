@@ -6,8 +6,17 @@ const objectSchema = (properties, required = []) => ({
 
 const NATIVE_BROWSER_TOOL_DEFINITIONS = Object.freeze([
   {
+    name: 'browser_control',
+    description: '读取软件完整浏览器态势，或显式管理当前页面自动化接管。overview 无需先选择或打开浏览器，返回全部浏览器记录、当前打开窗口及其标签页、AI-Workspace 目录树；status 查看当前页；acquire 开始接管；release 停止接管。',
+    input_schema: objectSchema({
+      action: { type: 'string', enum: ['overview', 'status', 'acquire', 'release'] },
+      workspace_depth: { type: 'number', description: 'overview 的工作区目录深度，默认 4，范围 1-8。' },
+      workspace_max_entries: { type: 'number', description: 'overview 最多返回的目录项，默认 500，范围 10-2000。' },
+    }),
+  },
+  {
     name: 'manage_card',
-    description: '管理并运行原生 Chromium 自动化卡片。支持 rules/list/get/write/patch_step/insert_step/delete_step/move_step/delete/run。',
+    description: '管理并运行原生 Chromium 自动化卡片。rules/list/get 可在只读模式使用；写入或 run 前必须先调用 browser_control action=acquire 接管当前活动页面，完成后允许 AI 调用 action=release 停止接管。切换或新开标签页后需要重新接管。支持 rules/list/get/write/patch_step/insert_step/delete_step/move_step/delete/run。',
     input_schema: objectSchema({
       action: { type: 'string', enum: ['rules', 'list', 'get', 'write', 'patch_step', 'insert_step', 'delete_step', 'move_step', 'delete', 'run'] },
       id: { type: 'string' }, card_name: { type: 'string' }, cardData: { type: 'object' },
@@ -18,7 +27,7 @@ const NATIVE_BROWSER_TOOL_DEFINITIONS = Object.freeze([
   },
   {
     name: 'browser_file', destructive: true,
-    description: '通过 AI 工作区安全下载 URL 或页面图片、把工作区文件上传到网页或 HeySure 服务器，或保存当前浏览器会话。upload 是上传网页文件控件；upload_to_server 是直接上传 HeySure 并返回 file_ref；download_element 由当前 Chromium Profile 原生下载图片 currentSrc。',
+    description: '通过 AI 工作区安全下载 URL 或页面图片、把工作区文件上传到网页或 HeySure 服务器，或保存当前浏览器会话。网页要求选择文件时必须使用 upload，并同时提供 AI-Workspace 内的 path/paths 和文件控件 selector/ref；不要先用 browser_action 点击文件控件。upload_to_server 是直接上传 HeySure 并返回 file_ref；download_element 由当前 Chromium Profile 原生下载图片 currentSrc。',
     input_schema: objectSchema({
       action: { type: 'string', enum: ['download', 'download_element', 'upload', 'upload_to_server', 'save_session', 'info'] },
       url: { type: 'string', description: '下载用绝对 URL 或相对于当前页面的 URL' },
@@ -59,7 +68,7 @@ const NATIVE_BROWSER_TOOL_DEFINITIONS = Object.freeze([
   },
   {
     name: 'browser_action', destructive: true,
-    description: '通过 Chromium 原生输入执行点击、拖拽选文、整段输入、光标/选区定位、局部插入、滚动或组合按键。',
+    description: '通过 Chromium 原生输入执行点击、拖拽选文、整段输入、光标/选区定位、局部插入、滚动或组合按键。必须先调用 browser_control action=acquire 接管当前活动页面；接管期间页面显示紫色发光边框，任何来源触发的文件选择器或阻塞式浏览器模态弹窗都会被阻止。切换或新开标签页后需要重新接管；完成后 AI 可以调用 browser_control action=release 停止接管。文件上传改用 browser_file action=upload 并附带 path/paths 与 selector/ref。',
     input_schema: objectSchema({
       action: { type: 'string', enum: ['click', 'double_click', 'right_click', 'drag', 'scroll', 'type', 'insert_text', 'set_selection', 'press_key'] },
       selector: { type: 'string' }, ref: { type: 'string' }, text: { type: 'string' },

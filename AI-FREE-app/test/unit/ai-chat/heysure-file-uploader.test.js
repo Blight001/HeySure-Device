@@ -107,6 +107,54 @@ test('download result gains file_ref and a view-image next action', async () => 
   assert.match(result.next_action, /view_image/);
 });
 
+test('upload_to_server result uploads an existing workspace file and returns file_ref', async () => {
+  const fileRef = `file_${'d'.repeat(32)}`;
+  const uploads = [];
+  const result = await attachHeySureDownloadedFile({
+    sourceName: 'browser_file', args: { action: 'upload_to_server', path: 'uploads/clip.mp4' },
+    result: {
+      success: true, action: 'upload_to_server',
+      absolute_path: 'C:/AI-Workspace/uploads/clip.mp4', local_workspace_file: true,
+    },
+    server: 'https://heysure.example', token: 'secret', aiConfigId: 9, sessionId: 'chat-video',
+    upload: async (input) => {
+      uploads.push(input);
+      return {
+        file_ref: fileRef, workspace_path: 'Uploads/clip.mp4',
+        mime_type: 'video/mp4', can_send_to_user: true,
+      };
+    },
+  });
+
+  assert.equal(uploads[0].localPath, 'C:/AI-Workspace/uploads/clip.mp4');
+  assert.equal(uploads[0].sessionId, 'chat-video');
+  assert.equal(result.uploaded_to_heysure, true);
+  assert.equal(result.file_ref, fileRef);
+  assert.match(result.next_action, /message\.send\+to/);
+});
+
+test('legacy download with a local file result still reaches the server uploader', async () => {
+  let uploadCount = 0;
+  const result = await attachHeySureDownloadedFile({
+    sourceName: 'browser_file',
+    args: { action: 'download', url: 'file:///C:/AI-Workspace/uploads/clip.mp4', save_to_server: true },
+    result: {
+      success: true, action: 'upload_to_server',
+      absolute_path: 'C:/AI-Workspace/uploads/clip.mp4', local_workspace_file: true,
+    },
+    upload: async () => {
+      uploadCount += 1;
+      return {
+        file_ref: `file_${'e'.repeat(32)}`, workspace_path: 'Uploads/clip.mp4',
+        mime_type: 'video/mp4', can_send_to_user: true,
+      };
+    },
+  });
+
+  assert.equal(uploadCount, 1);
+  assert.equal(result.uploaded_to_heysure, true);
+});
+
 test('failed server upload preserves successful local download result', async () => {
   const result = await attachHeySureDownloadedFile({
     sourceName: 'browser_file', args: { action: 'download' },

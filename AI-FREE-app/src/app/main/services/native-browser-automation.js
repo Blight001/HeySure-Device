@@ -1,5 +1,7 @@
 'use strict';
 
+const path = require('path');
+const { fileURLToPath } = require('url');
 const { NATIVE_BROWSER_TOOL_DEFINITIONS } = require('./native-browser-tool-definitions');
 
 const CONNECTION_PREFIX = 'native:';
@@ -59,6 +61,21 @@ function normalizeUrl(value) {
   const parsed = new URL(candidate);
   if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('浏览器导航只支持 HTTP/HTTPS 地址');
   return parsed.href;
+}
+
+function localServerUploadPath(args = {}) {
+  const direct = text(args.path);
+  if (direct) return direct;
+  const rawUrl = text(args.url);
+  if (!/^file:/i.test(rawUrl)) throw new Error('upload_to_server 缺少 AI 工作区文件 path');
+  try { return fileURLToPath(new URL(rawUrl)); } catch (_) {
+    throw new Error('本地文件 URL 无效');
+  }
+}
+
+function isDirectServerUpload(action, args = {}) {
+  if (action === 'upload_to_server') return true;
+  return action === 'download' && args.save_to_server === true && /^file:/i.test(text(args.url));
 }
 
 function tabItems(getTabs) {
@@ -149,7 +166,10 @@ class NativeBrowserAutomation {
     }
     const url = normalizeUrl(args.url);
     if (action === 'replace') await this.runtime.navigate(profileId, 'chromium', url);
-    else if (action === 'navigate') await this.runtime.openTabs(profileId, 'chromium', [url]);
+    else if (action === 'navigate') {
+      await this.runtime.openTabs(profileId, 'chromium', [url]);
+      await this.runtime.focus(profileId, 'chromium');
+    }
     else throw new Error(`browser_tab 不支持的原生操作: ${action || '(空)'}`);
     return { success: true, action, id: profileId, url, cardStep: { name: `打开 ${new URL(url).hostname}`, type: 'navigate', url } };
   }
@@ -236,8 +256,18 @@ class NativeBrowserAutomation {
     ));
   }
 
+  browserServerUpload(args) {
+    if (!this.downloadService?.resolveUploadPaths) throw new Error('AI 工作区文件服务不可用');
+    const [absolutePath] = this.downloadService.resolveUploadPaths([localServerUploadPath(args)]);
+    return {
+      success: true, action: 'upload_to_server', file_name: path.basename(absolutePath),
+      absolute_path: absolutePath, local_workspace_file: true,
+    };
+  }
+
   async browserFile(connection, args) {
     const action = text(args.action).toLowerCase();
+    if (isDirectServerUpload(action, args)) return this.browserServerUpload(args);
     if (action === 'upload') {
       const result = await this.browserUpload(connection, args);
       return { ...result, action: 'upload' };

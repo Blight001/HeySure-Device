@@ -18,22 +18,22 @@ const NATIVE_BROWSER_TOOL_DEFINITIONS = Object.freeze([
   },
   {
     name: 'browser_file', destructive: true,
-    description: '通过 AI 工作区安全下载 URL 或页面中的图片元素、向当前页面上传任意常规文件（图片、视频、音频、文档、压缩包等），或保存当前浏览器会话。上传仍受目标网页 input 的 accept 规则约束；download_element 会按 ref/selector/坐标定位 img，并由当前 Chromium Profile 原生下载 currentSrc。',
+    description: '通过 AI 工作区安全下载 URL 或页面图片、把工作区文件上传到网页或 HeySure 服务器，或保存当前浏览器会话。upload 是上传网页文件控件；upload_to_server 是直接上传 HeySure 并返回 file_ref；download_element 由当前 Chromium Profile 原生下载图片 currentSrc。',
     input_schema: objectSchema({
-      action: { type: 'string', enum: ['download', 'download_element', 'upload', 'save_session', 'info'] },
+      action: { type: 'string', enum: ['download', 'download_element', 'upload', 'upload_to_server', 'save_session', 'info'] },
       url: { type: 'string', description: '下载用绝对 URL 或相对于当前页面的 URL' },
       directory: { type: 'string' }, filename: { type: 'string' }, media_type: { type: 'string' },
       overwrite: { type: 'boolean' }, timeout_ms: { type: 'number' }, max_bytes: { type: 'number' },
       selector: { type: 'string' }, ref: { type: 'string' },
       x: { type: 'number', description: 'download_element 的视口 X 坐标；ref 会自动解析为元素暴露点' },
       y: { type: 'number', description: 'download_element 的视口 Y 坐标；ref 会自动解析为元素暴露点' },
-      path: { type: 'string', description: 'AI-Workspace 内任意类型的单个文件路径' },
+      path: { type: 'string', description: 'AI-Workspace 内任意类型的单个文件路径；upload_to_server 必填' },
       paths: { type: 'array', items: { type: 'string' }, description: 'AI-Workspace 内任意类型的多个文件路径' }, mode: { type: 'string' }, page_url: { type: 'string' },
     }, ['action']),
   },
   {
     name: 'browser_tab',
-    description: '通过受认证 Chromium Runtime Bridge 管理当前浏览器的导航、页面打开、刷新与焦点。',
+    description: '通过受认证 Chromium Runtime Bridge 管理当前浏览器。replace 覆盖当前页；navigate 新建标签页、立即激活并把浏览器打开到前台。',
     input_schema: objectSchema({
       action: { type: 'string', enum: ['list', 'switch', 'replace', 'navigate', 'reload'] },
       url: { type: 'string' }, id: { type: 'string' }, index: { type: 'number' },

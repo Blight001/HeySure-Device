@@ -104,6 +104,7 @@ Cookie 属于登录会话数据，不属于 `browser_environment.settings` 的�
 - 子目录：`directory` 只接受 AI 工作区内相对路径，例如 `downloads/models`；拒绝绝对路径、`..` 逃逸和指向工作区外的链接目录。
 - 下载参数：`url`、`filename`、`media_type`、`transport`、`use_cookies`、`overwrite`、`timeout_ms`、`max_bytes`、`tab_id`。媒体下载应将 `browser_observe` 返回的 `category` 传给 `media_type`；`transport` 可取 `auto`、`browser`、`software`。
 - 上传参数：本机调用使用 `path` 或 `paths` 指定 AI 工作区文件；HeySure 远程调用还可使用当前数字成员服务器工作区的 `file_ref` 或 `file_refs`。AI-FREE 会通过 HeySure 创建默认 5 分钟临时链接，下载并校验后物化到本机 `AI-Workspace/Incoming/<task_id>/`。两类参数不能混用。使用 `selector` 或 `ref` 定位页面文件输入控件；多文件可设置 `mode=open-multiple`。
+- 上传目标：`action=upload` 把工作区文件放入当前网页文件控件；`action=upload_to_server` 直接把 `path` 指定的 AI 工作区文件上传到 HeySure 成员工作区并返回 `file_ref`，不经过网页。兼容旧调用：`action=download`、`url=file:///...` 且 `save_to_server=true` 时按 `upload_to_server` 处理。
 - 会话参数：`filename`、`directory`、`overwrite`、`tab_id`。保存结果只返回路径和 Cookie 数量，不把 Cookie 原文放入聊天结果。
 - Cookie 规则：`use_cookies` 默认开启，但只发送与目标 URL 域名、路径、Secure 属性和有效期匹配的 Cookie；重定向后会重新匹配，不向其它域泄漏。
 - 网络边界：禁止 localhost、`.local`、IPv4/IPv6 私网、链路本地、组播和保留地址。每次重定向都重新解析，并将实际连接固定到已审核 IP，防止 DNS 重绑定。
@@ -114,7 +115,7 @@ Cookie 属于登录会话数据，不属于 `browser_environment.settings` 的�
 - 作用：通过当前受管 Chromium Profile 管理页面导航与焦点。
 - `action`：必填，可用值为 `list`、`switch`、`replace`、`navigate`、`reload`。
 - `list` 每次调用都从 Chromium TabStrip 读取全部标签页与当前活动页，不使用窗口首次打开时缓存的网址。
-- `replace` 原生覆盖当前页，`navigate` 原生打开新标签；`switch` 传入 `url`、`id` 或 `index` 时切换 Chromium 内部标签页，不传目标时仅聚焦当前受管浏览器。
+- `replace` 原生覆盖当前页；`navigate` 原生打开新标签、立即激活该标签并把当前受管浏览器打开到前台；`switch` 传入 `url`、`id` 或 `index` 时切换 Chromium 内部标签页，不传目标时仅聚焦当前受管浏览器。
 
 ### `browser_observe`
 
@@ -128,6 +129,8 @@ Cookie 属于登录会话数据，不属于 `browser_environment.settings` 的�
 - Fork 原生 Observe 默认在 Chromium UI 层绘制与元素 `id` 对应的边框标签，不写入网页 DOM、不接收鼠标事件；导航、滚动、窗口隐藏或超时后自动清除。最多绘制 120 个标记。
 - 路由参数：`tab_id`。
 - 下载链接：可见 HTTP/HTTPS 链接会在对应 item 中提供 `downloadUrl`，并汇总到顶层 `downloadLinks`；其中的 `url` 可直接交给 `browser_file`。
+- 图片识别：可见 `img`（含 `picture/srcset`）、`video`、`audio`、`canvas` 和 CSS `background-image` 统一返回 `kind=media`；即使图片被网页包装成可点击元素，也保留 `interactive=true`，不会再被误报成普通按钮。
+- 图片链接：媒体 item 返回 `mediaType`、`mediaUrl`、`mediaUrls`，HTTP(S) 原图候选同时写入 `downloadUrl`；`downloadLinks` 会携带对应 `ref`、`kind`、`mediaType` 和可选 `linkedUrl`，可直接按四张生成图筛选并下载。
 
 ### `browser_screenshot`
 

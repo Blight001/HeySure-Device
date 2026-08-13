@@ -42,6 +42,11 @@ function createTestServer() {
     });
     response.setHeader('Content-Type', 'text/html; charset=utf-8');
     response.setHeader('Cache-Control', 'no-store');
+    if (url.pathname.startsWith('/asset-') && url.pathname.endsWith('.svg')) {
+      response.setHeader('Content-Type', 'image/svg+xml');
+      response.end(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240"><rect width="320" height="240" fill="#345"/><text x="20" y="120" fill="white">${url.pathname}</text></svg>`);
+      return;
+    }
     if (url.pathname === '/input-result' || url.pathname === '/file-click' ||
         url.pathname === '/file-result' || url.pathname === '/native-event') {
       response.end('ok');
@@ -93,6 +98,17 @@ function createTestServer() {
             fetch('/input-result?profile=closed-shadow&trusted=' + event.isTrusted).catch(() => {});
           });
         </script>`);
+      return;
+    }
+    if (url.pathname === '/media-grid') {
+      response.end(`<!doctype html><meta charset="utf-8"><title>MEDIA_GRID_READY</title>
+        <style>.tile{position:fixed;width:220px;height:160px;object-fit:cover}.clickable{cursor:pointer}
+          #one{left:20px;top:20px}#two{left:260px;top:20px}#three{left:20px;top:210px;background-image:url('/asset-three.svg');background-size:cover}#four{left:260px;top:210px}</style>
+        <a href="/asset-one-full.svg"><img id="one" class="tile clickable" src="/asset-one.svg"></a>
+        <picture><source srcset="/asset-two.svg 1x, /asset-two-large.svg 2x"><img id="two" class="tile" src="/asset-two-thumb.svg"></picture>
+        <div id="three" class="tile"></div>
+        <img id="four" class="tile clickable" src="/asset-four-thumb.svg" data-image-url="/asset-four.svg">
+        <a id="download-file" download="locked.svg" href="/asset-download.svg" style="position:fixed;left:520px;top:20px">下载测试</a>`);
       return;
     }
     if (url.pathname === '/native-input') {
@@ -250,6 +266,7 @@ app.whenReady().then(async () => {
       : path.resolve(__dirname, '..', '..', '..', 'resources'));
   manager = createBrowserRuntimeManager({
     userDataDir: runtimeRoot,
+    sandboxDir: path.join(runtimeRoot, 'AI-Workspace'),
     resourcesPath: acceptanceResourcesPath,
     getParentWindow: () => window,
     logger: console,
@@ -285,6 +302,8 @@ app.whenReady().then(async () => {
   const duplicateTabs = await manager.openTabs('phase3_b', 'chromium', subUrls);
   assert.equal(duplicateTabs.result.opened, 0);
   assert.equal(duplicateTabs.result.skipped, 2);
+  const tabsAfterOpen = await manager.dispatchAutomationByProcessId(b.state.pid, 'list-tabs', {});
+  assert.equal(tabsAfterOpen.result.activeTab.url, subUrls.at(-1));
 
   await manager.hide('phase3_b', 'chromium');
   await manager.show('phase3_a', 'chromium');
@@ -370,7 +389,37 @@ app.whenReady().then(async () => {
   );
   assert.equal(new URLSearchParams(coordinateRequest.query || '').get('trusted'), 'true');
 
-  const uploadPath = path.join(runtimeRoot, 'input-video.mp4');
+  const mediaPage = await manager.navigate('phase3_b', 'chromium', `${origin}/media-grid`);
+  assert.equal(mediaPage.result.title, 'MEDIA_GRID_READY');
+  const mediaObserved = await manager.dispatchAutomationByProcessId(b.state.pid, 'observe-page', {
+    filter: 'media', limit: 20, show_highlights: false,
+  });
+  const mediaItems = mediaObserved.result.items.filter((item) => item.kind === 'media');
+  assert.equal(mediaItems.length, 4);
+  assert(mediaItems.every((item) => Array.isArray(item.mediaUrls)));
+  assert(mediaItems.every((item) => item.downloadUrl?.startsWith(origin)));
+  assert.equal(mediaItems.find((item) => item.selector === '#one')?.interactive, true);
+  assert.equal(mediaItems.find((item) => item.selector === '#one')?.linkedUrl, `${origin}/asset-one-full.svg`);
+  assert(mediaItems.find((item) => item.selector === '#two')?.mediaUrls.includes(`${origin}/asset-two-large.svg`));
+  assert.equal(mediaItems.find((item) => item.selector === '#three')?.mediaType, 'background-image');
+  assert(mediaItems.find((item) => item.selector === '#four')?.mediaUrls.includes(`${origin}/asset-four.svg`));
+  assert.equal(mediaObserved.result.downloadLinks.filter((item) => item.kind === 'media').length, 4);
+
+  const downloadObserved = await manager.dispatchAutomationByProcessId(b.state.pid, 'observe-page', {
+    keyword: '下载测试', limit: 10, show_highlights: false,
+  });
+  const downloadItem = downloadObserved.result.items.find((item) => item.selector === '#download-file');
+  await manager.dispatchAutomationByProcessId(b.state.pid, 'perform-action', {
+    action: 'click', ref: downloadItem.id, x: downloadItem.clickX, y: downloadItem.clickY,
+  });
+  const lockedDownload = path.join(runtimeRoot, 'AI-Workspace', 'locked.svg');
+  const downloadDeadline = Date.now() + 15000;
+  while (!fs.existsSync(lockedDownload) && Date.now() < downloadDeadline) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.equal(fs.existsSync(lockedDownload), true, '普通 Chromium 下载必须自动保存到 AI-Workspace');
+
+  const uploadPath = path.join(runtimeRoot, 'AI-Workspace', 'input-video.mp4');
   fs.writeFileSync(uploadPath, 'ai-free-upload-acceptance');
   await manager.show('phase3_b', 'chromium');
   const filePageUrl = `${origin}/file-input?profile=b`;
@@ -565,6 +614,8 @@ app.whenReady().then(async () => {
   console.log('[phase3-acceptance] native keyboard and wheel events reached the page as trusted input');
   console.log('[phase3-acceptance] native drag, caret selection, insert text and editing shortcuts passed');
   console.log('[phase3-acceptance] observe returned only topmost click owners and truncated long text');
+  console.log('[phase3-acceptance] observe identified four obfuscated media elements and returned direct links');
+  console.log('[phase3-acceptance] regular browser downloads were locked to AI-Workspace');
   console.log('[phase3-acceptance] closed Shadow DOM controls were observed and clicked as trusted native input');
   console.log('[phase3-acceptance] observed coordinates clicked the topmost target as trusted native input');
   console.log('[phase3-acceptance] native observe highlights were attached outside the page DOM');

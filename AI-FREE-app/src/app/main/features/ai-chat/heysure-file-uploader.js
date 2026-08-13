@@ -7,7 +7,7 @@ const { resolveInside } = require('../../services/ai-sandbox-file-tools');
 const FILE_REF_RE = /^file_[a-f0-9]{32}$/;
 const MAX_FILE_BYTES = 250 * 1024 * 1024;
 const UPLOAD_TIMEOUT_MS = 10 * 60 * 1000;
-const DOWNLOAD_ACTIONS = new Set(['download', 'download_element']);
+const SERVER_UPLOAD_ACTIONS = new Set(['download', 'download_element', 'upload_to_server']);
 
 function attachmentUploadUrl(server) {
   const base = new URL(String(server || ''));
@@ -71,7 +71,7 @@ function createHeySureFileUploader(options = {}) {
 function isDownloadResult(context) {
   const action = String(context.args?.action || '').trim().toLowerCase();
   return context.sourceName === 'browser_file'
-    && DOWNLOAD_ACTIONS.has(action)
+    && (SERVER_UPLOAD_ACTIONS.has(action) || context.result?.action === 'upload_to_server')
     && context.result
     && typeof context.result === 'object'
     && context.result.success !== false;

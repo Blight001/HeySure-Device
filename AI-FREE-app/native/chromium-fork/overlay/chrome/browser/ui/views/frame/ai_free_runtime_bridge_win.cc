@@ -899,7 +899,7 @@ void HandleCommandOnUi(scoped_refptr<BridgeConnection> connection,
         ++skipped;
         continue;
       }
-      chrome::AddTabAt(browser, url, -1, false);
+      chrome::AddTabAt(browser, url, -1, true);
       ++opened;
     }
     base::DictValue result;

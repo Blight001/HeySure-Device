@@ -258,6 +258,38 @@ test('fork element download uses the current profile DownloadManager and a works
   assert.doesNotMatch(patch, /capture-screenshot/);
 });
 
+test('fork locks every browser download to the AI workspace and activates newly opened tabs', () => {
+  const patchDirectory = path.join(__dirname, '../../../native/chromium-fork/patches');
+  const series = fs.readFileSync(path.join(patchDirectory, 'series'), 'utf8');
+  const patch = fs.readFileSync(
+    path.join(patchDirectory, '0035-ai-free-workspace-downloads-and-active-tabs.patch'), 'utf8',
+  );
+  assert.match(series, /0034-ai-free-download-element\.patch\s+0035-ai-free-workspace-downloads-and-active-tabs\.patch/);
+  assert.match(patch, /GetAiFreeLockedDownloadDirectory/);
+  assert.match(patch, /kDownloadDefaultDirectorySwitch/);
+  assert.match(patch, /PromptForDownload\(\) const/);
+  assert.match(patch, /return false;/);
+  assert.match(patch, /IsDownloadPathManaged\(\) const/);
+  assert.match(patch, /chrome::AddTabAt\(browser, url, -1, true\)/);
+});
+
+test('fork observe classifies obfuscated media and returns direct image links', () => {
+  const patchDirectory = path.join(__dirname, '../../../native/chromium-fork/patches');
+  const series = fs.readFileSync(path.join(patchDirectory, 'series'), 'utf8');
+  const patch = fs.readFileSync(
+    path.join(patchDirectory, '0036-ai-free-observe-media-links.patch'), 'utf8',
+  );
+  assert.match(series, /0035-ai-free-workspace-downloads-and-active-tabs\.patch\s+0036-ai-free-observe-media-links\.patch/);
+  assert.match(patch, /el\.currentSrc/);
+  assert.match(patch, /srcsetUrls/);
+  assert.match(patch, /backgroundUrls/);
+  assert.match(patch, /data-image-url/);
+  assert.match(patch, /item\.mediaUrls/);
+  assert.match(patch, /item\.downloadUrl=downloadable/);
+  assert.match(patch, /kind:i\.kind/);
+  assert.match(patch, /mediaType:i\.mediaType/);
+});
+
 test('fork observe highlights stay in the native event-transparent UI layer', () => {
   const patchDirectory = path.join(__dirname, '../../../native/chromium-fork/patches');
   const series = fs.readFileSync(path.join(patchDirectory, 'series'), 'utf8');

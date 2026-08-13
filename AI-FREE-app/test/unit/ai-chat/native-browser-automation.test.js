@@ -178,6 +178,18 @@ test('native tab and session operations do not enqueue extension tasks', async (
   assert.deepEqual(calls[1], ['automation', 42, 'get-session-data', {}]);
 });
 
+test('browser_tab navigate opens a new Chromium tab and brings it to the foreground', async () => {
+  const { calls, service } = fixture();
+  const result = await service.dispatch('native:profile-a', 'browser_tab', {
+    action: 'navigate', url: 'https://example.org/new',
+  });
+  assert.equal(result.success, true);
+  assert.deepEqual(calls, [
+    ['openTabs', 'profile-a', 'chromium', ['https://example.org/new']],
+    ['focus', 'profile-a', 'chromium'],
+  ]);
+});
+
 test('browser_tab list reads the live Chromium tab strip on every call', async () => {
   const { calls, service, setListedTabs } = fixture();
   const first = await service.dispatch('native:profile-a', 'browser_tab', { action: 'list' });
@@ -224,6 +236,27 @@ test('browser_file owns uploads and browser_action rejects the removed upload ac
     service.dispatch('native:profile-a', 'browser_action', { action: 'upload_file', path: 'report.txt' }),
     /browser_file action=upload/,
   );
+});
+
+test('browser_file exposes an AI workspace file for direct HeySure upload without a webpage', async () => {
+  const { calls, service } = fixture();
+  const result = await service.dispatch('native:profile-a', 'browser_file', {
+    action: 'upload_to_server', path: 'C:/workspace/report.txt',
+  });
+  assert.equal(result.action, 'upload_to_server');
+  assert.equal(result.absolute_path, 'C:/workspace/report.txt');
+  assert.equal(result.local_workspace_file, true);
+  assert.deepEqual(calls, []);
+});
+
+test('browser_file treats file URL download with save_to_server as a compatible direct upload', async () => {
+  const { calls, service } = fixture();
+  const result = await service.dispatch('native:profile-a', 'browser_file', {
+    action: 'download', url: 'file:///C:/workspace/grok-video.mp4', save_to_server: true,
+  });
+  assert.equal(result.action, 'upload_to_server');
+  assert.equal(result.absolute_path, 'C:\\workspace\\grok-video.mp4');
+  assert.deepEqual(calls, []);
 });
 
 test('browser_wait reacquires the active page after a timed-out document attempt', async () => {

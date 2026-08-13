@@ -236,6 +236,54 @@ test('HeySure browser_file 下载完成后上传成员工作区并回传 file_re
   service.stop();
 });
 
+test('HeySure browser_file 可将 AI 工作区已有文件直接上传并回传 file_ref', async () => {
+  const socket = new FakeSocket();
+  const calls = [];
+  const uploads = [];
+  const fileRef = `file_${'d'.repeat(32)}`;
+  const service = createAiServerDeviceService({
+    hasVipAccess: () => true,
+    fetch: async () => loginResponse(),
+    createSocket: () => socket,
+    getTools: () => ({ tools: [{
+      name: 'browser_file', description: '传输工作区文件',
+      inputSchema: { type: 'object', properties: { action: { type: 'string' } }, required: ['action'] },
+    }] }),
+    callTool: async (name, args) => {
+      calls.push({ name, args });
+      return {
+        success: true, action: 'upload_to_server',
+        absolute_path: 'C:/AI-Workspace/uploads/grok-video-latest.mp4', local_workspace_file: true,
+      };
+    },
+    uploadWorkspaceFile: async (input) => {
+      uploads.push(input);
+      return {
+        file_ref: fileRef, workspace_path: 'Uploads/grok-video-latest.mp4',
+        mime_type: 'video/mp4', can_send_to_user: true,
+      };
+    },
+  });
+  await service.login({ server: 'https://heysure.example', account: 'alice', password: 'secret' });
+  await tick();
+
+  await socket.serverEmit('task:dispatch', {
+    taskId: 'task-upload-existing', sessionId: 'chat-video', aiConfigId: 19,
+    tool: 'aifree.browser+file',
+    args: { action: 'upload_to_server', path: 'uploads/grok-video-latest.mp4' },
+  });
+  await tick();
+
+  assert.deepEqual(calls[0], {
+    name: 'browser_file', args: { action: 'upload_to_server', path: 'uploads/grok-video-latest.mp4' },
+  });
+  assert.equal(uploads[0].localPath, 'C:/AI-Workspace/uploads/grok-video-latest.mp4');
+  const terminal = socket.sent.find((entry) => entry.event === 'task:result')?.payload;
+  assert.equal(terminal.result.file_ref, fileRef);
+  assert.equal(terminal.result.uploaded_to_heysure, true);
+  service.stop();
+});
+
 test('未知工具返回 task:error，注册拒绝后会自动重新登录', async () => {
   const socket = new FakeSocket();
   let loginCount = 0;

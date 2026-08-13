@@ -17,7 +17,7 @@ function augmentHeySureBrowserFileTool(sourceName, tool) {
   const schema = tool.input_schema || { type: 'object', properties: {} };
   return {
     ...tool,
-    description: `${tool.description} HeySure 远程调用 upload 时也可传服务器工作区 file_ref/file_refs；download/download_element 默认将结果上传到成员工作区并返回 file_ref。`,
+    description: `${tool.description} HeySure 远程调用 upload 时也可传服务器工作区 file_ref/file_refs；download/download_element 默认上传下载结果；upload_to_server 可直接上传设备 AI-Workspace 文件并返回 file_ref。`,
     input_schema: {
       ...schema,
       properties: {

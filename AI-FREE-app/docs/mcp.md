@@ -125,6 +125,8 @@ Cookie 属于登录会话数据，不属于 `browser_environment.settings` 的�
 - 框架参数：`frame`、`frame_path`。
 - 文本与标记参数：`include_text`、`text_limit`（默认 120，范围 20–500）、`mark`、`highlight_duration_ms`。超长文本会截断并返回 `textTruncated=true`。
 - 顶层可点击筛选：交互元素必须在当前视口的至少一个候选点通过 Chromium 命中测试；被遮罩完全覆盖、`pointer-events:none`或禁用的元素不返回。按钮内部的 `span/svg/path` 会归并到最近的按钮或链接。
+- 控件语义：保留 `kind=interactive` 的兼容分类，同时返回 `role`、`controlType`、`editable`、`multiline`、`label`、`readOnly`、`required` 以及选中/展开/按下状态。可区分文本、密码、搜索、数字、日期时间、文件和富文本输入，以及按钮、链接、复选/单选、开关、滑块、下拉/列表、标签页和菜单项。`select` 还会返回最多 50 个选项及其选中状态；密码框的当前值不会进入 `text`、`value` 或关键字匹配。
+- 语义筛选：`filter` 除原有 `interactive`、`media`、`text` 外，还可传 `input`、`form` 或具体 `role`/`controlType`，例如 `checkbox`、`combobox`、`text-input`。关键字匹配同时覆盖可见文本、`label`、`placeholder` 和 `aria-label`。
 - Closed Shadow DOM：隔离世界无法访问的 closed shadowRoot 会由 Chromium Accessibility Tree 补充其中可见、可用的交互控件，并返回 `accessibilityFallback=true` 与真实 `clickX/clickY`；这类 item 不伪造 selector，后续应直接使用其 `ref` 点击。
 - Fork 原生 Observe 默认在 Chromium UI 层绘制与元素 `id` 对应的边框标签，不写入网页 DOM、不接收鼠标事件；导航、滚动、窗口隐藏或超时后自动清除。最多绘制 120 个标记。
 - 路由参数：`tab_id`。

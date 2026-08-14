@@ -100,6 +100,22 @@ function createTestServer() {
         </script>`);
       return;
     }
+    if (url.pathname === '/semantic-controls') {
+      response.end(`<!doctype html><meta charset="utf-8"><title>SEMANTIC_CONTROLS_READY</title>
+        <style>body{display:grid;grid-template-columns:repeat(3,220px);gap:14px;padding:20px}
+          input,textarea,select,button,[role],[contenteditable]{min-height:36px}</style>
+        <label for="username">用户名</label><input id="username" placeholder="请输入账号" required>
+        <label for="password">密码</label><input id="password" type="password" value="observe-must-not-leak">
+        <textarea id="bio" aria-label="个人简介"></textarea>
+        <label><input id="remember" type="checkbox" checked>记住登录</label>
+        <label><input id="plan" type="radio" name="plan" checked>专业版</label>
+        <select id="region"><option value="cn">中国</option><option value="sg" selected>新加坡</option></select>
+        <div id="editor" contenteditable="plaintext-only" aria-label="正文编辑器">草稿</div>
+        <button id="details" type="button" aria-expanded="true">详情</button>
+        <div id="notifications" role="switch" aria-checked="false" tabindex="0">通知</div>
+        <div id="settings-tab" role="tab" aria-selected="true" tabindex="0">设置</div>`);
+      return;
+    }
     if (url.pathname === '/media-grid') {
       response.end(`<!doctype html><meta charset="utf-8"><title>MEDIA_GRID_READY</title>
         <style>.tile{position:fixed;width:220px;height:160px;object-fit:cover}.clickable{cursor:pointer}
@@ -388,6 +404,38 @@ app.whenReady().then(async () => {
     (item) => item.path === '/input-result' && item.profile === 'coordinate',
   );
   assert.equal(new URLSearchParams(coordinateRequest.query || '').get('trusted'), 'true');
+
+  const semanticPage = await manager.navigate('phase3_b', 'chromium', `${origin}/semantic-controls`);
+  assert.equal(semanticPage.result.title, 'SEMANTIC_CONTROLS_READY');
+  const semanticObserved = await manager.dispatchAutomationByProcessId(b.state.pid, 'observe-page', {
+    limit: 50, show_highlights: false,
+  });
+  const semanticItem = (selector) => semanticObserved.result.items.find((item) => item.selector === selector);
+  assert.equal(semanticItem('#username')?.role, 'textbox');
+  assert.equal(semanticItem('#username')?.controlType, 'text-input');
+  assert.equal(semanticItem('#username')?.editable, true);
+  assert.equal(semanticItem('#username')?.label, '用户名');
+  assert.equal(semanticItem('#username')?.required, true);
+  assert.equal(semanticItem('#password')?.inputType, 'password');
+  assert.equal(semanticItem('#password')?.text, '');
+  assert.equal(semanticItem('#password')?.value, '');
+  assert.equal(semanticItem('#bio')?.multiline, true);
+  assert.equal(semanticItem('#remember')?.controlType, 'checkbox');
+  assert.equal(semanticItem('#remember')?.checked, true);
+  assert.equal(semanticItem('#plan')?.controlType, 'radio');
+  assert.equal(semanticItem('#region')?.role, 'combobox');
+  assert.equal(semanticItem('#region')?.options.find((option) => option.selected)?.value, 'sg');
+  assert.equal(semanticItem('#editor')?.controlType, 'rich-text-input');
+  assert.equal(semanticItem('#details')?.expanded, true);
+  assert.equal(semanticItem('#notifications')?.role, 'switch');
+  assert.equal(semanticItem('#notifications')?.ariaChecked, 'false');
+  assert.equal(semanticItem('#settings-tab')?.role, 'tab');
+  const inputsOnly = await manager.dispatchAutomationByProcessId(b.state.pid, 'observe-page', {
+    filter: 'input', limit: 20, show_highlights: false,
+  });
+  assert(inputsOnly.result.items.some((item) => item.selector === '#username'));
+  assert(inputsOnly.result.items.some((item) => item.selector === '#editor'));
+  assert(inputsOnly.result.items.every((item) => item.editable === true));
 
   const mediaPage = await manager.navigate('phase3_b', 'chromium', `${origin}/media-grid`);
   assert.equal(mediaPage.result.title, 'MEDIA_GRID_READY');

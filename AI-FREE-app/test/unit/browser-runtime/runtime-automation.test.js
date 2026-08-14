@@ -308,6 +308,25 @@ test('fork takeover makes mutations explicit and globally suppresses blocking di
   assert.doesNotMatch(patch, /^\+.*RunJavaScriptDialog/m);
 });
 
+test('fork observe exposes semantic control types and form state', () => {
+  const patchDirectory = path.join(__dirname, '../../../native/chromium-fork/patches');
+  const series = fs.readFileSync(path.join(patchDirectory, 'series'), 'utf8');
+  const patch = fs.readFileSync(
+    path.join(patchDirectory, '0038-ai-free-observe-control-semantics.patch'), 'utf8',
+  );
+  assert.match(series, /0037-ai-free-mcp-modal-guard\.patch\s+0038-ai-free-observe-control-semantics\.patch/);
+  assert.match(patch, /controlInfo/);
+  assert.match(patch, /controlType/);
+  assert.match(patch, /role:semantic\.role/);
+  assert.match(patch, /editable:semantic\.editable/);
+  assert.match(patch, /label:clip\(label\)/);
+  assert.match(patch, /ariaChecked/);
+  assert.match(patch, /item\.options/);
+  assert.match(patch, /filter==='input'/);
+  assert.match(patch, /inputType==='password'\?'':rawText/);
+  assert.match(patch, /kEditable/);
+});
+
 test('fork observe highlights stay in the native event-transparent UI layer', () => {
   const patchDirectory = path.join(__dirname, '../../../native/chromium-fork/patches');
   const series = fs.readFileSync(path.join(patchDirectory, 'series'), 'utf8');

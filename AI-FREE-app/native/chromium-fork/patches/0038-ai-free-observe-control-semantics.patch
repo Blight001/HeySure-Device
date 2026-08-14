@@ -1,0 +1,71 @@
+diff --git a/chrome/browser/ui/views/frame/ai_free_page_automation.cc b/chrome/browser/ui/views/frame/ai_free_page_automation.cc
+--- a/chrome/browser/ui/views/frame/ai_free_page_automation.cc
++++ b/chrome/browser/ui/views/frame/ai_free_page_automation.cc
+@@ -75,7 +75,7 @@ std::string ObserveScript(const base::DictValue& command) {
+     const keyword=String(a.keyword||'').toLowerCase();
+     const tagFilter=String(a.tag||'').toLowerCase();
+     const kindFilter=String(a.filter||'').toLowerCase();
+-    const interactive='a[href],button,input,textarea,select,summary,[role="button"],[role="link"],[role="checkbox"],[role="menuitem"],[contenteditable="true"]';
++    const interactive='a[href],button,input:not([type="hidden"]),textarea,select,summary,[contenteditable]:not([contenteditable="false"]),[role="button"],[role="link"],[role="checkbox"],[role="radio"],[role="switch"],[role="textbox"],[role="searchbox"],[role="combobox"],[role="listbox"],[role="option"],[role="slider"],[role="spinbutton"],[role="tab"],[role="menuitem"],[role="menuitemcheckbox"],[role="menuitemradio"],[role="treeitem"]';
+     const items=[]; let matched=0;
+     const isElement=(node)=>!!node&&node.nodeType===1;
+     const style=(el)=>el.ownerDocument.defaultView.getComputedStyle(el);
+@@ -82,6 +82,10 @@ std::string ObserveScript(const base::DictValue& command) {
+     const srcsetUrls=(value)=>String(value||'').split(',').map(part=>absoluteUrl(part.trim().split(/\s+/)[0])).filter(Boolean);
+     const backgroundUrls=(value)=>{const urls=[];for(const match of String(value||'').matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/g)){const url=absoluteUrl(match[2]);if(url)urls.push(url);}return urls;};
+     const mediaInfo=(el,computed)=>{const tag=el.tagName.toLowerCase(),urls=[];const add=value=>{const url=absoluteUrl(value);if(url&&!urls.includes(url))urls.push(url);};if(tag==='img'){add(el.currentSrc);add(el.src);for(const url of srcsetUrls(el.getAttribute('srcset')))add(url);const picture=el.closest('picture');if(picture){for(const source of picture.querySelectorAll('source'))for(const url of srcsetUrls(source.srcset))add(url);}for(const name of ['data-src','data-original','data-image-url'])add(el.getAttribute(name));}else if(tag==='video'){add(el.currentSrc);add(el.src);add(el.poster);}else if(tag==='audio'){add(el.currentSrc);add(el.src);}for(const url of backgroundUrls(computed.backgroundImage))add(url);return {isMedia:/^(img|video|audio|canvas)$/.test(tag)||urls.length>0,type:/^(img|video|audio|canvas)$/.test(tag)?tag:'background-image',urls};};
++    const roleOf=(el)=>String(el.getAttribute('role')||'').trim().toLowerCase();
++    const labelOf=(el)=>{const labels=el.labels?[...el.labels]:[];const wrapping=el.closest?.('label');if(wrapping&&!labels.includes(wrapping))labels.push(wrapping);return labels.map(label=>String(label.innerText||label.textContent||'').trim()).filter(Boolean).join(' ').replace(/\s+/g,' ');};
++    const controlInfo=(el,tag,inputType)=>{const explicitRole=roleOf(el);let role=explicitRole,controlType=explicitRole,editable=false,multiline=false;if(tag==='input'){const type=inputType||'text';if(['button','submit','reset','image'].includes(type)){role=role||'button';controlType='button';}else if(type==='checkbox'||type==='radio'||type==='range'){role=role||(type==='range'?'slider':type);controlType=role;}else if(type==='file'||type==='color'){role=role||'button';controlType=type+'-input';}else{role=role||(type==='search'?'searchbox':type==='number'?'spinbutton':'textbox');controlType=type==='number'?'number-input':/^(date|datetime-local|month|time|week)$/.test(type)?'date-time-input':'text-input';editable=true;}}else if(tag==='textarea'){role=role||'textbox';controlType='text-input';editable=true;multiline=true;}else if(tag==='select'){role=role||(el.multiple?'listbox':'combobox');controlType='select';}else if(tag==='button'){role=role||'button';controlType='button';}else if(tag==='a'){role=role||'link';controlType='link';}else if(tag==='summary'){role=role||'button';controlType='disclosure';}else if(el.isContentEditable){role=role||'textbox';controlType='rich-text-input';editable=true;multiline=true;}else if(!controlType){controlType='clickable';}return {role,controlType,editable,multiline};};
++    const matchesFilter=(filter,kind,info)=>!filter||filter===kind||filter===info.role||filter===info.controlType||(filter==='input'&&info.editable)||(filter==='form'&&['input','select','button'].some(value=>info.controlType.includes(value)));
+     const selector=(el)=>{if(el.id)return '#'+CSS.escape(el.id);const n=el.getAttribute('name');if(n)return el.tagName.toLowerCase()+'[name="'+CSS.escape(n)+'"]';let s=el.tagName.toLowerCase();const p=el.parentElement;if(p){const same=[...p.children].filter(x=>x.tagName===el.tagName);if(same.length>1)s+=':nth-of-type('+(same.indexOf(el)+1)+')';}return s;};
+     const composedParent=(el)=>{if(el.parentElement)return el.parentElement;const root=el.getRootNode?.();return root&&root.host||null;};
+     const rendered=(el)=>{for(let current=el;isElement(current);current=composedParent(current)){const c=style(current);if(c.display==='none'||c.visibility==='hidden'||c.visibility==='collapse'||Number(c.opacity)===0||current.inert)return false;}return true;};
+@@ -104,12 +108,17 @@ std::string ObserveScript(const base::DictValue& command) {
+         else if(a.includeText!==false&&el.children.length===0&&String(el.innerText||el.textContent||'').trim())kind='text';
+         if(!kind)continue;
+         const point=exposedPoint(el,r,clickable,kind==='media');if(!point)continue;
++        const inputType=tag==='input'?String(el.type||'').toLowerCase():'';
++        const semantic=controlInfo(el,tag,inputType);
+         const rawText=String(el.innerText||el.textContent||el.value||el.getAttribute('aria-label')||'').trim().replace(/\s+/g,' ');
+-        if(keyword&&!rawText.toLowerCase().includes(keyword))continue;if(tagFilter&&tag!==tagFilter)continue;if(kindFilter&&kind!==kindFilter)continue;
++        const safeText=inputType==='password'?'':rawText;
++        const label=labelOf(el);const searchable=[safeText,label,el.getAttribute('placeholder'),el.getAttribute('aria-label')].filter(Boolean).join(' ').toLowerCase();
++        if(keyword&&!searchable.includes(keyword))continue;if(tagFilter&&tag!==tagFilter)continue;if(!matchesFilter(kindFilter,kind,semantic))continue;
+         matched++;if(items.length>=limit)continue;
+         const clip=(value,max=textLimit)=>String(value||'').slice(0,max);
+-        const inputType=tag==='input'?String(el.type||'').toLowerCase():'';
+-        const item={id:'e'+matched,kind,tag,selector:selector(el),text:rawText.slice(0,textLimit),textTruncated:rawText.length>textLimit,name:clip(el.getAttribute('name')),placeholder:clip(el.getAttribute('placeholder')),ariaLabel:clip(el.getAttribute('aria-label')),value:/password/i.test(el.type||'')?'':clip(el.value),disabled:!!el.disabled,...(inputType?{inputType}:{}),...(inputType==='file'?{requiresFileUpload:true}:{}),x:Math.round(r.left),y:Math.round(r.top),width:Math.round(r.width),height:Math.round(r.height)};
++        const item={id:'e'+matched,kind,tag,selector:selector(el),text:safeText.slice(0,textLimit),textTruncated:safeText.length>textLimit,name:clip(el.getAttribute('name')),label:clip(label),placeholder:clip(el.getAttribute('placeholder')),ariaLabel:clip(el.getAttribute('aria-label')),value:inputType==='password'?'':clip(el.value),disabled:!!el.disabled,role:semantic.role,controlType:semantic.controlType,editable:semantic.editable,multiline:semantic.multiline,readOnly:!!el.readOnly,required:!!el.required,...(inputType?{inputType}:{}),...(inputType==='file'?{requiresFileUpload:true}:{}),...('checked' in el?{checked:!!el.checked}:{}),...(el.getAttribute('aria-checked')!==null?{ariaChecked:el.getAttribute('aria-checked')}:{}),...(el.getAttribute('aria-expanded')!==null?{expanded:el.getAttribute('aria-expanded')==='true'}:{}),...(el.getAttribute('aria-pressed')!==null?{pressed:el.getAttribute('aria-pressed')==='true'}:{}),x:Math.round(r.left),y:Math.round(r.top),width:Math.round(r.width),height:Math.round(r.height)};
++        if(tag==='select'){item.multiple=!!el.multiple;item.options=[...el.options].slice(0,50).map(option=>({text:clip(option.text),value:clip(option.value),selected:option.selected,disabled:option.disabled}));item.optionsTruncated=el.options.length>50;}
++        if(tag==='button')item.buttonType=String(el.type||'submit').toLowerCase();
+         if(clickable){item.interactive=true;item.clickX=Math.round(point.x*100)/100;item.clickY=Math.round(point.y*100)/100;}
+         if(kind==='media'){item.mediaType=media.type;item.mediaUrls=media.urls.slice(0,10);if(item.mediaUrls.length)item.mediaUrl=item.mediaUrls[0];const downloadable=item.mediaUrls.find(url=>/^https?:/i.test(url));if(downloadable)item.downloadUrl=downloadable;if(tag==='img'){item.naturalWidth=Number(el.naturalWidth)||0;item.naturalHeight=Number(el.naturalHeight)||0;}const linked=absoluteUrl(el.closest?.('a[href]')?.href);if(linked&&/^https?:/i.test(linked))item.linkedUrl=linked;}
+         if(tag==='a'&&/^https?:/i.test(el.href||'')){item.href=String(el.href).slice(0,2048);item.downloadUrl=item.href;const n=el.getAttribute('download');if(n)item.downloadFilename=String(n).slice(0,160);}items.push(item);
+diff --git a/chrome/browser/ui/views/frame/ai_free_accessibility_observe.cc b/chrome/browser/ui/views/frame/ai_free_accessibility_observe.cc
+--- a/chrome/browser/ui/views/frame/ai_free_accessibility_observe.cc
++++ b/chrome/browser/ui/views/frame/ai_free_accessibility_observe.cc
+@@ -18,4 +18,5 @@
+ #include "content/public/browser/web_contents.h"
++#include "ui/accessibility/ax_enum_util.h"
+ #include "ui/accessibility/ax_mode.h"
+ #include "ui/accessibility/ax_node.h"
+ #include "ui/accessibility/ax_node_data.h"
+@@ -174,5 +175,6 @@ void MergeAccessibilityItems(const base::DictValue& command,
+     }
+     const std::u16string full_text = base::UTF8ToUTF16(text);
++    const std::string role = base::ToLowerASCII(ui::ToString(data.role));
+     base::DictValue item;
+     item.Set("id", "e" + std::to_string(matched));
+     item.Set("kind", "interactive");
+@@ -186,5 +188,10 @@ void MergeAccessibilityItems(const base::DictValue& command,
+     item.Set("ariaLabel", ClipUtf8(text, text_limit));
+     item.Set("value", "");
+     item.Set("disabled", false);
++    item.Set("role", role);
++    item.Set("controlType", role.empty() ? "clickable" : role);
++    item.Set("editable", data.HasState(ax::mojom::State::kEditable));
++    item.Set("multiline", data.HasState(ax::mojom::State::kMultiline));
++    item.Set("readOnly", data.GetRestriction() == ax::mojom::Restriction::kReadOnly);
+     item.Set("x", static_cast<int>(std::round(bounds.x())));
+     item.Set("y", static_cast<int>(std::round(bounds.y())));

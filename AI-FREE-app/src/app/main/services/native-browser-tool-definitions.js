@@ -50,7 +50,7 @@ const NATIVE_BROWSER_TOOL_DEFINITIONS = Object.freeze([
   },
   {
     name: 'browser_observe',
-    description: '通过 Chromium 隔离世界观察当前页面，并在浏览器原生 UI 层绘制标记。',
+    description: '通过 Chromium 隔离世界观察当前页面，并在浏览器原生 UI 层绘制标记。每个交互项会返回 role、controlType、editable、label 和选中/展开等状态，用于区分输入框、按钮、链接、复选/单选、下拉框、富文本区等元素。filter 可用 interactive、media、text、input、form 或具体 role/controlType。',
     input_schema: objectSchema({
       limit: { type: 'number' }, max_items: { type: 'number' }, filter: { type: 'string' },
       tag: { type: 'string' }, keyword: { type: 'string' }, include_text: { type: 'boolean' },

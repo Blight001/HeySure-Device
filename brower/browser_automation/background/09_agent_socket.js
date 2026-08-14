@@ -579,6 +579,8 @@ async function emitAgentEnrollOn(socket) {
         os: { platform: 'browser', arch: 'unknown', release: AGENT_VERSION, hostname: id },
         capabilities: toolDefs.map((t) => t.name),
         toolDefs,
+        aiDescription: '用于运行浏览器自动化卡片并执行受控的网页操作',
+        catalogProtocolVersion: 2,
         version: AGENT_VERSION,
         token: auth.token || '',
         userId: auth.userId != null ? auth.userId : null,

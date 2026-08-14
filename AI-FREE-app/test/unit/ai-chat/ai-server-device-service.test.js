@@ -139,6 +139,11 @@ test('登录后注册 custom 设备并将派发任务恰好回一个终态', asy
   assert.equal(registration.id, 'ai-free-machine-123');
   assert.equal(registration.deviceType, 'custom');
   assert.equal(registration.platform, 'ai-free-custom-service');
+  assert.equal(
+    registration.aiDescription,
+    '用于连接 AI-FREE，调用其中已启用的软件窗口、浏览器与自动化 MCP 工具',
+  );
+  assert.equal(registration.catalogProtocolVersion, 2);
   assert.deepEqual(registration.capabilities, ['aifree.browser+action']);
   assert.equal(registration.toolDefs[0].input_schema.required[0], 'action');
 

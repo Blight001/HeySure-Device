@@ -256,6 +256,8 @@ async function emitRegisterOn(s: Socket): Promise<void> {
     // describe_tool instead of hardcoding browser tool schemas, so a tool added
     // here — or a description edited in the popup — needs no server change.
     toolDefs,
+    aiDescription:   '用于操作当前浏览器中的网页，并执行受控的页面自动化',
+    catalogProtocolVersion: 2,
     version:         '1.0.0',
     token:           auth.token || settings.agentToken || '',
     userId:          auth.userId ?? null,

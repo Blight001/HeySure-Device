@@ -339,6 +339,8 @@ export class HeySureAgent {
         capabilities: [...getAvailableTools(), 'remote_control', 'remote_terminal'],
         runtimes: cachedRuntimes() || undefined,
         toolDefs: this.effectiveToolDefs(),
+        aiDescription: '用于在这台 Windows 设备上执行受控的桌面、命令行与远程操作',
+        catalogProtocolVersion: 2,
         version: '2.0.0-tauri',
         token: this.settings.authToken || this.settings.agentToken || '',
         workspaceRoot: this.workspaceRoot,

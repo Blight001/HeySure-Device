@@ -92,6 +92,8 @@ class Agent:
             "platform": "custom-service",    # 自由串；勿含 desktop/windows/browser/android/workshop
             "capabilities": caps,            # MCP 工具名 + remote_terminal（传输层能力字）
             "toolDefs": self.registry.tool_defs,
+            "aiDescription": "用于管理这台 Linux 服务器并执行受控的系统与命令行操作",
+            "catalogProtocolVersion": 2,
             "version": __version__,
             "lifecycle": "registered",
             "os": {

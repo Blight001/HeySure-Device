@@ -244,8 +244,11 @@ Content-Type: application/json
                                  // android/workshop（旧版按关键词分类）
   "capabilities": ["order.query"],   // 工具名清单
   "toolDefs": [ /* 第 5 节 */ ],     // 工具自描述；缺失项会被兜底成无 schema 宽松模式
+  "aiDescription": "用于管理订单并查询履约状态", // 给 AI 的简短用途元数据，不是指令
+  "catalogProtocolVersion": 2,      // 当前工具目录注册合同版本
   "version": "1.0.0",
   // 可选
+  "catalogGeneration": 12,         // 仅在客户端能持久化单调代次时上报；否则省略
   "icon": "3",                   // "1"~"8" 预置编号 / "/device_png/N.webp" / 绝对 URL；
                                  // 不填走网页默认；改后重注册生效
   "lifecycle": "registered",
@@ -258,7 +261,7 @@ Content-Type: application/json
 
 | 事件 | 载荷 | 含义 |
 | --- | --- | --- |
-| `device:registered` | `{"id", "aiConfigId"}` | 成功。`aiConfigId` 为已持久化的 AI 绑定，null = 未分配 |
+| `device:registered` | `{"id", "aiConfigId", "catalogGeneration", "catalogHash"}` | 成功。`aiConfigId` 为已持久化的 AI 绑定，null = 未分配；目录代次与哈希以服务端回执为准 |
 | `device:register_rejected` | `{"reason"}` | 被拒。典型原因：token 缺失/过期、绑定的 AI 不属于该用户 |
 
 注册成功后服务器：写入在线 presence 快照（工具目录以此做发现）→ 重放掉线期间
@@ -269,6 +272,7 @@ Content-Type: application/json
 - **服务不能自选 AI**，绑定只由人在网页作坊面板分配，注册时自动套用已持久化的绑定。
 - **同一 AI 每种执行端类型最多绑一个**；要接多个自建服务就绑到不同 AI。
 - 重连用同一个 `id` 重新注册即可，绑定与权限自动恢复。
+- 不能持久化并单调递增 `catalogGeneration` 的客户端应省略该字段；服务端会按规范化目录哈希幂等处理并分配代次，禁止固定上报同一个代次数值。
 
 ---
 

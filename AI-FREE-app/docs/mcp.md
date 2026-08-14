@@ -178,6 +178,7 @@ AI 对话和 HeySure 设备端都会发现当前所有已连接浏览器的工�
 ## HeySure 注册与可用性
 
 - HeySure 设备工具注册由 [`ai-server-device-service.js`](../src/app/main/features/ai-chat/ai-server-device-service.js) 负责，内部名称会转换为 `aifree.<工具名>`。
+- 注册同时上报 AI 用途说明“用于连接 AI-FREE，调用其中已启用的软件窗口、浏览器与自动化 MCP 工具”和 `catalogProtocolVersion=2`，让 HeySure AI 能把该设备与普通浏览器、桌面或 Android 执行器区分开；该说明仅是能力元数据，不是执行指令。
 - 外部调用目录由 [`browser-automation-external-gateway.js`](../src/app/main/services/browser-automation-external-gateway.js) 汇总，并执行会员权限、浏览器路由和敏感参数限制。
 - 只有服务器实时校验为有效会员时，软件才会向 HeySure 注册为在线设备并接受调用。
 - 浏览器连接建立或断开后，设备会自动刷新工具目录。因此 HeySure 端可见工具数量可能在 2 个和 9 个之间变化。

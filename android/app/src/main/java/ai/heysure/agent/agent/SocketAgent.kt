@@ -270,6 +270,8 @@ class SocketAgent(
             put("os", "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
             put("capabilities", JSONArray(capabilities()))
             put("toolDefs", toolDefs())
+            put("aiDescription", "用于在安卓设备上执行受控的点击、滑动、截图与应用操作")
+            put("catalogProtocolVersion", 2)
             put("version", ai.heysure.agent.BuildConfig.VERSION_NAME)
             put("token", settings.authToken)
             put("lifecycle", "registered")

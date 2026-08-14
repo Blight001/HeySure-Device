@@ -133,6 +133,8 @@ export class AdbAgent {
       os: `ADB host ${os.platform()} → ${this.cfg.serial}`,
       capabilities: toolNames(),
       toolDefs: toolDefs(),
+      aiDescription: '用于通过 ADB 在安卓设备上执行受控的点击、滑动、截图与应用操作',
+      catalogProtocolVersion: 2,
       version: '2.0.0',
       token: this.cfg.authToken,
       lifecycle: 'registered',

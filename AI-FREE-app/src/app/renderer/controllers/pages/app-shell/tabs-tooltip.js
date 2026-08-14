@@ -299,7 +299,7 @@ function buildAdvancedSystemTooltip(settings, runtimeEnvironment) {
     ? portProtection.allowList.join('、') : '无';
   return [
     `CPU：${Math.max(1, Number(settings.cpu) || 1)} 核`,
-    `内存：${Math.max(1, Number(settings.memory) || 1)} GB`,
+    `设备内存指纹：${Math.max(1, Number(settings.memory) || 1)} GB`,
     `设备名称：${formatCustomSetting(deviceName)}`,
     `MAC 地址：${formatCustomSetting(macAddress)}`,
     `禁止跟踪（DNT）：${enabledLabel(settings.doNotTrack)}`,

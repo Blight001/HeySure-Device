@@ -34,6 +34,7 @@ const DEFAULT_AI_FREE_BROWSER_SETTINGS = Object.freeze({
   sslEnabled: false,
   portScanProtection: { enabled: true, allowList: [] },
   hardwareAcceleration: true,
+  lowSpecMode: 'auto',
   launchArgs: { mode: 'default', value: '' },
   automation: { permissionOrigins: [] },
 });
@@ -178,7 +179,7 @@ function normalizeAiFreeBrowserSettings(input = {}) {
       enabled: bool(portScanProtection.enabled, defaults.portScanProtection.enabled),
       allowList: normalizePortAllowList(portScanProtection.allowList),
     },
-    hardwareAcceleration: bool(source.hardwareAcceleration, defaults.hardwareAcceleration),
+    ...normalizeRuntimePolicy(source, defaults),
     launchArgs: { mode: pick(launchArgs.mode, ['default', 'custom'], defaults.launchArgs.mode), value: text(launchArgs.value, '', 10000) },
     automation: normalizeAutomationSettings(source),
   };
@@ -198,6 +199,13 @@ function parseCookieJson(settings = {}) {
 function parseLaunchArgs(settings = {}) {
   if (settings.launchArgs?.mode !== 'custom') return [];
   return String(settings.launchArgs.value || '').split(/\r?\n|\s+(?=--)/).map((item) => item.trim()).filter((item) => item.startsWith('--')).slice(0, 100);
+}
+
+function normalizeRuntimePolicy(source, defaults) {
+  return {
+    hardwareAcceleration: bool(source.hardwareAcceleration, defaults.hardwareAcceleration),
+    lowSpecMode: pick(source.lowSpecMode, ['auto', 'on', 'off'], defaults.lowSpecMode),
+  };
 }
 
 module.exports = {

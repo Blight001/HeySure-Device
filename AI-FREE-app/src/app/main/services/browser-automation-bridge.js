@@ -13,6 +13,7 @@ class BrowserAutomationBridgeRuntime {
     this.logger = options.logger || console;
     this.host = '127.0.0.1';
     this.port = Number(options.port || process.env.AI_FREE_AUTOMATION_BRIDGE_PORT || DEFAULT_PORT);
+    this.backgroundExecutionLeases = options.backgroundExecutionLeases || null;
     this.cardCacheStore = createCardCacheStore({ dataDir: options.cardCacheDir });
     this.nativeCardService = createNativeAutomationCardService({
       read: () => this.cardCacheStore.read(), write: (state) => this.cardCacheStore.write(state),
@@ -101,13 +102,18 @@ class BrowserAutomationBridgeRuntime {
     return { state, item };
   }
 
+  async withBackgroundLease(operation, options = {}) {
+    const lease = this.backgroundExecutionLeases?.acquire?.({ timeoutMs: options.timeoutMs });
+    try { return await operation(); } finally { lease?.release?.(); }
+  }
+
   manageCard(connectionId, args = {}, options = {}) {
     const action = String(args?.action || '').trim().toLowerCase();
     if (action === 'run') {
-      return this.nativeCardService.execute(args, {
+      return this.withBackgroundLease(() => this.nativeCardService.execute(args, {
         timeoutMs: options.timeoutMs,
         dispatch: (tool, toolArgs) => this.cardMcpRouter.execute(connectionId, tool, toolArgs, options),
-      });
+      }), options);
     }
     return this.nativeCardService.execute(args, { timeoutMs: options.timeoutMs });
   }
@@ -120,7 +126,10 @@ class BrowserAutomationBridgeRuntime {
   }
 
   dispatch(connectionId, tool, args = {}, options = {}) {
-    return this.nativeAutomation.dispatch(connectionId, tool, args, options);
+    return this.withBackgroundLease(
+      () => this.nativeAutomation.dispatch(connectionId, tool, args, options),
+      options,
+    );
   }
 
   async stop() {

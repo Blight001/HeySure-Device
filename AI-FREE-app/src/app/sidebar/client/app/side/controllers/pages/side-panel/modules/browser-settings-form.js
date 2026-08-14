@@ -49,6 +49,7 @@
     deps.setValue('browser-webgl-vendor', webgl.vendor); deps.setValue('browser-webgl-renderer', webgl.renderer);
     deps.setValue('browser-cpu', current.cpu); deps.setValue('browser-memory', current.memory); deps.setValue('device-name', deviceName.value); deps.setValue('mac-address', macAddress.value);
     deps.setChecked('do-not-track', current.doNotTrack); deps.setValue('port-scan-allow-list', (Array.isArray(protection.allowList) ? protection.allowList : []).join(',')); deps.setChecked('hardware-acceleration', current.hardwareAcceleration);
+    deps.setValue('low-spec-mode', current.lowSpecMode || 'auto');
     deps.setValue('launch-args', launchArgs.value);
     deps.syncConditionalFields();
     return current;

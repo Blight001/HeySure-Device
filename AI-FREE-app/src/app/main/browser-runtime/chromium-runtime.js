@@ -1,11 +1,13 @@
 const crypto = require('crypto');
+const path = require('path');
 const { BrowserRuntime } = require('./browser-runtime');
 const { ChromiumCommandClient, createPipeName } = require('./chromium-command-client');
 const { ChromiumHealthMonitor } = require('./chromium-health');
 const { launchChromium } = require('./chromium-launcher');
 const { prepareSessionImport } = require('./session-import');
 const { assertActiveChromiumLaunch, normalizeBounds, RUNTIME_STATUS, RUNTIME_TYPES } = require('./runtime-types');
-const { cleanupFailedChromiumLaunch, stopChromiumProfile } = require('./chromium-runtime-process');
+const { stopChromiumProfile } = require('./chromium-runtime-process');
+const { launchChromiumProfile } = require('./chromium-runtime-launch');
 const { bindChromiumProcessFailure } = require('./chromium-process-diagnostics');
 const { snapshotAppliedChromiumProfile } = require('./chromium-profile-snapshot');
 const { attachChildWindowWithRetry } = require('./chromium-window-attachment');
@@ -13,8 +15,8 @@ const { groupCookiesByOrigin } = require('./chromium-cookie-groups');
 const { dispatchRuntimeInput, dispatchRuntimeInputByProcessId } = require('./runtime-input');
 const { dispatchRuntimeAutomationByProcessId } = require('./runtime-automation');
 const { openChromiumTabs } = require('./chromium-tab-actions');
-
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const { waitForBrowserWindow } = require('./chromium-handshake-waiter');
+const { startChromiumPreflightWarmup } = require('./chromium-preflight-warmup');
 
 class ChromiumRuntime extends BrowserRuntime {
   constructor(options = {}) {
@@ -44,38 +46,22 @@ class ChromiumRuntime extends BrowserRuntime {
 
   /** @param {Record<string, any>} [rawProfile] */
   async launchProfile(rawProfile = {}, rawBounds = {}) {
-    const profileId = String(rawProfile.profileId || rawProfile.id || '').trim();
-    if (!profileId) throw new Error('缺少 Profile ID');
-    if (this.isProfileVisible(profileId)) {
-      await this.resize(profileId, rawBounds);
-      await this.show(profileId);
-      return this.getState(profileId);
-    }
-    const context = this.prepareProfileLaunch(profileId, rawProfile, rawBounds);
-    try {
-      const instance = await this.createProfileInstance(context);
-      await this.completeProfileLaunch(profileId, instance, context.bounds);
-      return this.getState(profileId);
-    } catch (error) {
-      const state = this.store.getState(profileId);
-      const stopOwnsCleanup = error?.code === 'CHROMIUM_LAUNCH_CANCELLED'
-        && [RUNTIME_STATUS.STOPPING, RUNTIME_STATUS.STOPPED].includes(state?.status);
-      if (!stopOwnsCleanup) {
-        await cleanupFailedChromiumLaunch(this, profileId, {
-          hostHwnd: context.hostHwnd,
-          commandClient: context.commandClient,
-          error,
-        });
-      }
-      throw error;
-    }
+    return launchChromiumProfile(this, rawProfile, rawBounds);
+  }
+
+  prewarm() {
+    return startChromiumPreflightWarmup({
+      ...this.launchOptions,
+      cacheFile: path.join(this.store.rootDir, '.chromium-sandbox-access.json'),
+      logger: this.logger,
+    });
   }
 
   isProfileVisible(profileId) {
     return ['ready', 'hidden'].includes(this.store.getState(profileId)?.status);
   }
 
-  prepareProfileLaunch(profileId, rawProfile, rawBounds) {
+  prepareProfileLaunch(profileId, rawProfile, rawBounds, performanceSpan) {
     const existing = this.instances.get(profileId);
     if (existing?.child?.exitCode === null) {
       const error = /** @type {Error & {code?: string}} */ (new Error(`Chromium Profile ${profileId} 仍在运行`));
@@ -83,10 +69,14 @@ class ChromiumRuntime extends BrowserRuntime {
       throw error;
     }
     const bounds = normalizeBounds(rawBounds);
+    performanceSpan?.mark('boundsNormalize');
     const paths = this.store.ensureProfile({ ...rawProfile, profileId, runtimeType: RUNTIME_TYPES.CHROMIUM });
+    performanceSpan?.mark('profileStorage');
     const runtimeProfileId = String(paths.id || '').trim();
     this.store.acquireLock(profileId, { runtimeType: RUNTIME_TYPES.CHROMIUM });
+    performanceSpan?.mark('profileLock');
     this.store.createState(profileId, RUNTIME_TYPES.CHROMIUM, { bounds, status: RUNTIME_STATUS.STARTING, startedAt: Date.now() });
+    performanceSpan?.mark('stateCreate');
     return {
       profileId,
       profile: { ...rawProfile, profileId },
@@ -95,6 +85,7 @@ class ChromiumRuntime extends BrowserRuntime {
       bounds,
       hostHwnd: null,
       commandClient: null,
+      performanceSpan,
     };
   }
 
@@ -107,6 +98,7 @@ class ChromiumRuntime extends BrowserRuntime {
     });
     context.hostHwnd = hostHwnd;
     this.windowBridge.hideHostWindow(hostHwnd);
+    context.performanceSpan?.mark('hostWindow');
     const pipeName = createPipeName(context.profileId);
     const launchToken = crypto.randomBytes(32).toString('hex');
     const commandClient = new ChromiumCommandClient({
@@ -114,8 +106,9 @@ class ChromiumRuntime extends BrowserRuntime {
     });
     context.commandClient = commandClient;
     await commandClient.listen();
+    context.performanceSpan?.mark('pipeListen');
     this.store.transition(context.profileId, RUNTIME_STATUS.WAITING_PIPE, { hostHwnd, pipeName });
-    const launched = launchChromium({
+    const launched = await launchChromium({
       ...context,
       hostHwnd,
       pipeName,
@@ -124,6 +117,7 @@ class ChromiumRuntime extends BrowserRuntime {
       executablePath: context.profile.executablePath,
       logger: this.logger,
     });
+    context.performanceSpan?.mark('processLaunch');
     const instance = this.recordProfileInstance(context, parentWindow, commandClient, launched);
     this.bindInstance(context.profileId, instance);
     return instance;
@@ -147,6 +141,7 @@ class ChromiumRuntime extends BrowserRuntime {
       monitor: null,
       parentFocusHandler: null,
       parentFocusRaiseTimers: new Set(),
+      performanceSpan: context.performanceSpan,
     };
     this.instances.set(context.profileId, instance);
     this.store.patchState(context.profileId, { pid: child.pid });
@@ -155,9 +150,11 @@ class ChromiumRuntime extends BrowserRuntime {
 
   async completeProfileLaunch(profileId, instance, bounds) {
     const browserHwnd = await this.waitForBrowserWindow(profileId, instance);
+    instance.performanceSpan?.mark('pipeHandshake');
     assertActiveChromiumLaunch(this.instances.get(String(profileId)) === instance, this.store.getState(profileId)?.status);
     this.assertCompleteHandshake(profileId, browserHwnd);
     await this.attachProfileWindow(profileId, instance, browserHwnd, bounds);
+    instance.performanceSpan?.mark('windowAttach');
     instance.monitor = new ChromiumHealthMonitor({
       isWindowAlive: (hwnd) => this.windowBridge.isWindowAlive(hwnd),
       onFailure: (error) => this.markCrashed(profileId, error),
@@ -165,6 +162,7 @@ class ChromiumRuntime extends BrowserRuntime {
     instance.monitor.start(() => this.store.getState(profileId));
     this.bindParentWindowFocus(profileId, instance);
     this.emit('state-changed', this.getState(profileId));
+    instance.performanceSpan?.mark('runtimeFinalize');
   }
 
   assertCompleteHandshake(profileId, browserHwnd) {
@@ -260,26 +258,7 @@ class ChromiumRuntime extends BrowserRuntime {
   }
 
   async waitForBrowserWindow(profileId, instance) {
-    const allowPrototype = String(process.env.AI_FREE_CHROMIUM_HANDSHAKE || '').toLowerCase() === 'prototype';
-    const timeoutMs = Math.max(3000, Number(instance.profile.launchTimeoutMs) || 30000);
-    let helloWindow = String(instance.commandClient.lastHello?.browserHwnd || '');
-    instance.commandClient.once('hello', (message) => { helloWindow = String(message.browserHwnd || ''); });
-    const startedAt = Date.now();
-    while (Date.now() - startedAt < timeoutMs) {
-      if (instance.launchFailure) throw instance.launchFailure;
-      assertActiveChromiumLaunch(this.instances.get(String(profileId)) === instance, this.store.getState(profileId)?.status);
-      if (helloWindow) return helloWindow;
-      if (allowPrototype) {
-        const found = this.windowBridge.findMainWindowByProcessId(instance.child.pid);
-        if (found) return found;
-      }
-      if (instance.child.exitCode !== null) throw new Error('Chromium 在创建窗口前退出');
-      await delay(100);
-    }
-    /** @type {Error & {code?: string}} */
-    const error = new Error(allowPrototype ? '等待 Chromium 主窗口超时' : '等待 Chromium Fork 命名管道握手超时');
-    error.code = 'CHROMIUM_WINDOW_TIMEOUT';
-    throw error;
+    return waitForBrowserWindow(this, profileId, instance);
   }
 
   async attach(profileId) { return this.getState(profileId); }
@@ -521,6 +500,9 @@ class ChromiumRuntime extends BrowserRuntime {
     const state = this.store.getState(id);
     if (!instance || !state) throw new Error(`Chromium Profile ${id} 不存在`);
     const profile = { ...instance.profile };
+    if (options.compatibilityMode === true) {
+      profile.extraArgs = Array.from(new Set([...(profile.extraArgs || []), '--disable-gpu']));
+    }
     const rememberedInitialUrl = String(profile.initialUrl || '');
     const rememberedRestoreLastSession = profile.restoreLastSession === true;
     // 内部重启（插件开关、指纹参数更新）必须只恢复现有会话。若再次把

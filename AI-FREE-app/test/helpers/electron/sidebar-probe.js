@@ -31,7 +31,7 @@ app.whenReady().then(async () => {
     const report = await win.webContents.executeJavaScript(`({
       theme: document.documentElement.dataset.theme || '',
       hasControlShell: !!document.querySelector('.control-shell'),
-      tabButtons: document.querySelectorAll('.tab-button').length,
+      tabButtons: Array.from(document.querySelectorAll('.tab-button')).filter((item) => !item.hidden).length,
       chatStructure: (() => {
         const messages = document.getElementById('ai-chat-messages');
         const firstTool = {
@@ -127,7 +127,28 @@ app.whenReady().then(async () => {
       const image = await win.webContents.capturePage();
       fs.writeFileSync(process.env.AI_FREE_WELCOME_CAPTURE, image.toPNG());
     }
-    result = { loaded: true, ...report, consoleErrors: consoleErrors.slice(0, 5) };
+    const devWin = new BrowserWindow({ show: false, webPreferences: { sandbox: false } });
+    const devPage = path.join(__dirname, '..', '..', '..', 'src', 'app', 'sidebar', 'ai-control.html');
+    await devWin.webContents.loadFile(devPage, { query: { dev: '1' } });
+    const devNavigation = await devWin.webContents.executeJavaScript(`({
+      tabButtons: Array.from(document.querySelectorAll('.tab-button')).filter((item) => !item.hidden).length,
+      consoleVisible: !document.querySelector('[data-dev-only]')?.hidden,
+    })`);
+    const devConsolePage = path.join(__dirname, '..', '..', '..', 'src', 'app', 'main', 'views', 'dev-console.html');
+    await devWin.webContents.loadFile(devConsolePage, { query: { dev: '1' } });
+    devNavigation.consolePageIntegrated = await devWin.webContents.executeJavaScript(`(
+      document.querySelectorAll('.sidebar-nav .sidebar-tab').length === 3
+      && document.querySelector('.sidebar-tab.active')?.textContent.includes('调试控制台')
+    )`);
+    devWin.destroy();
+    result = {
+      loaded: true,
+      ...report,
+      devTabButtons: devNavigation.tabButtons,
+      devConsoleVisible: devNavigation.consoleVisible,
+      devConsolePageIntegrated: devNavigation.consolePageIntegrated,
+      consoleErrors: consoleErrors.slice(0, 5),
+    };
   } catch (error) {
     result = { loaded: false, error: String((error && error.message) || error), consoleErrors: consoleErrors.slice(0, 5) };
   }

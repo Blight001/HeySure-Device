@@ -54,6 +54,7 @@ function buildAppShellDeps({
     accountStorage,
     http,
     APP_DISPLAY_NAME,
+    getBrowserCapacity,
   } = services;
 
   return {
@@ -125,8 +126,6 @@ function buildAppShellDeps({
     setSideView: appRuntime.setSideView,
     getControlPanelWindow: appRuntime.getControlPanelWindow,
     setControlPanelWindow: appRuntime.setControlPanelWindow,
-    getConsoleWindow: appRuntime.getConsoleWindow,
-    setConsoleWindow: appRuntime.setConsoleWindow,
     getLicenseWindow: appRuntime.getLicenseWindow,
     setLicenseWindow: appRuntime.setLicenseWindow,
     getActiveTabId: appRuntime.getActiveTabId,
@@ -162,8 +161,8 @@ function buildAppShellDeps({
     getJson: http.getJson,
     downloadOrSaveMedia,
     extensionManager,
-    createDevConsoleWindow: () => getAppShell()?.createDevConsoleWindow?.(),
     isDevMode,
+    getBrowserCapacity,
   };
 }
 

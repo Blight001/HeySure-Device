@@ -10,6 +10,7 @@ const {
   snapshotHasRestorableSession,
 } = require('./chromium-launcher');
 const { RUNTIME_STATUS } = require('./runtime-types');
+const { createChromiumPerformanceSpan } = require('./chromium-performance');
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -89,16 +90,21 @@ async function stopChromiumProfile(runtime, profileId, options = {}) {
   const state = runtime.store.getState(id);
   const instance = runtime.instances.get(id);
   if (!state) return null;
+  const performanceSpan = createChromiumPerformanceSpan(runtime.logger, 'stop');
   if (![RUNTIME_STATUS.STOPPING, RUNTIME_STATUS.STOPPED].includes(state.status)) {
     runtime.store.transition(id, RUNTIME_STATUS.STOPPING);
   }
+  performanceSpan.mark('stateTransition');
   try {
-    if (instance) await shutdownChromiumInstance(runtime, id, instance, options);
+    if (instance) await shutdownChromiumInstance(runtime, id, instance, options, performanceSpan);
   } catch (error) {
     await markChromiumStopFailed(runtime, id, instance, state, error);
+    performanceSpan.fail(error);
     throw error;
   }
   finalizeStoppedProfile(runtime, id, instance, state);
+  performanceSpan.mark('finalize');
+  performanceSpan.finish();
   runtime.emit('state-changed', runtime.getState(id));
   return runtime.getState(id);
 }
@@ -188,19 +194,33 @@ function patchFailedLaunchState(runtime, id, instance, error, processExited) {
   });
 }
 
-async function shutdownChromiumInstance(runtime, id, instance, options) {
+async function shutdownChromiumInstance(runtime, id, instance, options, performanceSpan) {
   const preserveSession = options.preserveSession !== false;
   const preCloseSnapshot = preserveSession ? captureChromiumSessionFiles(instance.paths, null) : null;
   const stableSnapshot = preserveSession ? loadStableChromiumSession(instance.paths, runtime.logger) : null;
+  performanceSpan.mark('sessionSnapshot');
   instance.expectedExit = true;
   instance.monitor?.stop();
   runtime.unbindParentWindowFocus(instance);
-  try { await instance.commandClient.send('close-browser', {}, { timeoutMs: 3000 }); } catch (_) {}
+  performanceSpan.mark('runtimeTeardown');
+  // Chromium may terminate before its bridge can acknowledge close-browser.
+  // Start the request, but measure the graceful-exit deadline from the user
+  // action instead of serially adding the command timeout to the exit timeout.
+  const closeRequest = instance.commandClient.send('close-browser', {}, { timeoutMs: 3000 })
+    .catch(() => null);
+  performanceSpan.mark('closeRequest');
   await waitForGracefulChromiumExit(instance, options);
-  if (instance.child.exitCode === null) await forceChromiumExit(instance, options);
+  performanceSpan.mark('gracefulExit');
+  if (instance.child.exitCode === null) {
+    await forceChromiumExit(instance, options);
+    performanceSpan.mark('forceExit');
+  }
   if (instance.child.exitCode === null) throwChromiumExitTimeout(id);
   if (preserveSession) await preserveChromiumSession(runtime, id, instance, preCloseSnapshot, stableSnapshot);
+  performanceSpan.mark('sessionPersist');
   try { await instance.commandClient.close(); } catch (_) {}
+  performanceSpan.mark('transportClose');
+  void closeRequest;
 }
 
 async function waitForGracefulChromiumExit(instance, options) {

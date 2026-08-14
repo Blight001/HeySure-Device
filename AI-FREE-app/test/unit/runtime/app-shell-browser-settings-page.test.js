@@ -70,7 +70,7 @@ test('浏览器配置内嵌主窗口且只创建侧边栏子视图', () => {
     resolveControlPanelHtmlPath: (fileName) => `C:/app/sidebar/${fileName}`,
     getSideView: () => sideView, setSideView: (view) => { sideView = view; },
     setMainWindow: (window) => { mainWindow = window; }, resolveMainWindow: () => mainWindow,
-    resolveControlPanelWindow: () => null, closeDevConsoleWindow: () => {},
+    resolveControlPanelWindow: () => null,
     getIsSidebarVisible: () => true, isControlPanelModeEnabled: () => false,
   });
 

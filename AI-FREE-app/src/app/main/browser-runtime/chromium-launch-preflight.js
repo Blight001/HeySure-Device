@@ -2,7 +2,7 @@
 
 const { createChromiumDiagnosticBundle } = require('./chromium-diagnostic-bundle');
 const { createChromiumLaunchLog } = require('./chromium-launch-log');
-const { formatChromiumPreflight, runChromiumPreflight } = require('./chromium-preflight');
+const { formatChromiumPreflight, runCachedChromiumPreflight } = require('./chromium-preflight');
 
 function throwPreflightFailure(options, executablePath, preflight) {
   const detail = formatChromiumPreflight(preflight);
@@ -27,7 +27,7 @@ function throwPreflightFailure(options, executablePath, preflight) {
 }
 
 function prepareChromiumPreflight(options, executablePath, sandboxAccess) {
-  const preflight = runChromiumPreflight({ executablePath, sandboxAccess });
+  const preflight = runCachedChromiumPreflight({ executablePath, sandboxAccess });
   if (!preflight.ok) throwPreflightFailure(options, executablePath, preflight);
   return preflight;
 }

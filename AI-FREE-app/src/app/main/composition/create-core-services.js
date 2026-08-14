@@ -20,6 +20,9 @@ const { createLicenseStore } = require('../services/license-store');
 const { createServerResolver } = require('../services/server-resolver');
 const { createTabHelpers } = require('../services/tab-helpers');
 const { createRuntimeHelpers } = require('../services/runtime-helpers');
+const { createSystemResourceMonitor } = require('../platform/system-resource-monitor');
+const { createBrowserLaunchGuard } = require('../features/browser/browser-launch-guard');
+const { createBackgroundExecutionLeaseManager } = require('../platform/background-execution-lease');
 const { createExtensionManager } = require('../services/extension-manager');
 const { getHardwareFingerprint } = require('../utils/hardware-js');
 const { resolveVipAccess } = require('../utils/vip-access');
@@ -42,7 +45,7 @@ const {
 
 const APP_DISPLAY_NAME = 'AI-FREE';
 
-function createCoreServices({ app, fs, path, BrowserWindow, safeStorage, getTabManager }) {
+function createCoreServices({ app, fs, path, BrowserWindow, powerSaveBlocker, safeStorage, safeModePolicy, getTabManager }) {
   // ---- 全局状态 ----
   const appRuntime = createAppState();
   const tabs = appRuntime.tabs;
@@ -61,6 +64,14 @@ function createCoreServices({ app, fs, path, BrowserWindow, safeStorage, getTabM
     getParentWindow: appRuntime.getMainWindow,
     logger: console,
   });
+  const systemResourceMonitor = createSystemResourceMonitor({
+    fs,
+    profileRoot: app.getPath('userData'),
+    getActiveProfiles: () => browserRuntimeManager.listStates()
+      .filter((state) => !['stopped', 'crashed'].includes(String(state?.status || ''))).length,
+    logger: console,
+  });
+  const browserLaunchGuard = createBrowserLaunchGuard({ resourceMonitor: systemResourceMonitor });
   try {
     if (process.platform === 'win32' && browserRuntimeManager.isChromiumAvailable()) {
       browserRuntimeManager.windowBridge.setPerMonitorDpiAwareness();
@@ -68,11 +79,39 @@ function createCoreServices({ app, fs, path, BrowserWindow, safeStorage, getTabM
   } catch (error) {
     console.warn('[ChromiumRuntime] 无法初始化 Per-Monitor DPI V2:', error?.message || error);
   }
+  app.whenReady().then(async () => {
+    systemResourceMonitor.start();
+    if (safeModePolicy?.preflightWarmup === false) {
+      console.warn('[SafeMode] 已跳过 Chromium 后台预检');
+      return;
+    }
+    const snapshot = await systemResourceMonitor.getSnapshot({ force: true });
+    if (snapshot.pressure === 'critical') {
+      console.warn('[BrowserCapacity] 资源严重不足，跳过 Chromium 后台预检');
+      return;
+    }
+    await browserRuntimeManager.prewarmChromium();
+  }).catch((error) => {
+    console.warn('[ChromiumRuntime] 无法启动后台预检:', error?.message || error);
+  });
+  app.once('will-quit', () => systemResourceMonitor.stop());
 
   const licenseCache = createLicenseCache();
   if (typeof accountStorage.setLicenseCache === 'function') {
     accountStorage.setLicenseCache(licenseCache);
   }
+  const backgroundExecutionLeases = createBackgroundExecutionLeaseManager({
+    powerSaveBlocker,
+    logger: console,
+  });
+  app.once('will-quit', () => backgroundExecutionLeases.dispose());
+  const getBrowserCapacity = () => {
+    const access = resolveVipAccess(licenseCache.getSnapshot?.() || {});
+    return browserLaunchGuard.evaluate({
+      productLimit: access.isVip ? 8 : 5,
+      administratorLimit: licenseCache.getRuntimeConfig?.().browserCapacityLimit,
+    });
+  };
 
   const browserPartitionCleaner = createBrowserPartitionCleaner({
     app,
@@ -103,6 +142,7 @@ function createCoreServices({ app, fs, path, BrowserWindow, safeStorage, getTabM
   const logger = createLogger({ getSideWebContents: () => (appRuntime.getSideView() && appRuntime.getSideView().webContents) || null });
 
   const browserAutomationBridge = createBrowserAutomationBridge({
+    backgroundExecutionLeases,
     logger: console,
     cardCacheDir: resolveAutomationCardCacheDir(app),
     browserDownloadService: createBrowserDownloadService({ sandboxDir: aiSandboxDir }),
@@ -137,7 +177,7 @@ function createCoreServices({ app, fs, path, BrowserWindow, safeStorage, getTabM
     getMainWindow: appRuntime.getMainWindow,
     getSideView: appRuntime.getSideView,
     getControlPanelWindow: appRuntime.getControlPanelWindow,
-    getConsoleWindow: appRuntime.getConsoleWindow,
+    isDevMode,
   });
   const { sendToSide, getAppConsoleHistory, getDebugConsoleHistory } = uiBridge;
 
@@ -243,6 +283,10 @@ function createCoreServices({ app, fs, path, BrowserWindow, safeStorage, getTabM
     appRuntime,
     tabs,
     browserRuntimeManager,
+    systemResourceMonitor,
+    browserLaunchGuard,
+    backgroundExecutionLeases,
+    getBrowserCapacity,
     aiSandboxDir,
     licenseCache,
     browserPartitionCleaner,

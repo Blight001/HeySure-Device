@@ -100,6 +100,8 @@ class CrashReporterRuntime {
       fatalIncidentRecorded: current.fatalIncidentRecorded === true,
       startupPhase: this.startupPhase,
       pid: process.pid,
+      appExecutable: process.execPath,
+      isPackaged: this.app?.isPackaged === true,
       logFilePath: this.currentLogPath,
       serverBase: this.serverBase,
       serverBaseConfigured: Boolean(this.serverBase),

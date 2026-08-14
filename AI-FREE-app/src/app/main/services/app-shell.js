@@ -176,23 +176,6 @@ class AppShellRuntime {
     });
   }
 
-  createDevConsoleWindow() {
-    if (!this.deps.isDevMode) return null;
-    const existing = this.resolveDependency('getConsoleWindow');
-    if (existing && !existing.isDestroyed()) return existing;
-    const window = this.createShellWindow({
-      width: 760, height: 860, title: `${this.deps.APP_DISPLAY_NAME} - 调试控制台`,
-      backgroundColor: '#0e1116',
-    });
-    this.deps.setConsoleWindow?.(window);
-    this.removeWindowMenu(window, '控制台窗口');
-    window.loadFile(this.deps.path.join(__dirname, '../views/dev-console.html'));
-    this.showWindowWhenReady(window, '调试控制台窗口');
-    window.on('closed', () => this.deps.setConsoleWindow?.(null));
-    this.logWindowLoadFailure(window, '调试控制台');
-    return window;
-  }
-
   revealExistingControlPanel(window) {
     try {
       if (window.isMinimized()) window.restore();
@@ -215,7 +198,7 @@ class AppShellRuntime {
     this.removeWindowMenu(window, '控制页窗口');
     const htmlPath = this.resolveControlPanelHtmlPath();
     if (!htmlPath) return this.closeMissingControlPanel(window);
-    window.loadFile(htmlPath);
+    window.loadFile(htmlPath, { query: { dev: this.deps.isDevMode ? '1' : '0' } });
     this.showWindowWhenReady(window, '控制页窗口', true);
     window.on('closed', () => this.clearControlPanelWindow());
     this.logWindowLoadFailure(window, '控制页', { controlPanelPath: htmlPath });
@@ -233,22 +216,10 @@ class AppShellRuntime {
     this.deps.setControlPanelWindow?.(null);
   }
 
-  closeDevConsoleWindow() {
-    try {
-      const window = this.resolveDependency('getConsoleWindow');
-      if (window && !window.isDestroyed()) window.close();
-    } catch (error) {
-      this.deps.logger.warn?.('[启动] 关闭调试控制台失败:', error?.message || error);
-    } finally {
-      this.deps.setConsoleWindow?.(null);
-    }
-  }
-
   initializeControllers() {
     const mainController = createAppShellMainWindowController({
       ...this.deps,
       canPollAnnouncements: this.canPollAnnouncements.bind(this),
-      closeDevConsoleWindow: this.closeDevConsoleWindow.bind(this),
       createControlPanelWindow: this.createControlPanelWindow.bind(this),
       ensureAnnouncementPoller: this.ensureAnnouncementPoller.bind(this),
       isControlPanelModeEnabled: this.isControlPanelModeEnabled.bind(this),
@@ -273,7 +244,6 @@ class AppShellRuntime {
       ...this.deps,
       cleanupAccountProfile,
       removeDirectoryWithRetries,
-      createDevConsoleWindow: this.createDevConsoleWindow.bind(this),
       createMainWindow: this.createMainWindow,
       ensureAnnouncementPoller: this.ensureAnnouncementPoller.bind(this),
       isControlPanelOnlyModeEnabled: this.isControlPanelOnlyModeEnabled.bind(this),
@@ -310,7 +280,6 @@ class AppShellRuntime {
 function createAppShell(deps = {}) {
   const runtime = new AppShellRuntime(deps);
   return {
-    createDevConsoleWindow: runtime.createDevConsoleWindow.bind(runtime),
     bootstrapMainApp: runtime.bootstrapMainApp,
     createMainWindow: runtime.createMainWindow,
     revealMainWindow: runtime.revealMainWindow,

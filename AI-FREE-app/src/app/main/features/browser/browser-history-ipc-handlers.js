@@ -50,13 +50,16 @@ function profileAuditSummary(audit) {
 
 async function getBrowserHistory(deps) {
   try {
+    const capacity = typeof deps.ui?.getBrowserCapacity === 'function'
+      ? await deps.ui.getBrowserCapacity()
+      : null;
     const history = deps.syncOpenTabsToBrowserHistory(deps.ui);
     const serialized = deps.serializeBrowserHistory(history, deps.ui);
     if (syncSerializedUrls(history, serialized)) deps.writeBrowserHistorySafe(history);
     const cleanup = deps.cleanupOrphanBrowserProfiles(history, deps.ui);
     warnCleanupFailure('[IPC] 自动清理孤立 Chromium 环境失败:', cleanup);
     const audit = cleanup && cleanup.profileAudit || deps.auditBrowserProfiles(history, deps.ui);
-    return { ok: true, history: serialized, profileAudit: profileAuditSummary(audit) };
+    return { ok: true, history: serialized, profileAudit: profileAuditSummary(audit), capacity };
   } catch (error) {
     return { ok: false, error: errorMessage(error), history: [] };
   }

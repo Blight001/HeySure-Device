@@ -5,6 +5,8 @@ const { spawn } = require('child_process');
 const { appContext: defaultAppContext } = require('../runtime/app-context');
 const { installShutdownUncaughtExceptionGuard } = require('../utils/logger');
 
+const CHROMIUM_QUIT_GRACE_MS = 750;
+
 function launchIndependentCommand(target, logger = console) {
   const resolvedTarget = String(target || '').trim();
   if (!resolvedTarget) throw new Error('启动目标为空');
@@ -47,7 +49,7 @@ function attemptSync(logger, failureLabel, action) {
   }
 }
 
-async function stopRuntimeProcesses(deps, isUpdateExit) {
+async function stopRuntimeProcesses(deps) {
   const {
     logger, aiServerDeviceService, browserAutomationBridge,
     browserRuntimeManager, stopClashMiniProcess, sendToSide,
@@ -56,8 +58,8 @@ async function stopRuntimeProcesses(deps, isUpdateExit) {
   await attemptAsync(logger, '关闭 Chromium 原生自动化网关失败', () => browserAutomationBridge?.stop?.());
   await attemptAsync(logger, 'Chromium Profile 关闭失败', async () => {
     if (typeof browserRuntimeManager?.stopAll === 'function') {
-      logger.log?.('[退出] 正在优雅关闭 Chromium Profile...');
-      await browserRuntimeManager.stopAll({ timeoutMs: isUpdateExit ? 2000 : 5000 });
+      logger.log?.('[退出] 正在后台并行关闭 Chromium Profile...');
+      await browserRuntimeManager.stopAll({ timeoutMs: CHROMIUM_QUIT_GRACE_MS });
     }
   });
   await attemptAsync(logger, '关闭 Clash Mini 失败', async () => {
@@ -65,6 +67,16 @@ async function stopRuntimeProcesses(deps, isUpdateExit) {
     const result = await stopClashMiniProcess({ sendToSide });
     if (result?.ok === false) logger.warn?.('[退出] Clash Mini 未完全退出:', result.error || result);
     else logger.log?.('[退出] Clash Mini 已关闭');
+  });
+}
+
+function hidePlatformWindows(deps) {
+  const { logger, BrowserWindow } = deps;
+  attemptSync(logger, '隐藏窗口失败', () => {
+    logger.log?.('[退出] 立即隐藏所有窗口，后台回收运行时...');
+    for (const window of BrowserWindow.getAllWindows()) {
+      try { window.hide?.(); } catch (_) {}
+    }
   });
 }
 
@@ -113,7 +125,7 @@ async function cleanupPersistentRuntime(deps) {
 
 async function runShutdownCleanup(deps, pendingUpdate) {
   const isUpdateExit = Boolean(pendingUpdate.target);
-  await stopRuntimeProcesses(deps, isUpdateExit);
+  await stopRuntimeProcesses(deps);
   closePlatformResources(deps);
   if (isUpdateExit) {
     deps.logger.log?.('[退出] 更新退出模式：跳过浏览器缓存和深度清理');
@@ -142,6 +154,7 @@ function createBeforeQuitHandler(deps) {
       deps.appContext.markShuttingDown();
       deps.installShutdownGuard();
       try { deps.sendToSide?.('app-shutting-down', { reason: 'quit' }); } catch (_) {}
+      hidePlatformWindows(deps);
       const pendingUpdate = deps.appContext.getPendingUpdateInstall();
       const hardExitTimer = setTimeout(
         () => deps.app.exit(0),
@@ -182,6 +195,7 @@ module.exports = {
   cleanupPersistentRuntime,
   closePlatformResources,
   createBeforeQuitHandler,
+  hidePlatformWindows,
   launchIndependentCommand,
   registerAppShutdown,
   runShutdownCleanup,

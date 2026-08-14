@@ -123,6 +123,40 @@ test('app shutdown notifies renderer and drains Chromium before terminating Clas
   assert.ok(events.indexOf('chromium') < events.indexOf('clash'));
 });
 
+test('app shutdown hides windows before waiting for Chromium cleanup', async () => {
+  const events = [];
+  let releaseChromium;
+  let finish;
+  const chromiumStopped = new Promise((resolve) => { releaseChromium = resolve; });
+  const completed = new Promise((resolve) => { finish = resolve; });
+  const handler = createBeforeQuitHandler({
+    app: { exit: () => { events.push('exit'); finish(); } },
+    appContext: {
+      beginMainAppExit: () => true,
+      markShuttingDown: () => {},
+      getPendingUpdateInstall: () => ({ target: '' }),
+    },
+    installShutdownGuard: () => {},
+    sendToSide: () => {},
+    browserRuntimeManager: { stopAll: async () => { events.push('chromium'); await chromiumStopped; } },
+    BrowserWindow: { getAllWindows: () => [{ hide: () => events.push('hide'), close: () => events.push('close') }] },
+    shortcutManager: { unregister: () => {} },
+    cleanupAllBrowserSessionData: async () => {},
+    cleanupBrowserPartitionsRootDir: async () => {},
+    stopClashMiniProcess: async () => ({ ok: true }),
+    getGlobalHttpClient: () => null,
+    logger: { log() {}, warn() {}, error() {} },
+  });
+
+  handler({ preventDefault() {} });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(events, ['hide', 'chromium']);
+  releaseChromium();
+  await completed;
+  assert.ok(events.indexOf('hide') < events.indexOf('close'));
+  assert.ok(events.indexOf('close') < events.indexOf('exit'));
+});
+
 test('shutdown-only connection resets are treated as expected cleanup', (t) => {
   const previous = appContext.isShuttingDown();
   t.after(() => { appContext.setShuttingDown(previous); });

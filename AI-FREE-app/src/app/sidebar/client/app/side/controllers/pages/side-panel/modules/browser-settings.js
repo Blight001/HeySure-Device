@@ -51,6 +51,19 @@
     list?.setAttribute('aria-busy', active ? 'true' : 'false');
   }
 
+  function renderBrowserCapacity(capacity) {
+    const target = el('browser-capacity-status');
+    if (!target) return;
+    const snapshot = capacity?.snapshot || {};
+    const labels = { normal: '资源正常', warning: '资源紧张', critical: '资源不足' };
+    if (!capacity) {
+      target.textContent = '设备容量暂不可用';
+      return;
+    }
+    target.textContent = `${snapshot.activeProfiles || 0} / ${snapshot.profileLimit || 0} · ${labels[snapshot.pressure] || '资源未知'}`;
+    target.dataset.pressure = snapshot.pressure || 'unknown';
+  }
+
   function animateBrowserHistoryRemoval(historyIds) {
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return Promise.resolve();
     const ids = new Set((Array.isArray(historyIds) ? historyIds : [historyIds]).map(String));
@@ -111,6 +124,7 @@
       browserProfileAudit = response.profileAudit && typeof response.profileAudit === 'object'
         ? response.profileAudit
         : null;
+      renderBrowserCapacity(response.capacity);
       updateBrowserHistorySelection(options);
       renderBrowserHistory();
       renderBrowserProfileAudit();
@@ -266,7 +280,7 @@
       webglImage: { mode: getSegment('webglImage.mode','noise'), seed: current.webglImage?.seed }, webglMetadata: { mode: getSegment('webglMetadata.mode','custom'), vendor: value('browser-webgl-vendor'), renderer: value('browser-webgl-renderer') },
       webgpu: { mode: getSegment('webgpu.mode','webgl') }, audioContext: { mode: getSegment('audioContext.mode','noise'), seed: current.audioContext?.seed }, clientRects: { mode: getSegment('clientRects.mode','noise'), seed: current.clientRects?.seed }, speechVoices: { mode: getSegment('speechVoices.mode','noise'), seed: current.speechVoices?.seed },
       cpu: number('browser-cpu',8), memory: number('browser-memory',8), deviceName: { mode: getSegment('deviceName.mode','default'), value: value('device-name') }, macAddress: { mode: getSegment('macAddress.mode','default'), value: value('mac-address') },
-      doNotTrack: checked('do-not-track'), sslEnabled: getSegment('sslEnabled') === 'true', portScanProtection: { enabled: getSegment('portScanProtection.enabled') === 'true', allowList: value('port-scan-allow-list').split(/[\s,;]+/).filter(Boolean) }, hardwareAcceleration: checked('hardware-acceleration'), launchArgs: { mode: getSegment('launchArgs.mode','default'), value: value('launch-args') },
+      doNotTrack: checked('do-not-track'), sslEnabled: getSegment('sslEnabled') === 'true', portScanProtection: { enabled: getSegment('portScanProtection.enabled') === 'true', allowList: value('port-scan-allow-list').split(/[\s,;]+/).filter(Boolean) }, hardwareAcceleration: checked('hardware-acceleration'), lowSpecMode: value('low-spec-mode', 'auto'), launchArgs: { mode: getSegment('launchArgs.mode','default'), value: value('launch-args') },
     };
     return setting;
   }

@@ -44,7 +44,6 @@ function createSidebarView(deps, mainWindow) {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: false,
-      backgroundThrottling: false,
       preload: deps.path.join(__dirname, '../preload.js'),
     },
   });
@@ -75,7 +74,9 @@ function loadSidebar(deps, sideView) {
     return;
   }
   deps.logger.log?.('[启动] 加载本地侧边栏:', sidebarLocalPath);
-  sideView.webContents.loadFile(sidebarLocalPath).catch((error) => {
+  sideView.webContents.loadFile(sidebarLocalPath, {
+    query: { dev: deps.isDevMode ? '1' : '0' },
+  }).catch((error) => {
     deps.logger.error?.('[启动] 本地侧边栏加载失败:', error?.message || error);
   });
 }
@@ -159,7 +160,6 @@ function updateMainWindowLayout(deps, mainWindow) {
 }
 
 function handleMainWindowClosed(deps) {
-  deps.closeDevConsoleWindow();
   try {
     const panel = deps.resolveControlPanelWindow();
     if (panel && !panel.isDestroyed()) panel.close();

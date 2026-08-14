@@ -1,7 +1,10 @@
 'use strict';
 
+const childProcess = require('child_process');
+const path = require('path');
 const { PendingReportStore } = require('./pending-store');
 const { isProcessAlive, readJsonSafe } = require('./shared');
+const { createCrashLoopGuard } = require('../crash-loop-guard');
 
 const DEFAULT_POLL_MS = 1000;
 const DEFAULT_RETRY_MS = 60 * 1000;
@@ -24,6 +27,7 @@ class CrashWatchdogWorker {
     this.isProcessAlive = options.isProcessAlive || isProcessAlive;
     this.store = options.store || new PendingReportStore(this.rootDir, { isProcessAlive: this.isProcessAlive });
     this.onDiagnostic = options.onDiagnostic || (() => {});
+    this.restartApplication = options.restartApplication || restartPackagedApplication;
     this.nextUploadAt = 0;
   }
 
@@ -59,6 +63,7 @@ class CrashWatchdogWorker {
   async finishAfterAbnormalExit(state) {
     await this.settleNativeDump();
     const reportId = this.store.recoverSession(this.sessionPath, { parentKnownDead: true });
+    this.recoverApplicationIfAllowed(state);
     const deadline = Date.now() + this.postExitMs;
     let current = state;
     while (true) {
@@ -72,6 +77,23 @@ class CrashWatchdogWorker {
     }
   }
 
+  recoverApplicationIfAllowed(state) {
+    if (state.isPackaged !== true) return null;
+    const guard = createCrashLoopGuard({ filePath: path.join(this.rootDir, 'crash-loop.json') });
+    const decision = guard.recordExit({ kind: 'crash' });
+    if (!decision.autoRecover) {
+      this.onDiagnostic(`崩溃循环保护: ${decision.action} (${decision.crashCount})`);
+      return decision;
+    }
+    try {
+      this.restartApplication(state.appExecutable);
+      this.onDiagnostic('崩溃循环保护: 已执行一次受控恢复启动');
+    } catch (error) {
+      this.onDiagnostic(`恢复启动失败: ${error?.message || error}`);
+    }
+    return decision;
+  }
+
   async run() {
     const currentSessionId = this.readSession().sessionId || '';
     this.store.recoverOrphanSessions(currentSessionId);
@@ -82,4 +104,21 @@ class CrashWatchdogWorker {
   }
 }
 
-module.exports = { CrashWatchdogWorker };
+function restartPackagedApplication(executablePath) {
+  const rawTarget = String(executablePath || '').trim();
+  if (!rawTarget) throw new Error('缺少应用可执行文件');
+  const target = path.resolve(rawTarget);
+  const environment = { ...process.env };
+  delete environment.ELECTRON_RUN_AS_NODE;
+  delete environment.AI_FREE_CRASH_WATCHDOG;
+  const child = childProcess.spawn(target, [], {
+    detached: true,
+    env: environment,
+    stdio: 'ignore',
+    windowsHide: true,
+  });
+  child.unref?.();
+  return Number(child.pid) || 0;
+}
+
+module.exports = { CrashWatchdogWorker, restartPackagedApplication };

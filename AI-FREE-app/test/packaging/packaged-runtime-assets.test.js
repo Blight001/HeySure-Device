@@ -62,6 +62,8 @@ test('sidebar logos use the runtime asset resolver in source and packaged apps',
   const index = fs.readFileSync(path.join(sidebarRoot, 'index.html'), 'utf8');
   const aiControlPage = fs.readFileSync(path.join(sidebarRoot, 'ai-control.html'), 'utf8');
   const accountCenterPage = fs.readFileSync(path.join(sidebarRoot, 'account-center.html'), 'utf8');
+  const devConsolePage = fs.readFileSync(path.join(__dirname, '../../src/app/main/views/dev-console.html'), 'utf8');
+  const appShellSource = fs.readFileSync(path.join(__dirname, '../../src/app/main/services/app-shell.js'), 'utf8');
   const appShell = fs.readFileSync(path.join(__dirname, '../../src/app/views/app-shell.html'), 'utf8');
   const accountAuthCss = fs.readFileSync(
     path.join(sidebarRoot, 'client/app/side/styles/modules/account-auth.css'),
@@ -89,6 +91,10 @@ test('sidebar logos use the runtime asset resolver in source and packaged apps',
   assert.equal(appShell.includes('id="account-center-btn"'), false);
   assert.ok(aiControlPage.includes('data-tab="account-center-panel"'));
   assert.ok(accountCenterPage.includes('id="account-center-panel"'));
+  assert.ok(aiControlPage.includes('data-dev-only'));
+  assert.ok(accountCenterPage.includes('data-dev-only'));
+  assert.ok(devConsolePage.includes('../../sidebar/ai-control.html?dev=1'));
+  assert.equal(appShellSource.includes('createDevConsoleWindow'), false);
   assert.ok(appShell.includes('../sidebar/client/scripts/logo-assets.js'));
   assert.ok(appShell.includes('id="ai-free-settings-panel"'));
   assert.ok(appShell.includes('id="browser-settings-tutorial"'));

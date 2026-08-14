@@ -8,17 +8,21 @@ test('侧边栏状态事件同时投递到内嵌浏览器配置首页', () => {
   const bridgeModulePath = require.resolve('../../../src/app/main/composition/create-ui-bridge');
   const originalConsoleModule = require.cache[consoleModulePath];
   const originalBridgeModule = require.cache[bridgeModulePath];
+  let debugSenders = null;
   require.cache[consoleModulePath] = {
     id: consoleModulePath,
     filename: consoleModulePath,
     loaded: true,
     exports: {
-      createAppConsoleBridge: () => ({
-        install() {},
-        pushDebugOnly() {},
-        getHistory: () => [],
-        getDebugHistory: () => [],
-      }),
+      createAppConsoleBridge: (options) => {
+        debugSenders = options.getDebugSenders;
+        return {
+          install() {},
+          pushDebugOnly() {},
+          getHistory: () => [],
+          getDebugHistory: () => [],
+        };
+      },
     },
     children: [],
     paths: [],
@@ -39,12 +43,13 @@ test('侧边栏状态事件同时投递到内嵌浏览器配置首页', () => {
       getMainWindow: () => makeView(mainEvents),
       getSideView: () => makeView(sidebarEvents),
       getControlPanelWindow: () => null,
-      getConsoleWindow: () => null,
+      isDevMode: true,
     });
 
     assert.equal(bridge.sendToSide('clash-mini-status', { running: true }), true);
     assert.deepEqual(sidebarEvents, [['clash-mini-status', { running: true }]]);
     assert.deepEqual(mainEvents, [['clash-mini-status', { running: true }]]);
+    assert.equal(debugSenders().length, 1, '开发模式调试日志应投递到侧边栏 WebContents');
   } finally {
     if (originalConsoleModule) require.cache[consoleModulePath] = originalConsoleModule;
     else delete require.cache[consoleModulePath];

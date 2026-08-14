@@ -20,11 +20,16 @@ const { registerAppLifecycle } = require('./services/app-lifecycle');
 const { setDreamTargetUrl, getStorePath } = require('./config');
 const { resolveTabBrowserProfile } = require('./utils/browser-profile');
 const { httpGetUniversal } = require('./lib/http');
+const { createCrashLoopGuard } = require('./runtime/crash-loop-guard');
 
 // 启动/打开/显示：startMainApp的具体业务逻辑。
 function startMainApp() {
   applyWindowsAppUserModelId();
-  tuneElectronRuntime({ app, fs, powerSaveBlocker, getStorePath });
+  const crashLoopDecision = createCrashLoopGuard({
+    filePath: path.join(app.getPath('userData'), 'crash-reports', 'crash-loop.json'),
+  }).inspect();
+  if (crashLoopDecision.safeMode) app.disableHardwareAcceleration();
+  tuneElectronRuntime({ app, fs, getStorePath });
 
   // ---- 单例应用 ----
   const isPrimaryInstance = acquireSingleInstance({
@@ -42,8 +47,20 @@ function startMainApp() {
 
   // ---- 核心服务 ----
   let tabManager;
-  const services = createCoreServices({ app, fs, path, BrowserWindow, safeStorage, getTabManager: () => tabManager });
+  const services = createCoreServices({
+    app, fs, path, BrowserWindow, powerSaveBlocker, safeStorage,
+    safeModePolicy: crashLoopDecision.safeModePolicy,
+    getTabManager: () => tabManager,
+  });
   const { appRuntime, tabs, sendToSide, licenseCache } = services;
+  if (crashLoopDecision.safeMode) {
+    app.whenReady().then(() => dialog.showMessageBox({
+      type: 'warning',
+      title: 'AI-FREE 安全模式',
+      message: '检测到主程序短时间内连续异常退出，已进入安全模式。',
+      detail: '本次不会执行 Chromium 后台预热，并已关闭硬件加速。请先关闭不必要的软件，再手动打开浏览器环境。',
+    })).catch(() => {});
+  }
 
   // ---- 晚绑定（tabManager/auth/appShell 创建后回填）----
   let auth;
@@ -119,6 +136,7 @@ function startMainApp() {
 
   // ---- 标签管理 ----
   tabManager = createTabManager({
+    browserLaunchGuard: services.browserLaunchGuard,
     browserRuntimeManager: services.browserRuntimeManager,
     fs,
     logger: console,
@@ -137,6 +155,9 @@ function startMainApp() {
     getSetTabAccountId: () => setTabAccountId,
     getAuth: late.getAuth,
     licenseCache,
+    resolveAdministratorBrowserLimit: () => (
+      services.licenseCache.getRuntimeConfig?.().browserCapacityLimit
+    ),
     sendToSide,
     updateTabs: services.tabHelpers.updateTabs,
     httpGetUniversal,

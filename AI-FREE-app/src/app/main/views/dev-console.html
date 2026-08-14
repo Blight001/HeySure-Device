@@ -24,6 +24,27 @@
     html, body { width: 100%; height: 100%; margin: 0; background: radial-gradient(circle at top, #121826 0%, #0b0f14 58%); color: var(--text); font-family: Arial; }
     body { overflow: hidden; }
     .shell { position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; }
+    .sidebar-nav {
+      flex: 0 0 auto;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin: 6px 12px 12px;
+      border-bottom: 1px solid rgba(86, 112, 151, 0.32);
+    }
+    .sidebar-tab {
+      height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      color: #8b97ab;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .sidebar-tab:hover { color: #e6eefb; }
+    .sidebar-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
     .topbar {
       padding: 12px 14px 10px;
       border-bottom: 1px solid var(--border);
@@ -233,11 +254,16 @@
 </head>
 <body>
   <div class="shell">
+    <nav class="sidebar-nav" aria-label="侧边栏栏目">
+      <a class="sidebar-tab" href="../../sidebar/ai-control.html?dev=1">AI 控制</a>
+      <a class="sidebar-tab" href="../../sidebar/account-center.html?dev=1">个人中心</a>
+      <a class="sidebar-tab active" href="./dev-console.html?dev=1" aria-current="page">调试控制台</a>
+    </nav>
     <div class="topbar">
       <div class="topline">
         <div>
           <div class="title">调试控制台</div>
-          <div class="subtitle">点击上方标题查看对应日志，开发模式自动打开</div>
+          <div class="subtitle">点击日志来源查看对应信息</div>
         </div>
         <div class="summary" id="summary">等待日志...</div>
       </div>
@@ -259,7 +285,7 @@
     </div>
 
     <div class="footer">
-      <div>提示：窗口只在开发模式自动打开，不影响正式版。</div>
+      <div>提示：该栏目仅在开发模式显示。</div>
       <div id="status">正在连接日志流...</div>
     </div>
 

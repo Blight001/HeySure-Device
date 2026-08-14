@@ -244,7 +244,7 @@ test('侧栏输入中创建浏览器会在 HWND 附着完成后恢复侧栏原�
   assert.equal(calls.includes('browser-focus'), false);
 });
 
-test('异步创建失败时移除占位并恢复之前的栏目', async () => {
+test('异步创建失败时保留可操作错误栏目', async () => {
   const chromium = new EventEmitter();
   const tabs = new Map([['existing-browser', {
     id: 'existing-browser', runtimeType: 'chromium', runtimeStatus: 'ready',
@@ -273,8 +273,9 @@ test('异步创建失败时移除占位并恢复之前的栏目', async () => {
     /launch failed/,
   );
 
-  assert.deepEqual([...tabs.keys()], ['existing-browser']);
-  assert.equal(activeTabId, 'existing-browser');
+  assert.deepEqual([...tabs.keys()], ['existing-browser', 'failed-browser']);
+  assert.equal(tabs.get('failed-browser').runtimeStatus, 'crashed');
+  assert.equal(activeTabId, 'failed-browser');
 });
 
 test('加载中关闭栏目会取消后续启动', async () => {
@@ -451,6 +452,129 @@ test('关闭最后一个浏览器后回到内置首页且不再启动 Chromium',
   assert.equal(launchCount, 0);
 });
 
+test('关闭栏目会立即更新 UI 并在后台停止 Chromium', async () => {
+  const chromium = new EventEmitter();
+  const tabs = new Map([
+    ['browser-1', { id: 'browser-1', runtimeType: 'chromium', accountId: 'account-1' }],
+    ['browser-2', { id: 'browser-2', runtimeType: 'chromium' }],
+  ]);
+  let activeTabId = 'browser-1';
+  let finishStop;
+  const stopPending = new Promise((resolve) => { finishStop = resolve; });
+  const calls = [];
+  const manager = createTabManager({
+    browserRuntimeManager: {
+      chromium,
+      async hide(profileId) { calls.push(`hide:${profileId}`); },
+      async show(profileId) { calls.push(`show:${profileId}`); },
+      async stop(profileId) { calls.push(`stop:${profileId}`); await stopPending; },
+    },
+    getTabs: () => tabs,
+    getMainWindow: () => ({ isDestroyed: () => false, emit() {} }),
+    getActiveTabId: () => activeTabId,
+    setActiveTabId: (tabId) => { activeTabId = tabId; },
+    updateTabs() { calls.push('update'); },
+    sendToSide(channel) { calls.push(channel); },
+    logger: { warn() {} },
+  });
+
+  const closing = manager.closeTab('browser-1');
+
+  assert.equal(tabs.has('browser-1'), false);
+  assert.equal(activeTabId, 'browser-2');
+  assert.ok(calls.includes('hide:browser-1'));
+  assert.ok(calls.includes('tab-closed'));
+  await closing;
+  finishStop();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(calls.filter((call) => call === 'stop:browser-1').length, 1);
+});
+
+test('同一 Profile 快速重开会等待后台停止完成且不重复停止', async () => {
+  const chromium = new EventEmitter();
+  const tabs = new Map([['reopen-browser', {
+    id: 'reopen-browser', runtimeType: 'chromium', runtimeStatus: 'ready',
+  }]]);
+  let activeTabId = 'reopen-browser';
+  let finishStop;
+  const stopPending = new Promise((resolve) => { finishStop = resolve; });
+  let stopCount = 0;
+  let launchCount = 0;
+  const manager = createTabManager({
+    browserRuntimeManager: {
+      chromium,
+      async stop() { stopCount += 1; await stopPending; },
+      async launchProfile() { launchCount += 1; return { status: 'ready' }; },
+      async hide() {},
+      async show() {},
+      async focus() {},
+    },
+    getTabs: () => tabs,
+    getMainWindow: () => ({ isDestroyed: () => false, getContentSize: () => [1200, 800], emit() {} }),
+    getActiveTabId: () => activeTabId,
+    setActiveTabId: (tabId) => { activeTabId = tabId; },
+    getIsSidebarVisible: () => false,
+    updateTabs() {},
+    sendToSide() {},
+    logger: { warn() {}, error() {} },
+  });
+
+  const firstClose = manager.closeTab('reopen-browser');
+  const duplicateClose = manager.closeTab('reopen-browser');
+  const reopening = manager.addTab('chrome://newtab/', { tabId: 'reopen-browser' });
+  await Promise.all([firstClose, duplicateClose]);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(stopCount, 1);
+  assert.equal(launchCount, 0);
+  assert.equal(tabs.has('reopen-browser'), false);
+
+  finishStop();
+  assert.equal(await reopening, 'reopen-browser');
+  assert.equal(launchCount, 1);
+  assert.equal(tabs.get('reopen-browser')?.runtimeStatus, 'ready');
+});
+
+test('后台停止失败不恢复已关闭栏目且阻止竞态重开', async () => {
+  const chromium = new EventEmitter();
+  const tabs = new Map([['failed-stop-browser', {
+    id: 'failed-stop-browser', runtimeType: 'chromium', runtimeStatus: 'ready',
+  }]]);
+  let activeTabId = 'failed-stop-browser';
+  let failStop;
+  const stopPending = new Promise((_resolve, reject) => { failStop = reject; });
+  let launchCount = 0;
+  const warnings = [];
+  const manager = createTabManager({
+    browserRuntimeManager: {
+      chromium,
+      async stop() { await stopPending; },
+      async launchProfile() { launchCount += 1; return { status: 'ready' }; },
+      async hide() {},
+      async show() {},
+      async focus() {},
+    },
+    getTabs: () => tabs,
+    getMainWindow: () => ({ isDestroyed: () => false, getContentSize: () => [1200, 800], emit() {} }),
+    getActiveTabId: () => activeTabId,
+    setActiveTabId: (tabId) => { activeTabId = tabId; },
+    getIsSidebarVisible: () => false,
+    updateTabs() {},
+    sendToSide() {},
+    logger: { warn: (...args) => warnings.push(args.join(' ')), error() {} },
+  });
+
+  await manager.closeTab('failed-stop-browser');
+  const reopening = manager.addTab('chrome://newtab/', { tabId: 'failed-stop-browser' });
+  failStop(new Error('stop failed'));
+
+  await assert.rejects(reopening, /stop failed/);
+  assert.equal(tabs.has('failed-stop-browser'), false);
+  assert.equal(activeTabId, null);
+  assert.equal(launchCount, 0);
+  assert.match(warnings.join('\n'), /stop failed/);
+});
+
 test('切换到内置首页会隐藏当前 Chromium 并保留浏览器标签', async () => {
   const chromium = new EventEmitter();
   const tabs = new Map([['active-browser', {
@@ -485,18 +609,15 @@ test('切换到内置首页会隐藏当前 Chromium 并保留浏览器标签', a
   assert.equal(updateCount, 1);
 });
 
-test('Chromium 意外关闭时同步关闭对应栏目', async () => {
+test('Chromium 意外关闭时保留可恢复的错误栏目', async () => {
   const chromium = new EventEmitter();
   const tabs = new Map([
     ['browser-1', { id: 'browser-1', runtimeType: 'chromium' }],
     ['browser-2', { id: 'browser-2', runtimeType: 'chromium' }],
   ]);
-  const stopped = [];
   const browserRuntimeManager = {
     chromium,
-    async stop(profileId) {
-      stopped.push(profileId);
-    },
+    async stop() { throw new Error('crashed tab must not be stopped again'); },
   };
   const mainWindow = {
     isDestroyed: () => false,
@@ -514,11 +635,9 @@ test('Chromium 意外关闭时同步关闭对应栏目', async () => {
   });
 
   chromium.emit('crashed', { profileId: 'browser-1', lastError: { message: '已退出' } });
-  await new Promise((resolve) => setImmediate(resolve));
-  await new Promise((resolve) => setImmediate(resolve));
-
-  assert.deepEqual(stopped, ['browser-1']);
-  assert.equal(tabs.has('browser-1'), false);
+  assert.equal(tabs.get('browser-1').runtimeStatus, 'crashed');
+  assert.deepEqual(tabs.get('browser-1').runtimeError, { message: '已退出' });
+  assert.equal(tabs.has('browser-1'), true);
   assert.equal(tabs.has('browser-2'), true);
 });
 

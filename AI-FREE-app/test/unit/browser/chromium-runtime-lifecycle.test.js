@@ -73,3 +73,15 @@ test('Chromium 握手前退出时保留真实退出码和内核诊断', async ()
       && error.message.includes('missing dependency'),
   );
 });
+
+test('Chromium hello 事件到达后不再等待 100ms 轮询周期', async () => {
+  const { instance, runtime } = createRuntime();
+  const waiting = runtime.waitForBrowserWindow('slow-profile', instance);
+  instance.commandClient.emit('hello', { browserHwnd: '4321' });
+
+  const result = await Promise.race([
+    waiting,
+    new Promise((resolve) => setTimeout(() => resolve('poll-timeout'), 50)),
+  ]);
+  assert.equal(result, '4321');
+});

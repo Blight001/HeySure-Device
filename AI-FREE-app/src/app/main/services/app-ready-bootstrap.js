@@ -28,15 +28,6 @@ function registerConsoleHistoryIpc(deps, ipc) {
   }
 }
 
-function openDevConsole(deps) {
-  if (!deps.isDevMode || typeof deps.createDevConsoleWindow !== 'function') return;
-  try {
-    deps.createDevConsoleWindow();
-  } catch (error) {
-    deps.logger.warn?.('[启动] 预创建调试控制台失败:', error?.message || error);
-  }
-}
-
 function scheduleCoreDirectoryInitialization(deps) {
   setImmediate(() => {
     try {
@@ -170,7 +161,6 @@ async function restoreMembership(deps) {
 
 async function bootstrapReadyApp(deps, ipc) {
   registerConsoleHistoryIpc(deps, ipc);
-  openDevConsole(deps);
   scheduleCoreDirectoryInitialization(deps);
   scheduleUpdateStorageCleanup(deps);
   scheduleDeviceIdLog(deps);

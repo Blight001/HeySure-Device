@@ -20,6 +20,7 @@
   <link rel="stylesheet" href="./client/app/side/styles/side.css" />
   <link rel="stylesheet" href="../renderer/styles/app-shell-automation.css" />
   <link rel="stylesheet" href="../renderer/styles/app-shell-automation-canvas.css" />
+  <script defer src="./client/scripts/dev-mode-navigation.js"></script>
 </head>
 <body>
   <div class="control-shell">
@@ -31,6 +32,10 @@
       <a class="tab-button active" href="./account-center.html" data-tab="account-center-panel" aria-controls="account-center-panel" aria-current="page">
         <span class="tab-button-icon" aria-hidden="true">●</span>
         <span>个人中心</span>
+      </a>
+      <a class="tab-button" href="../main/views/dev-console.html?dev=1" data-dev-only hidden>
+        <span class="tab-button-icon" aria-hidden="true">◇</span>
+        <span>调试控制台</span>
       </a>
     </nav>
     <div class="main-wrapper">

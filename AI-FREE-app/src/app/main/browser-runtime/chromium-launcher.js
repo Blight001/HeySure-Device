@@ -1,11 +1,12 @@
-const fs = require('fs');
-const path = require('path');
+const fs = require('fs'); const path = require('path');
 const { spawn } = require('child_process');
 const { prepareChromiumPreflight } = require('./chromium-launch-preflight');
 const { ensureChromiumSandboxAccess } = require('./chromium-sandbox-access');
 const { enforceLocalModelDisabled } = require('./chromium-local-model-policy');
 const { buildChromiumProfileArgs } = require('./chromium-profile-args');
 const { attachChromiumLaunchLogging } = require('./chromium-launch-log');
+const { createChromiumPerformanceSpan } = require('./chromium-performance');
+const { waitForChromiumPreflightWarmup } = require('./chromium-preflight-warmup');
 const { callOptional, firstText } = require('../../shared/safe-values');
 
 const SESSION_FILE_PATTERN = /^(Session|Tabs)_(\d+)$/;
@@ -429,8 +430,8 @@ function buildChromiumArgs(options = {}) {
     '--disable-background-networking',
     '--disable-component-update',
     '--disable-session-crashed-bubble',
-    '--disable-backgrounding-occluded-windows',
   ];
+  if (profile.lowSpecMode !== true) args.push('--disable-backgrounding-occluded-windows');
   args.push(...buildChromiumProfileArgs(options, profile, bounds));
   args.push(...(Array.isArray(profile.extraArgs) ? profile.extraArgs : []));
   const modelSafeArgs = enforceLocalModelDisabled(args);
@@ -463,38 +464,48 @@ function chromiumSpawnEnvironment(options) {
   return buildChromiumEnvironment(process.env, overrides);
 }
 
-function launchChromium(options = {}) {
-  const executablePath = resolveChromiumExecutable(options);
-  const profileRoot = String(options.paths?.root || '').trim();
-  const cacheFile = profileRoot
-    ? path.join(path.dirname(profileRoot), '.chromium-sandbox-access.json')
-    : '';
-  const sandboxAccess = ensureChromiumSandboxAccess(executablePath, options.logger, { cacheFile });
-  const preflight = prepareChromiumPreflight(options, executablePath, sandboxAccess);
-  const launchOptions = resolveChromiumLaunchOptions(options);
-  applyChromiumSessionStartupPolicy(launchOptions.paths, launchOptions.logger, launchOptions.profile);
-  const args = buildChromiumArgs(launchOptions);
-  const child = spawn(executablePath, args, {
-    cwd: path.dirname(executablePath),
-    // 让 WinMain 收到隐藏启动状态，避免 Browser HWND 在嵌入前闪现。
-    // --window-position 是额外兜底，处理忽略初始 show state 的构建。
-    windowsHide: true,
-    detached: false,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: chromiumSpawnEnvironment(options),
-  });
-  const diagnostics = attachChromiumLaunchLogging({
-    child, executablePath, args, logger: options.logger,
-    logFilePath: options.chromiumLogPath,
-    diagnosticDir: options.chromiumDiagnosticDir,
-    userDataDir: options.chromiumUserDataDir,
-    appVersion: options.appVersion,
-    sandboxAccess,
-    preflight,
-    forwardOutput: forwardChromiumOutput,
-    shouldIgnore: shouldIgnoreChromiumDiagnostic,
-  });
-  return { child, executablePath, args, diagnostics };
+async function launchChromium(options = {}) {
+  const span = createChromiumPerformanceSpan(options.logger, 'process-launch');
+  try {
+    const executablePath = resolveChromiumExecutable(options); span.mark('resolveExecutable');
+    await waitForChromiumPreflightWarmup(executablePath); span.mark('preflightWarmupWait');
+    const profileRoot = String(options.paths?.root || '').trim();
+    const cacheFile = profileRoot
+      ? path.join(path.dirname(profileRoot), '.chromium-sandbox-access.json')
+      : '';
+    const sandboxAccess = ensureChromiumSandboxAccess(executablePath, options.logger, { cacheFile });
+    span.mark('sandboxAccess');
+    const preflight = prepareChromiumPreflight(options, executablePath, sandboxAccess);
+    span.mark('preflight');
+    const launchOptions = resolveChromiumLaunchOptions(options);
+    applyChromiumSessionStartupPolicy(launchOptions.paths, launchOptions.logger, launchOptions.profile); span.mark('sessionPolicy');
+    const args = buildChromiumArgs(launchOptions); span.mark('arguments');
+    const child = spawn(executablePath, args, {
+      cwd: path.dirname(executablePath),
+      windowsHide: true,
+      detached: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: chromiumSpawnEnvironment(options),
+    });
+    span.mark('spawn');
+    const diagnostics = attachChromiumLaunchLogging({
+      child, executablePath, args, logger: options.logger,
+      logFilePath: options.chromiumLogPath,
+      diagnosticDir: options.chromiumDiagnosticDir,
+      userDataDir: options.chromiumUserDataDir,
+      appVersion: options.appVersion,
+      sandboxAccess,
+      preflight,
+      forwardOutput: forwardChromiumOutput,
+      shouldIgnore: shouldIgnoreChromiumDiagnostic,
+    });
+    span.mark('diagnostics');
+    span.finish();
+    return { child, executablePath, args, diagnostics };
+  } catch (error) {
+    span.fail(error);
+    throw error;
+  }
 }
 
 // Windows 未安装特定 Winsock 服务提供程序时 Chromium 会反复输出该诊断，

@@ -89,6 +89,7 @@ const INVOKE_CHANNELS = [
   { channel: 'reset-ai-free-browser-settings', kind: 'invoke', domain: 'browser', registrar: 'src/app/main/features/browser/register-browser-settings-ipc.js' },
   { channel: 'resolve-browser-data-clear-confirm', kind: 'invoke', domain: 'browser', registrar: 'src/app/main/ipc/register/ui.js' },
   { channel: 'restart-browser-runtime', kind: 'invoke', domain: 'browser', registrar: 'src/app/main/ipc/register/ui.js' },
+  { channel: 'open-browser-diagnostics', kind: 'invoke', domain: 'browser', registrar: 'src/app/main/ipc/register/ui.js' },
   { channel: 'save-account', kind: 'invoke', domain: 'account', registrar: 'src/app/main/ipc/account_remember.js' },
   { channel: 'save-clash-config', kind: 'invoke', domain: 'network', registrar: 'src/app/main/ipc/register/clash.js' },
   { channel: 'save-global-credentials', kind: 'invoke', domain: 'account', registrar: 'src/app/main/ipc/account_remember.js' },

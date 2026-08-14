@@ -41,6 +41,7 @@ class BrowserRuntimeManager {
   }
   runtimeFor(_type) { return this.chromium; }
   async launchProfile(profile, bounds) { return this.runtimeFor(this.resolveType(profile)).launchProfile(profile, bounds); }
+  async prewarmChromium() { return this.chromium.prewarm(); }
   async show(profileId, type) { return this.runtimeFor(type).show(profileId); }
   async hide(profileId, type) { return this.runtimeFor(type).hide(profileId); }
   async resize(profileId, type, bounds) { return this.runtimeFor(type).resize(profileId, bounds); }

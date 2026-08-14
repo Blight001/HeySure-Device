@@ -89,7 +89,6 @@ function buildLifecycleDeps({
     createMainWindow: appShell.createMainWindow,
     revealMainWindow: appShell.revealMainWindow,
     getMainWindow: appRuntime.getMainWindow,
-    createDevConsoleWindow: appShell.createDevConsoleWindow,
     getAppConsoleHistory,
     getDebugConsoleHistory,
     isDevMode,

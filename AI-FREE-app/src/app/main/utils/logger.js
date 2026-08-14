@@ -6,6 +6,13 @@ const util = require('util');
 
 let activeRunLogger = null;
 const shutdownExceptionGuardTargets = new WeakSet();
+const DEFAULT_RUN_LOG_LIMITS = Object.freeze({
+  maxFileBytes: 20 * 1024 * 1024,
+  maxFiles: 10,
+  maxAgeMs: 14 * 24 * 60 * 60 * 1000,
+  maxTotalBytes: 200 * 1024 * 1024,
+});
+const LOG_LIMIT_MARKER = '[日志] 文件已达到容量上限，后续内容仅输出到控制台。\n';
 
 // Mihomo 在应用退出时会主动关闭现有代理连接。此时 Node 可能把连接重置
 // 作为未处理 rejection 上报；它只在明确的退出阶段属于预期清理。
@@ -75,6 +82,86 @@ function formatRunStamp(date = new Date()) {
   return date.toISOString().replace(/[:.]/g, '-');
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function runLogNamePattern(prefix) {
+  return new RegExp(
+    `^${escapeRegExp(prefix)}-\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}-\\d{3}Z-\\d+\\.log$`,
+  );
+}
+
+function reportCleanupFailure(onError, error) {
+  try {
+    onError?.(error);
+  } catch (_) {}
+}
+
+function removeRunLog(file, fsRef, result, onError) {
+  try {
+    fsRef.unlinkSync(file.path);
+    result.removed.push(file.name);
+    return true;
+  } catch (error) {
+    result.failed.push(file.name);
+    reportCleanupFailure(onError, error);
+    return false;
+  }
+}
+
+function readOwnedRunLogs(logDir, prefix, fsRef, result, onError) {
+  const pattern = runLogNamePattern(prefix);
+  const files = [];
+  let entries;
+  try {
+    entries = fsRef.readdirSync(logDir, { withFileTypes: true });
+  } catch (error) {
+    reportCleanupFailure(onError, error);
+    return files;
+  }
+  for (const entry of entries) {
+    if (!entry.isFile() || !pattern.test(entry.name)) continue;
+    const filePath = path.join(logDir, entry.name);
+    try {
+      const stat = fsRef.statSync(filePath);
+      files.push({ name: entry.name, path: filePath, mtimeMs: stat.mtimeMs, size: stat.size });
+    } catch (error) {
+      result.failed.push(entry.name);
+      reportCleanupFailure(onError, error);
+    }
+  }
+  return files;
+}
+
+function pruneRunLogs(logDir, prefix = 'run', options = {}, deps = {}) {
+  const fsRef = deps.fs || fs;
+  const now = Number.isFinite(deps.now) ? deps.now : Date.now();
+  const limits = { ...DEFAULT_RUN_LOG_LIMITS, ...options };
+  const result = { removed: [], failed: [] };
+  const files = readOwnedRunLogs(logDir, prefix, fsRef, result, deps.onError);
+  const survivors = [];
+  for (const file of files) {
+    if (now - file.mtimeMs > limits.maxAgeMs) {
+      removeRunLog(file, fsRef, result, deps.onError);
+    } else {
+      survivors.push(file);
+    }
+  }
+  survivors.sort((left, right) => right.mtimeMs - left.mtimeMs);
+  let retainedBytes = 0;
+  for (const [index, file] of survivors.entries()) {
+    const exceedsCount = index >= limits.maxFiles;
+    const exceedsBytes = retainedBytes + file.size > limits.maxTotalBytes;
+    if (exceedsCount || exceedsBytes) {
+      removeRunLog(file, fsRef, result, deps.onError);
+    } else {
+      retainedBytes += file.size;
+    }
+  }
+  return result;
+}
+
 // 创建/初始化：buildLogLine的具体业务逻辑。
 function buildLogLine(level, args) {
   const timestamp = new Date().toISOString();
@@ -118,18 +205,47 @@ function captureOriginalConsole() {
   };
 }
 
-function openRunLogStream(logDir, prefix, originalConsole) {
+function openRunLogStream(logDir, prefix, originalConsole, maxFileBytes) {
   try {
     fs.mkdirSync(logDir, { recursive: true });
     const logFileName = `${prefix}-${formatRunStamp()}-${process.pid}.log`;
     const logFilePath = path.join(logDir, logFileName);
     const stream = fs.createWriteStream(logFilePath, { flags: 'a', encoding: 'utf8' });
     stream.on('error', () => {});
-    stream.write('\ufeff');
-    return { logFilePath, stream };
+    const byteOrderMark = '\ufeff';
+    const bytesWritten = Buffer.byteLength(byteOrderMark);
+    if (bytesWritten <= maxFileBytes) stream.write(byteOrderMark);
+    return { logFilePath, stream, writeState: { bytesWritten, truncated: false } };
   } catch (error) {
     originalConsole.warn('[日志] 无法创建日志文件，将仅输出到控制台:', error?.message || error);
-    return { logFilePath: '', stream: null };
+    return { logFilePath: '', stream: null, writeState: { bytesWritten: 0, truncated: true } };
+  }
+}
+
+function writeBoundedLine(stream, text, state, maxFileBytes) {
+  if (!stream || state.truncated) return;
+  const bytes = Buffer.byteLength(text);
+  if (state.bytesWritten + bytes <= maxFileBytes) {
+    stream.write(text);
+    state.bytesWritten += bytes;
+    return;
+  }
+  const markerBytes = Buffer.byteLength(LOG_LIMIT_MARKER);
+  if (state.bytesWritten + markerBytes <= maxFileBytes) {
+    stream.write(LOG_LIMIT_MARKER);
+    state.bytesWritten += markerBytes;
+  }
+  state.truncated = true;
+}
+
+function cleanupHistoricalRunLogs(logDir, prefix, limits, originalConsole) {
+  try {
+    if (!fs.existsSync(logDir)) return;
+    pruneRunLogs(logDir, prefix, { ...limits, maxFiles: Math.max(0, limits.maxFiles - 1) }, {
+      onError: (error) => originalConsole.warn('[日志] 清理历史运行日志失败:', error?.message || error),
+    });
+  } catch (error) {
+    originalConsole.warn('[日志] 清理历史运行日志失败:', error?.message || error);
   }
 }
 
@@ -173,20 +289,23 @@ function createLogger({ getSideWebContents = () => null } = {}) {
 }
 
 // 创建/初始化：initializeRunFileLogger的具体业务逻辑。
-/** @param {{app?: any, dirName?: string, prefix?: string}} [options] */
-function initializeRunFileLogger({ app, dirName = 'logs', prefix = 'run' } = {}) {
+/** @param {{app?: any, dirName?: string, prefix?: string, limits?: object}} [options] */
+function initializeRunFileLogger({ app, dirName = 'logs', prefix = 'run', limits: customLimits } = {}) {
   if (activeRunLogger) return activeRunLogger;
   const userDataDir = resolveUserDataDir(app);
   const logDir = path.join(userDataDir, dirName);
   const originalConsole = captureOriginalConsole();
-  const { logFilePath, stream } = openRunLogStream(logDir, prefix, originalConsole);
+  const limits = { ...DEFAULT_RUN_LOG_LIMITS, ...customLimits };
+  cleanupHistoricalRunLogs(logDir, prefix, limits, originalConsole);
+  const openedLog = openRunLogStream(logDir, prefix, originalConsole, limits.maxFileBytes);
+  const { logFilePath, stream, writeState } = openedLog;
 
   let closed = false;
 
   function write(level, args) {
     try {
       if (!stream) return;
-      stream.write(`${stripAnsi(buildLogLine(level, args))}\n`);
+      writeBoundedLine(stream, `${stripAnsi(buildLogLine(level, args))}\n`, writeState, limits.maxFileBytes);
     } catch (_) {}
   }
 
@@ -262,12 +381,8 @@ function initializeRunFileLogger({ app, dirName = 'logs', prefix = 'run' } = {})
   process.once('exit', close);
   process.once('beforeExit', close);
 
-  activeRunLogger = {
-    logDir,
-    logFilePath,
-    close,
-    writeLine: (level, ...args) => write(String(level || 'info'), args),
-  };
+  const writeLine = (level, ...args) => write(String(level || 'info'), args);
+  activeRunLogger = { logDir, logFilePath, close, writeLine };
 
   console.log('[日志] 本次运行日志文件:', logFilePath);
   return activeRunLogger;
@@ -278,4 +393,5 @@ module.exports = {
   initializeRunFileLogger,
   installShutdownUncaughtExceptionGuard,
   isExpectedShutdownNetworkError,
+  pruneRunLogs,
 };

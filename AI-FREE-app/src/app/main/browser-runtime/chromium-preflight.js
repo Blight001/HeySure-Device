@@ -12,7 +12,9 @@ const INTEGRITY_CHANNELS = [
   'Microsoft-Windows-CodeIntegrity/Operational',
   'Microsoft-Windows-AppLocker/EXE and DLL',
 ];
+const PREFLIGHT_CACHE_LIMIT = 8;
 const hashCache = new Map();
+const preflightCache = new Map();
 
 function check(id, status, detail, extra = {}) {
   return { id, status, detail: String(detail || ''), ...extra };
@@ -104,7 +106,13 @@ function readManifest(runtimeDir, fileSystem) {
 }
 
 function sha256(filePath, stat, fileSystem) {
-  const signature = `${filePath}|${stat.size}|${Math.trunc(stat.mtimeMs)}`;
+  const signature = [
+    filePath,
+    stat.size,
+    stat.mtimeMs,
+    stat.ctimeMs,
+    stat.ino || 0,
+  ].join('|');
   if (hashCache.has(signature)) return hashCache.get(signature);
   const digest = crypto.createHash('sha256')
     .update(fileSystem.readFileSync(filePath))
@@ -154,6 +162,69 @@ function checkSandbox(sandboxAccess) {
   return check('sandbox-access', 'failed', sandboxAccess?.error || 'AppContainer ACL 检查失败');
 }
 
+function statSignature(filePath, fileSystem) {
+  try {
+    const stat = fileSystem.statSync(filePath);
+    return [
+      stat.size,
+      stat.mtimeMs,
+      stat.ctimeMs,
+      stat.ino || 0,
+    ].join(':');
+  } catch (error) {
+    return `missing:${error?.code || 'unknown'}`;
+  }
+}
+
+function runtimeSignature(executablePath, fileSystem) {
+  const runtimeDir = path.dirname(path.resolve(executablePath));
+  const manifestPath = path.join(runtimeDir, RUNTIME_MANIFEST);
+  let manifestBytes;
+  let relativePaths = [];
+  try {
+    manifestBytes = fileSystem.readFileSync(manifestPath);
+    const manifest = JSON.parse(manifestBytes.toString('utf8'));
+    relativePaths = Object.keys(manifest?.files || {}).sort();
+  } catch (_) {
+    manifestBytes = Buffer.alloc(0);
+  }
+  const parts = [
+    path.resolve(executablePath),
+    crypto.createHash('sha256').update(manifestBytes).digest('hex'),
+    statSignature(manifestPath, fileSystem),
+  ];
+  for (const relativePath of relativePaths) {
+    parts.push(relativePath, statSignature(path.join(runtimeDir, relativePath), fileSystem));
+  }
+  return crypto.createHash('sha256').update(parts.join('|')).digest('hex');
+}
+
+function cacheKey(options, fileSystem) {
+  const platform = options.platform || process.platform;
+  const sandboxAccess = options.sandboxAccess || {};
+  return JSON.stringify({
+    runtime: runtimeSignature(options.executablePath, fileSystem),
+    platform,
+    arch: options.arch || process.arch,
+    release: options.osRelease || os.release(),
+    systemRoot: platform === 'win32'
+      ? String((options.env || process.env).SystemRoot || (options.env || process.env).WINDIR || '')
+      : '',
+    sandboxAccess: {
+      ok: Boolean(sandboxAccess.ok),
+      skipped: Boolean(sandboxAccess.skipped),
+      error: sandboxAccess.ok ? '' : String(sandboxAccess.error || ''),
+    },
+  });
+}
+
+function rememberPreflight(key, result) {
+  if (preflightCache.size >= PREFLIGHT_CACHE_LIMIT) {
+    preflightCache.delete(preflightCache.keys().next().value);
+  }
+  preflightCache.set(key, result);
+}
+
 function formatChromiumPreflight(result) {
   return result.checks.map((item) => `${item.id}=${item.status}(${item.detail})`).join('; ');
 }
@@ -184,7 +255,26 @@ function runChromiumPreflight(options = {}) {
   };
 }
 
+function runCachedChromiumPreflight(options = {}) {
+  const fileSystem = options.fs || fs;
+  const key = cacheKey(options, fileSystem);
+  const cached = preflightCache.get(key);
+  if (cached) return cached;
+  const result = runChromiumPreflight(options);
+  rememberPreflight(key, result);
+  return result;
+}
+
+function primeCachedChromiumPreflight(options = {}, result) {
+  if (!result || !Array.isArray(result.checks)) return null;
+  const fileSystem = options.fs || fs;
+  rememberPreflight(cacheKey(options, fileSystem), result);
+  return result;
+}
+
 module.exports = {
   formatChromiumPreflight,
+  primeCachedChromiumPreflight,
+  runCachedChromiumPreflight,
   runChromiumPreflight,
 };

@@ -70,6 +70,7 @@
               <div class="browser-history-heading">
                 <h2 id="browser-history-title">浏览器记录</h2>
                 <div class="browser-history-heading-actions">
+                  <span id="browser-capacity-status" class="browser-profile-audit" role="status">正在读取设备容量…</span>
                   <span id="browser-profile-audit" class="browser-profile-audit" hidden></span>
                   <button id="open-default-browser-settings" class="browser-default-settings-btn" type="button">浏览器默认环境配置</button>
                   <button id="refresh-browser-history" class="browser-history-refresh" type="button" title="刷新浏览器记录" aria-label="刷新浏览器记录">↻</button>
@@ -162,7 +163,7 @@
             <div class="vb-row"><span class="vb-label">ClientRects</span><div class="segmented" data-field="clientRects.mode"><button type="button" data-value="default">默认</button><button type="button" data-value="noise">随机</button></div></div>
             <div class="vb-row"><span class="vb-label">Speech Voices</span><div class="segmented" data-field="speechVoices.mode"><button type="button" data-value="default">默认</button><button type="button" data-value="noise">随机</button></div></div>
             <div class="vb-row"><label class="vb-label" for="browser-cpu">CPU</label><select id="browser-cpu" class="tiny-select"><option>2</option><option>4</option><option>6</option><option>8</option><option>12</option><option>16</option><option>32</option></select><span class="unit">核</span></div>
-            <div class="vb-row"><label class="vb-label" for="browser-memory">内存</label><select id="browser-memory" class="tiny-select"><option>2</option><option>4</option><option>8</option><option>16</option><option>32</option><option>64</option></select><span class="unit">GB</span></div>
+            <div class="vb-row"><label class="vb-label" for="browser-memory">设备内存指纹</label><div class="vb-grow"><div class="vb-inline"><select id="browser-memory" class="tiny-select"><option>2</option><option>4</option><option>8</option><option>16</option><option>32</option><option>64</option></select><span class="unit">GB</span></div><small class="field-hint">仅影响网页可见的设备信息，不限制浏览器实际内存占用。</small></div></div>
             <div class="vb-row"><span class="vb-label">设备名称</span><div class="vb-grow vb-inline"><div class="segmented" data-field="deviceName.mode"><button type="button" data-value="default">默认</button><button type="button" data-value="custom">自定义</button></div><input id="device-name" type="text"><button class="link-action" type="button" data-random-target="device-name">换一换</button><span class="kernel-badge">内核项</span></div></div>
             <div class="vb-row"><span class="vb-label">MAC 地址</span><div class="vb-grow vb-inline"><div class="segmented" data-field="macAddress.mode"><button type="button" data-value="default">默认</button><button type="button" data-value="custom">自定义</button></div><input id="mac-address" type="text"><button class="link-action" type="button" data-random-target="mac-address">换一换</button><span class="kernel-badge">内核项</span></div></div>
             <div class="vb-row"><span class="vb-label">Do Not Track</span><label class="switch"><input id="do-not-track" type="checkbox"><span></span></label></div>
@@ -170,6 +171,7 @@
             <div class="vb-row"><span class="vb-label">端口扫描保护</span><div class="segmented" data-field="portScanProtection.enabled"><button type="button" data-value="true">开启</button><button type="button" data-value="false">关闭</button></div></div>
             <div class="vb-row"><label class="vb-label" for="port-scan-allow-list">扫描白名单</label><input id="port-scan-allow-list" type="text" placeholder="输入端口号，多个用英文逗号隔开"></div>
             <div class="vb-row"><span class="vb-label">硬件加速</span><label class="switch"><input id="hardware-acceleration" type="checkbox"><span></span></label><span class="kernel-badge">重启生效</span></div>
+            <div class="vb-row"><label class="vb-label" for="low-spec-mode">低配模式</label><div class="vb-grow"><select id="low-spec-mode"><option value="auto">自动（推荐）</option><option value="on">开启</option><option value="off">关闭</option></select><small class="field-hint">关闭优化仍不会绕过资源不足门禁和设备安全上限。</small></div></div>
             <div class="vb-row vb-row-top"><span class="vb-label">启动参数</span><div class="vb-grow"><div class="segmented" data-field="launchArgs.mode"><button type="button" data-value="default">默认</button><button type="button" data-value="custom">自定义</button></div><textarea id="launch-args" rows="3" placeholder="每行一个 --switch=value"></textarea><span class="kernel-badge">仅 Chromium 内核</span></div></div>
           </details>
           </div>

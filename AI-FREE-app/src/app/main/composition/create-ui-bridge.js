@@ -2,18 +2,16 @@ const { createAppConsoleBridge } = require('../runtime/app-console');
 const { appContext } = require('../runtime/app-context');
 
 // 创建/初始化：createUiBridge的具体业务逻辑。
-function createUiBridge({ getMainWindow, getSideView, getControlPanelWindow, getConsoleWindow }) {
+function createUiBridge({ getMainWindow, getSideView, getControlPanelWindow, isDevMode = false }) {
   let sideView = null;
   let mainWindow = null;
   let controlPanelWindow = null;
-  let consoleWindow = null;
 
   const appConsoleBridge = createAppConsoleBridge({
     historyLimit: 500,
     getSenders: () => {
       sideView = getSideView();
       controlPanelWindow = typeof getControlPanelWindow === 'function' ? getControlPanelWindow() : null;
-      consoleWindow = typeof getConsoleWindow === 'function' ? getConsoleWindow() : null;
       const senders = [];
       if (sideView && sideView.webContents && !sideView.webContents.isDestroyed()) {
         senders.push(sideView.webContents);
@@ -21,15 +19,12 @@ function createUiBridge({ getMainWindow, getSideView, getControlPanelWindow, get
       if (controlPanelWindow && controlPanelWindow.webContents && !controlPanelWindow.webContents.isDestroyed()) {
         senders.push(controlPanelWindow.webContents);
       }
-      if (consoleWindow && consoleWindow.webContents && !consoleWindow.webContents.isDestroyed()) {
-        senders.push(consoleWindow.webContents);
-      }
       return senders;
     },
     getDebugSenders: () => {
-      consoleWindow = typeof getConsoleWindow === 'function' ? getConsoleWindow() : null;
-      if (consoleWindow && consoleWindow.webContents && !consoleWindow.webContents.isDestroyed()) {
-        return [consoleWindow.webContents];
+      sideView = getSideView();
+      if (isDevMode && sideView?.webContents && !sideView.webContents.isDestroyed()) {
+        return [sideView.webContents];
       }
       return [];
     },

@@ -1,4 +1,3 @@
-const { appContext } = require('../runtime/app-context');
 const { toggleSidebarVisibility } = require('./tab-common');
 const { createBrowserTutorialController } = require('../features/browser/browser-tutorial-controller');
 const { createBrowserNetworkController } = require('../features/browser/browser-network-controller');
@@ -19,6 +18,7 @@ class TabManagerRuntime {
     this.deps = deps;
     this.logger = deps.logger || console;
     this.closingTabIds = new Set();
+    this.profileStopTasks = new Map();
     this.initializeTutorialController();
     this.initializeNetworkController();
     this.initializeTabLauncher();
@@ -113,6 +113,7 @@ class TabManagerRuntime {
 
   initializeTabLauncher() {
     const controller = createBrowserTabLauncher({
+      browserLaunchGuard: this.deps.browserLaunchGuard,
       browserRuntimeManager: this.deps.browserRuntimeManager,
       extensionManager: this.deps.extensionManager,
       getBrowserProxyEndpoint: this.getBrowserProxyEndpoint,
@@ -121,6 +122,8 @@ class TabManagerRuntime {
       licenseCache: this.deps.licenseCache,
       logger: this.logger,
       readPersistedBrowserSettings: () => this.readPersistedBrowserSettings(),
+      resolveAdministratorBrowserLimit: this.deps.resolveAdministratorBrowserLimit,
+      waitForProfileStop: (id) => this.profileStopTasks.get(String(id || '')) || null,
       resolveActiveTabId: () => this.resolveActiveTabId(),
       resolveDefaultTabUrl: this.resolveDefaultTabUrl,
       resolveIsSidebarVisible: () => this.resolveIsSidebarVisible(),
@@ -175,15 +178,6 @@ class TabManagerRuntime {
     tab.runtimeStatus = 'crashed';
     tab.runtimeError = runtimeState.lastError || null;
     this.deps.updateTabs(true);
-    if (appContext.isShuttingDown()) return;
-    setImmediate(() => this.closeCrashedTab(tabId));
-  }
-
-  closeCrashedTab(tabId) {
-    if (appContext.isShuttingDown() || !this.resolveTabs().has(tabId) || this.closingTabIds.has(tabId)) return;
-    void this.closeTab(tabId).catch((error) => {
-      this.logger.warn?.('[ChromiumRuntime] 浏览器退出后关闭栏目失败:', error?.message || error);
-    });
   }
 
   handleRuntimeEvent(event) {
@@ -269,25 +263,45 @@ class TabManagerRuntime {
     const tabs = this.resolveTabs();
     if (!tabs.has(tabId) || !this.resolveMainWindow() || this.closingTabIds.has(tabId)) return;
     this.closingTabIds.add(tabId);
+    const orderedTabIds = Array.from(tabs.keys());
+    const tabToClose = tabs.get(tabId);
+    this.hideClosingTab(tabId);
+    tabs.delete(tabId);
+    this.notifyClosedAccount(tabId, tabToClose);
+    this.activateAfterClose(tabId, orderedTabIds, tabs);
+    this.deps.updateTabs(true);
+    this.stopClosingTabInBackground(tabToClose);
+  }
+
+  hideClosingTab(tabId) {
+    const hide = this.deps.browserRuntimeManager?.hide;
+    if (typeof hide !== 'function') return;
     try {
-      const orderedTabIds = Array.from(tabs.keys());
-      const tabToClose = tabs.get(tabId);
-      await this.stopClosingTab(tabToClose);
-      tabs.delete(tabId);
-      this.notifyClosedAccount(tabId, tabToClose);
-      await this.activateAfterClose(tabId, orderedTabIds, tabs);
-      this.deps.updateTabs(true);
-    } finally {
-      this.closingTabIds.delete(tabId);
+      void Promise.resolve(hide.call(this.deps.browserRuntimeManager, tabId, 'chromium')).catch((error) => {
+        this.logger.warn?.('[ChromiumRuntime] 隐藏待关闭环境失败:', error?.message || error);
+      });
+    } catch (error) {
+      this.logger.warn?.('[ChromiumRuntime] 隐藏待关闭环境失败:', error?.message || error);
     }
   }
 
-  async stopClosingTab(tab) {
-    try {
-      await this.deps.browserRuntimeManager?.stop(tab.id, 'chromium', { timeoutMs: 4000 });
-    } catch (error) {
-      this.logger.warn?.('[ChromiumRuntime] 关闭失败:', error?.message || error);
-    }
+  stopClosingTabInBackground(tab) {
+    const tabId = String(tab?.id || '');
+    let trackedTask;
+    const stopTask = Promise.resolve()
+      .then(() => this.deps.browserRuntimeManager?.stop(tabId, 'chromium', { timeoutMs: 4000 }))
+      .then(
+        () => ({ ok: true }),
+        (error) => {
+          this.logger.warn?.('[ChromiumRuntime] 关闭失败:', error?.message || error);
+          return { ok: false, error };
+        },
+      );
+    trackedTask = stopTask.finally(() => {
+      if (this.profileStopTasks.get(tabId) === trackedTask) this.profileStopTasks.delete(tabId);
+      this.closingTabIds.delete(tabId);
+    });
+    this.profileStopTasks.set(tabId, trackedTask);
   }
 
   notifyClosedAccount(tabId, tab) {
@@ -296,7 +310,7 @@ class TabManagerRuntime {
     try { this.deps.sendToSide('tab-closed', { tabId, accountId }); } catch (_) {}
   }
 
-  async activateAfterClose(tabId, orderedTabIds, tabs) {
+  activateAfterClose(tabId, orderedTabIds, tabs) {
     const remaining = Array.from(tabs.keys());
     if (!remaining.length) {
       this.deps.setActiveTabId?.(null);

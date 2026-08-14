@@ -1,4 +1,4 @@
-const { BrowserWindow, nativeTheme } = require('electron');
+const { BrowserWindow, nativeTheme, shell } = require('electron');
 const { resolveTabTitle } = require('../../services/tab-common');
 const { createTabContextMenuController } = require('../../features/browser/tab-context-menu-controller');
 const { createSidebarFocusHandler } = require('../../features/browser/sidebar-focus-controller');
@@ -226,8 +226,23 @@ function registerBrowserRuntimeIPC(ipc, ui, clearController) {
   ipc.handle('restart-browser-runtime', async (_event, payload = {}) => {
     const profileId = String(payload?.profileId || '').trim();
     if (!profileId || !ui?.browserRuntimeManager) return { ok: false, message: '缺少 Chromium Profile ID' };
-    try { return { ok: true, state: await ui.browserRuntimeManager.restart(profileId) }; }
+    try {
+      return {
+        ok: true,
+        state: await ui.browserRuntimeManager.restart(profileId, {
+          compatibilityMode: payload?.compatibilityMode === true,
+        }),
+      };
+    }
     catch (error) { return { ok: false, message: uiIpcError(error) }; }
+  });
+  ipc.handle('open-browser-diagnostics', async () => {
+    const directory = ui?.browserRuntimeManager?.chromium?.launchOptions?.chromiumDiagnosticDir;
+    if (!directory) return { ok: false, message: '诊断目录不可用' };
+    try {
+      const message = await shell.openPath(directory);
+      return message ? { ok: false, message } : { ok: true };
+    } catch (error) { return { ok: false, message: uiIpcError(error) }; }
   });
   ipc.handle('clear-browser-runtime-data', (_event, payload) => clearController.request(payload));
   ipc.handle('resolve-browser-data-clear-confirm', (event, payload) => clearController.resolve(event, payload));

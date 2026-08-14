@@ -24,6 +24,77 @@ require.cache[clashRuntimePath] = {
 delete require.cache[launcherPath];
 const { createBrowserTabLauncher } = require(launcherPath);
 
+function launchFixture(overrides = {}) {
+  const tabs = new Map();
+  const deps = {
+    browserRuntimeManager: { async launchProfile() { return { status: 'ready' }; } },
+    hasPersistedChromiumProfile: () => false,
+    licenseCache: { getSnapshot: () => ({ isVip: true }) },
+    logger: { info() {}, warn() {}, error() {} },
+    readPersistedBrowserSettings: () => ({}),
+    resolveActiveTabId: () => null,
+    resolveDefaultTabUrl: () => 'chrome://newtab/',
+    resolveIsSidebarVisible: () => false,
+    resolveMainWindow: () => ({ isDestroyed: () => false, getContentSize: () => [1200, 800] }),
+    resolveSideView: () => null,
+    resolveTabBrowserProfile: async () => ({}),
+    resolveTabs: () => tabs,
+    setActiveTabId() {},
+    switchTab() {},
+    updateTabs() {},
+    ...overrides,
+  };
+  return { launcher: createBrowserTabLauncher(deps), tabs };
+}
+
+test('resource denial happens before a placeholder tab or Chromium process is created', async () => {
+  let launches = 0;
+  const { launcher, tabs } = launchFixture({
+    browserLaunchGuard: {
+      async evaluate() {
+        return {
+          ok: false,
+          code: 'BROWSER_RESOURCE_MEMORY_CRITICAL',
+          retryable: true,
+          snapshot: { pressure: 'critical', activeProfiles: 1, profileLimit: 1 },
+        };
+      },
+    },
+    browserRuntimeManager: { async launchProfile() { launches += 1; } },
+  });
+
+  await assert.rejects(
+    launcher.addTab('https://example.test', { tabId: 'denied' }),
+    (error) => error.code === 'BROWSER_RESOURCE_MEMORY_CRITICAL',
+  );
+  assert.equal(tabs.size, 0);
+  assert.equal(launches, 0);
+});
+
+test('an explicit GPU launch failure retries once with the safe GPU argument', async () => {
+  const profiles = [];
+  const { launcher, tabs } = launchFixture({
+    browserRuntimeManager: {
+      async launchProfile(profile) {
+        profiles.push(profile);
+        if (profiles.length === 1) {
+          const error = new Error('GPU process failed');
+          error.code = 'CHROMIUM_GPU_PROCESS_CRASHED';
+          throw error;
+        }
+        return { status: 'ready' };
+      },
+    },
+  });
+
+  await launcher.addTab('https://example.test', { tabId: 'gpu-retry' });
+
+  assert.equal(profiles.length, 2);
+  assert.equal(profiles[1].launchMode, 'gpu-safe');
+  assert.equal(profiles[1].extraArgs.includes('--disable-gpu'), true);
+  assert.equal(tabs.get('gpu-retry').runtimeStatus, 'ready');
+});
+
 test('global proxy launch keeps proxy routing but passes no exit IP probe inputs', async () => {
   const tabs = new Map();
   const lookups = [];

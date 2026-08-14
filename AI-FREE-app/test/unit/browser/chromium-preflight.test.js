@@ -7,7 +7,10 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
-const { runChromiumPreflight } = require('../../../src/app/main/browser-runtime/chromium-preflight');
+const {
+  runCachedChromiumPreflight,
+  runChromiumPreflight,
+} = require('../../../src/app/main/browser-runtime/chromium-preflight');
 
 function sha256(value) {
   return crypto.createHash('sha256').update(value).digest('hex').toUpperCase();
@@ -83,4 +86,41 @@ test('启动前标记最近命中浏览器文件的 Code Integrity 事件', (t) 
 
   assert.equal(result.ok, true);
   assert.equal(result.checks.find((item) => item.id === 'code-integrity').status, 'warning');
+});
+
+test('相同 Chromium runtime 的后续 Profile 启动复用进程内自检结果', (t) => {
+  const runtime = createRuntime(t);
+  let spawnCount = 0;
+  const options = windowsOptions(runtime.executablePath);
+  options.spawnSync = () => {
+    spawnCount += 1;
+    return { status: 0, stdout: 'File System Name : NTFS' };
+  };
+
+  const first = runCachedChromiumPreflight(options);
+  const second = runCachedChromiumPreflight({
+    ...options,
+    sandboxAccess: { ok: true, cached: true },
+  });
+
+  assert.strictEqual(second, first);
+  assert.equal(spawnCount, 3);
+});
+
+test('Chromium 内核文件变化后缓存失效并重新执行完整自检', (t) => {
+  const runtime = createRuntime(t);
+  let spawnCount = 0;
+  const options = windowsOptions(runtime.executablePath);
+  options.spawnSync = () => {
+    spawnCount += 1;
+    return { status: 0, stdout: 'File System Name : NTFS' };
+  };
+  runCachedChromiumPreflight(options);
+
+  fs.writeFileSync(runtime.executablePath, 'changed-browser-runtime-size');
+  const refreshed = runCachedChromiumPreflight(options);
+
+  assert.equal(refreshed.ok, false);
+  assert.equal(refreshed.checks.find((item) => item.id === 'runtime-integrity').status, 'failed');
+  assert.equal(spawnCount, 6);
 });

@@ -23,6 +23,9 @@ test('侧边栏页面在真实 Electron 中加载并应用主题', { timeout: 60
   assert.ok(['dark', 'light', 'gold'].includes(result.theme), `主题未应用: ${result.theme}`);
   assert.equal(result.hasControlShell, true, '缺少 .control-shell 容器');
   assert.equal(result.tabButtons, 2, 'AI 控制/个人中心两个 tab 按钮应存在');
+  assert.equal(result.devTabButtons, 3, '开发模式应显示三个侧边栏栏目');
+  assert.equal(result.devConsoleVisible, true, '开发模式调试控制台入口应可见');
+  assert.equal(result.devConsolePageIntegrated, true, '调试控制台应保持侧边栏三栏导航');
   assert.equal(result.chatStructure.userTag, 'ARTICLE', '用户气泡应是独立消息节点');
   assert.equal(result.chatStructure.assistantTag, 'ARTICLE', 'AI 回合应是独立消息节点');
   assert.equal(result.chatStructure.assistantCount, 1, '重启后模型工具协议消息不应重复渲染为 AI 气泡');

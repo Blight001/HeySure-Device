@@ -68,3 +68,31 @@ test('AI control can select a shared automation card', (t) => {
   assert.equal(bridge.getCardCacheState().state.selectedId, 'second');
   assert.throws(() => bridge.selectCard('missing'), /不存在或已被删除/);
 });
+
+test('running an automation card holds and releases a background execution lease', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-free-card-lease-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  createCardCacheStore({ dataDir: root }).write({
+    items: [{
+      id: 'run',
+      cardName: '运行',
+      cardData: { name: '运行', steps: [{ type: 'navigate', url: 'https://example.test' }] },
+    }],
+    selectedId: 'run',
+  });
+  const events = [];
+  const bridge = createBrowserAutomationBridge({
+    cardCacheDir: root,
+    logger: { log() {} },
+    backgroundExecutionLeases: {
+      acquire() {
+        events.push('acquire');
+        return { release: () => events.push('release') };
+      },
+    },
+  });
+
+  await bridge.manageCard('', { action: 'run', card_id: 'run' });
+
+  assert.deepEqual(events, ['acquire', 'release']);
+});

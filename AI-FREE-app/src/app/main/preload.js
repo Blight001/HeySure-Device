@@ -159,6 +159,7 @@ contextBridge.exposeInMainWorld('aiFree', Object.freeze({
     createIndependentBrowser: invokeChannel('create-independent-browser'),
     openActiveWebConsole: invokeChannel('open-active-web-console'),
     restartBrowserRuntime: invokeChannel('restart-browser-runtime'),
+    openBrowserDiagnostics: invokeChannel('open-browser-diagnostics'),
     showBrowserHistoryGesturePopup: invokeChannel('show-browser-history-gesture-popup'),
     showTabContextMenu: invokeChannel('show-tab-context-menu'),
     closeBrowserHistoryGesturePopup: sendChannel('close-browser-history-gesture-popup'),

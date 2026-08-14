@@ -43,12 +43,15 @@ function createAiBrowserParticleLayer(seedValue) {
 }
 
 // 创建/初始化：createTabElement的具体业务逻辑。
-async function restartTabRuntime(tabElement, runtimeBadge) {
+async function restartTabRuntime(tabElement, runtimeBadge, compatibilityMode = false) {
   if (typeof ShellApi.restartBrowserRuntime !== 'function' || runtimeBadge.disabled) return;
   runtimeBadge.disabled = true;
   runtimeBadge.textContent = '…';
   try {
-    const result = await ShellApi.restartBrowserRuntime({ profileId: tabElement.dataset.id });
+    const result = await ShellApi.restartBrowserRuntime({
+      profileId: tabElement.dataset.id,
+      compatibilityMode,
+    });
     if (!result?.ok) throw new Error(result?.message || '重启失败');
   } catch (error) {
     showControllerError('重启 AI-FREE 环境失败', error);
@@ -68,6 +71,33 @@ function createRuntimeRecoveryButton(tabElement) {
     void restartTabRuntime(tabElement, runtimeBadge);
   });
   return runtimeBadge;
+}
+
+function createRuntimeRecoveryControls(tabElement) {
+  const controls = document.createElement('span');
+  controls.className = 'tab-runtime-actions';
+  controls.appendChild(createRuntimeRecoveryButton(tabElement));
+  const compatible = document.createElement('button');
+  compatible.type = 'button';
+  compatible.className = 'tab-runtime-badge crashed';
+  compatible.textContent = '兼容';
+  compatible.title = '使用无 GPU 兼容模式重试';
+  compatible.addEventListener('click', (event) => {
+    event.stopPropagation();
+    void restartTabRuntime(tabElement, compatible, true);
+  });
+  controls.appendChild(compatible);
+  const diagnostics = document.createElement('button');
+  diagnostics.type = 'button';
+  diagnostics.className = 'tab-runtime-badge crashed';
+  diagnostics.textContent = '诊断';
+  diagnostics.title = '打开脱敏诊断目录';
+  diagnostics.addEventListener('click', (event) => {
+    event.stopPropagation();
+    void ShellApi.openBrowserDiagnostics?.();
+  });
+  controls.appendChild(diagnostics);
+  return controls;
 }
 
 function initializeTabElement(tab) {
@@ -93,7 +123,7 @@ function appendTabContent(tabElement, tab) {
   titleSpan.title = buildTabTooltip(tab);
   tabElement.appendChild(titleSpan);
   if (tab?.runtimeType === 'chromium' && tab?.runtimeStatus === 'crashed') {
-    tabElement.appendChild(createRuntimeRecoveryButton(tabElement));
+    tabElement.appendChild(createRuntimeRecoveryControls(tabElement));
   }
   const closeBtn = document.createElement('span');
   closeBtn.className = 'tab-close';
@@ -197,12 +227,12 @@ function syncTabElement(tabElement, tab) {
     isAiConnectedBrowserProfile(tab.id),
   );
   tabElement.classList.toggle('network-magic', tab?.networkMagicEnabled === true);
-  const runtimeBadge = tabElement.querySelector('.tab-runtime-badge');
+  const runtimeBadge = tabElement.querySelector('.tab-runtime-actions');
   const crashed = tab?.runtimeType === 'chromium' && tab?.runtimeStatus === 'crashed';
   if (runtimeBadge && !crashed) {
     runtimeBadge.remove();
   } else if (!runtimeBadge && crashed) {
-    const recoveryButton = createRuntimeRecoveryButton(tabElement);
+    const recoveryButton = createRuntimeRecoveryControls(tabElement);
     tabElement.insertBefore(recoveryButton, tabElement.querySelector('.tab-close'));
   }
   tabElement.classList.toggle('active', !!tab.isActive);

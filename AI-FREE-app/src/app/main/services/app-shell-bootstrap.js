@@ -64,6 +64,7 @@ function createBootstrapUiDeps(deps) {
     buildManagedTabPartitionName: typeof deps.buildManagedTabPartitionName === 'function' ? deps.buildManagedTabPartitionName : null,
     applyClashMiniBrowserProxy: typeof deps.applyClashMiniBrowserProxy === 'function' ? deps.applyClashMiniBrowserProxy : null,
     browserRuntimeManager: deps.browserRuntimeManager || null,
+    getBrowserCapacity: deps.getBrowserCapacity,
   };
 }
 
@@ -107,9 +108,6 @@ function createBootstrapWindows(deps) {
   } catch (error) {
     deps.logger.warn?.('[启动] 创建主窗口失败:', bootstrapError(error));
   }
-  if (!deps.isDevMode) return;
-  try { deps.createDevConsoleWindow(); }
-  catch (error) { deps.logger.warn?.('[启动] 创建调试控制台窗口失败:', bootstrapError(error)); }
 }
 
 async function refreshBootstrapRuntimeUrls(deps, state) {

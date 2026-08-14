@@ -57,9 +57,22 @@ function runtimeTarget(target) {
     observedTag: _observedTag,
     observedInputType: _observedInputType,
     requiresFileUpload: _requiresFileUpload,
+    observedRefExpired: _observedRefExpired,
     ...input
   } = target;
   return input;
+}
+
+function expiredObservedRefResult(input) {
+  if (input.observedRefExpired !== true) return null;
+  return {
+    success: false,
+    action: text(input.action).toLowerCase(),
+    errorCode: 'OBSERVED_REF_EXPIRED',
+    error: '该元素 ref 不属于最近一次 browser_observe 结果。请重新观察并立即使用最新 ref，或改用稳定 selector。',
+    ref: text(input.ref),
+    suggestedTool: 'browser_observe',
+  };
 }
 
 function selectorTargetsFileInput(value) {
@@ -271,6 +284,8 @@ class NativeBrowserAutomation {
 
   async browserAction(connection, args) {
     const input = this.resolveObservedTarget(connection, args);
+    const expired = expiredObservedRefResult(input);
+    if (expired) return expired;
     if (text(input.action) === 'upload_file') throw new Error('文件上传请使用 browser_file action=upload');
     const blocked = fileUploadRequired(input);
     if (blocked) return blocked;
@@ -338,7 +353,7 @@ class NativeBrowserAutomation {
   resolveObservedTarget(connection, args) {
     if (text(args.selector) || !text(args.ref)) return args;
     const target = this.observeTargets.get(connection.id)?.get(text(args.ref));
-    if (!target) return args;
+    if (!target) return { ...args, observedRefExpired: true };
     const resolved = { ...target, ...args };
     if (!text(args.selector) && target.selector) resolved.selector = target.selector;
     const explicitPoint = nonNegativePoint(args.x, args.y);

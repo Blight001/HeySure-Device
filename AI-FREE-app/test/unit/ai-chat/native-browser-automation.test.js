@@ -195,6 +195,30 @@ test('observed refs click the validated exposed point instead of re-querying a g
   }]);
 });
 
+test('accessibility fallback refs use observed coordinates and stale refs fail with recovery guidance', async () => {
+  const { calls, service, setAutomationHandler } = fixture();
+  setAutomationHandler(async (_pid, command) => ({ result: command === 'observe-page' ? {
+    items: [{
+      id: 'e-fallback', kind: 'interactive', tag: 'unknown', accessibilityFallback: true,
+      clickX: 245.5, clickY: 118.25, text: '正文编辑器',
+    }],
+  } : { success: true } }));
+  await service.dispatch('native:profile-a', 'browser_observe', { limit: 10 });
+
+  await service.dispatch('native:profile-a', 'browser_action', { action: 'click', ref: 'e-fallback' });
+  assert.deepEqual(calls.at(-1), [
+    'automation', 42, 'perform-action',
+    { action: 'click', ref: 'e-fallback', x: 245.5, y: 118.25 },
+  ]);
+
+  const expired = await service.dispatch(
+    'native:profile-a', 'browser_action', { action: 'click', ref: 'e-before-latest-observe' },
+  );
+  assert.equal(expired.errorCode, 'OBSERVED_REF_EXPIRED');
+  assert.equal(expired.suggestedTool, 'browser_observe');
+  assert.match(expired.error, /最近一次 browser_observe/);
+});
+
 test('observed file inputs are blocked before Chromium can open a system chooser', async () => {
   const { calls, service, setAutomationHandler } = fixture();
   setAutomationHandler(async (_pid, command) => ({ result: command === 'observe-page' ? {

@@ -219,6 +219,9 @@ class AgentTests(unittest.TestCase):
             self.assertEqual(app.requests[0][1]["cwd"], str(path))
             self.assertEqual(app.requests[0][1]["sandbox"], "danger-full-access")
             self.assertEqual(app.requests[1][1]["sandboxPolicy"], {"type": "dangerFullAccess"})
+            started = [payload for event, payload in agent.socket.emitted if event == "codex:run_started"]
+            self.assertEqual(started[0]["branch"], "")
+            self.assertEqual(started[0]["baseSha"], "")
 
     def test_existing_run_resumes_its_thread(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

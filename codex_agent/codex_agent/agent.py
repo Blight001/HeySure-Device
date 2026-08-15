@@ -218,7 +218,7 @@ class CodexAgent:
                 if workspace_mode not in {"worktree", "current"}:
                     raise ValueError(f"unsupported workspace mode: {workspace_mode}")
                 worktree = (
-                    WorktreeInfo(self.config.workspace, None, None)
+                    WorktreeInfo(self.config.workspace, "", "")
                     if workspace_mode == "current"
                     else self.worktrees.prepare(
                         run_id, str(data.get("taskId") or run_id), existing=run

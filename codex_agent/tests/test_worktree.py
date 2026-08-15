@@ -86,8 +86,10 @@ class WorktreeTests(unittest.TestCase):
 
             info = WorktreeManager(repo, root=root, runner=runner).prepare("run-1", "Task 1")
             self.assertIn("local Git data only", info.warning)
-            submodule = next(call for call, _ in git.calls if "submodule" in call)
+            submodule, kwargs = next(item for item in git.calls if "submodule" in item[0])
             self.assertIn("--no-fetch", submodule)
+            self.assertEqual(kwargs["env"]["GIT_ALLOW_PROTOCOL"], "file")
+            self.assertEqual(kwargs["env"]["GIT_TERMINAL_PROMPT"], "0")
 
     def test_non_git_workspace_fails_without_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

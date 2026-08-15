@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from dataclasses import dataclass
@@ -105,7 +106,8 @@ class WorktreeManager:
         if not modules.is_file():
             return None
         result = self._run(
-            worktree, "submodule", "update", "--init", "--recursive", "--no-fetch", check=False
+            worktree, "submodule", "update", "--init", "--recursive", "--no-fetch",
+            check=False, local_only=True,
         )
         if result.returncode == 0:
             return None
@@ -120,8 +122,15 @@ class WorktreeManager:
         return result.stdout.strip()
 
     def _run(
-        self, cwd: Path, *arguments: str, check: bool
+        self, cwd: Path, *arguments: str, check: bool, local_only: bool = False
     ) -> subprocess.CompletedProcess[str]:
+        environment = None
+        if local_only:
+            environment = {
+                **os.environ,
+                "GIT_ALLOW_PROTOCOL": "file",
+                "GIT_TERMINAL_PROMPT": "0",
+            }
         try:
             return self.runner(
                 ["git", "-C", str(cwd), *arguments],
@@ -130,6 +139,7 @@ class WorktreeManager:
                 errors="replace",
                 capture_output=True,
                 check=check,
+                env=environment,
             )
         except OSError as exc:
             raise WorktreeError(f"cannot execute Git: {exc}") from exc

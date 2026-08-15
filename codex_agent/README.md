@@ -124,8 +124,9 @@ App Server 进程崩溃时运行进入 `recovering`，设备上报退出事件�
 - 主 workspace 不是 Git 仓库、分支冲突、路径已被占用或 worktree 创建失败时，run 会
   明确失败；不会退回可能有用户改动的主目录。`HEYSURE_CODEX_WORKTREE_MODE=off` 是唯一
   兼容例外，应只用于用户明确承担风险的诊断场景。
-- 根 worktree 创建后，设备只运行 `git submodule update --init --recursive --no-fetch`，
-  使用本机已有 Git 元数据初始化已登记子模块。缺少本地对象时不会联网拉取，也不会碰原
+- 根 worktree 创建后，设备运行 `git submodule update --init --recursive --no-fetch`，并把
+  Git 传输协议强制限制为本地 `file`。这同时阻止首次 clone 和后续 fetch 使用网络，只使用
+  本机已有 Git 元数据初始化已登记子模块。缺少本地对象时不会联网拉取，也不会碰原
   子模块工作区；设备会把警告前置到 prompt 并上报 `worktree/submoduleWarning`。
 - 沙箱和审批策略由工单下发或本地 Codex 托管策略决定；设备不会默认批准。
 - `workspaceWrite` 的 writable roots 会强制收窄为配置 workspace；`dangerFullAccess` 被拒绝，

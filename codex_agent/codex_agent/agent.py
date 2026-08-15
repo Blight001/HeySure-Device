@@ -552,6 +552,20 @@ class CodexAgent:
                 self.store.acknowledge_outbox(event_id)
                 return
             error_code = response.get("error_code") if isinstance(response, dict) else "NO_RESPONSE"
+            run_id = str(payload.get("runId") or "")
+            run = self.store.get_run(run_id) if run_id else None
+            if (
+                event_id
+                and error_code in {"RUN_NOT_FOUND", "STATE_CONFLICT"}
+                and run
+                and run.get("status") in {"succeeded", "failed", "cancelled"}
+            ):
+                self.store.acknowledge_outbox(event_id)
+                self.diagnostics.record(
+                    "outbox.terminal_rejection_dropped", event=event,
+                    run_id=run_id, error_code=error_code,
+                )
+                return
             logger.warning("reliable event was not acknowledged: event=%s error_code=%s", event, error_code)
 
         self.socket.emit(event, payload, callback=acknowledged)

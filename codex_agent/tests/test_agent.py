@@ -312,6 +312,15 @@ class AgentTests(unittest.TestCase):
             socket.callbacks[-1]({"ok": True})
             self.assertEqual(agent.store.outbox(), [])
 
+    def test_terminal_server_rejection_does_not_poison_replay_queue(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            agent, socket, _ = self.build(Path(directory))
+            agent.store.update_run("run-1", status="failed")
+            agent._emit_run("codex:approval_requested", "run-1", {"approvalId": "old"})
+            self.assertEqual(len(agent.store.outbox()), 1)
+            socket.callbacks[-1]({"ok": False, "error_code": "STATE_CONFLICT"})
+            self.assertEqual(agent.store.outbox(), [])
+
     def test_public_summary_is_forwarded_but_raw_reasoning_is_dropped(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             agent, socket, _ = self.build(Path(directory))

@@ -60,6 +60,7 @@ mac/src/asset-path.ts
 *.log
 dist/
 *.tsbuildinfo
+.heysure-codex-agent/
 
 # Local standalone experiment; it has no configured remote and is not a
 # reproducible HeySure-Device submodule.

@@ -208,13 +208,17 @@ class AgentTests(unittest.TestCase):
             )
             self.assertEqual(app.requests[0][1]["sandbox"], "read-only")
 
-    def test_danger_full_access_is_rejected(self) -> None:
+    def test_controller_can_use_current_workspace_with_full_access(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            agent, _, _ = self.build(Path(directory))
-            with self.assertRaisesRegex(ValueError, "unsupported sandbox"):
-                agent.start_run(
-                    {"runId": "run-1", "prompt": "Fix", "sandboxPolicy": {"type": "dangerFullAccess"}}
-                )
+            path = Path(directory)
+            agent, _, app = self.build(path)
+            agent.start_run({
+                "runId": "run-1", "prompt": "Fix", "workspaceMode": "current",
+                "sandboxPolicy": {"type": "dangerFullAccess"},
+            })
+            self.assertEqual(app.requests[0][1]["cwd"], str(path))
+            self.assertEqual(app.requests[0][1]["sandbox"], "danger-full-access")
+            self.assertEqual(app.requests[1][1]["sandboxPolicy"], {"type": "dangerFullAccess"})
 
     def test_existing_run_resumes_its_thread(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -371,6 +375,36 @@ class AgentTests(unittest.TestCase):
             request = [payload for event, payload in socket.emitted if event == "codex:approval_requested"][0]
             agent.approval_decision({"approvalId": request["approvalId"], "decision": "denied"})
             self.assertEqual(app.responses, [(44, {"decision": "decline"})])
+
+    def test_mcp_elicitation_uses_action_content_protocol(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            agent, socket, app = self.build(Path(directory))
+            agent.store.update_run("run-1", threadId="thread-1", turnId="turn-1", status="running")
+            agent._on_app_message({
+                "id": 45, "method": "mcpServer/elicitation/request",
+                "params": {"threadId": "thread-1", "mode": "form", "serverName": "custom",
+                           "requestedSchema": {"type": "object", "properties": {}}},
+            })
+            request = [payload for event, payload in socket.emitted if event == "codex:approval_requested"][0]
+            agent.approval_decision({"approvalId": request["approvalId"], "decision": "approved"})
+            self.assertEqual(app.responses, [(45, {"action": "accept", "content": {}})])
+
+    def test_controller_auto_accepts_empty_trusted_mcp_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            agent, socket, app = self.build(Path(directory))
+            agent.store.update_run(
+                "run-1", threadId="thread-1", turnId="turn-1", status="running",
+                trustedMcpServers=["baota"],
+            )
+            agent._on_app_message({
+                "id": 46, "method": "mcpServer/elicitation/request",
+                "params": {"threadId": "thread-1", "mode": "form", "serverName": "baota",
+                           "requestedSchema": {"type": "object", "properties": {}}},
+            })
+            self.assertEqual(app.responses, [(46, {"action": "accept", "content": {}})])
+            self.assertFalse(any(event == "codex:approval_requested" for event, _ in socket.emitted))
+            public = [payload for event, payload in socket.emitted if event == "codex:event"]
+            self.assertEqual(public[0]["type"], "approval/autoAccepted")
 
     def test_stale_approval_after_restart_is_consumed_with_public_warning(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

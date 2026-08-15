@@ -1,7 +1,8 @@
 # HeySure Codex Agent
 
-`codex_agent` 是 HeySure 的正式 Codex 项目维护设备。它把服务器维护工单连接到本机
-Codex App Server，不包装 OpenAI 兼容 API，也不操作 Codex 桌面 UI。
+`codex_agent` 是 HeySure 的正式 Codex 项目控制器。它把网页远程消息和维护工单连接到
+本机 Codex App Server；Codex 保持自身身份，不成为 HeySure 数字成员。成员名称仅可作为
+网页消息路由入口。它不包装 OpenAI 兼容 API，也不操作 Codex 桌面 UI。
 
 它只建立两条本机/出站连接：
 
@@ -75,7 +76,7 @@ $env:CODEX_COMMAND = '["C:\\Tools\\codex.exe","--profile","maintainer"]'
 | `HEYSURE_CODEX_WORKTREE_ROOT` | 否 | 主仓库同级的 `.heysure-codex-worktrees/<repo>` | 受管 Git worktree 根目录 |
 | `HEYSURE_CODEX_WORKTREE_MODE` | 否 | `on` | `on` 强制隔离；仅显式设为 `off` 才使用配置 workspace |
 | `HEYSURE_CODEX_DEVICE_ID` | 否 | 首次启动生成并持久化 | 显式稳定设备 ID |
-| `HEYSURE_CODEX_DEVICE_NAME` | 否 | `Codex Project Maintainer` | Web 展示名称 |
+| `HEYSURE_CODEX_DEVICE_NAME` | 否 | `Codex Project Controller` | Web 展示名称 |
 | `CODEX_COMMAND` | 否 | `codex` | Codex 可执行 argv 前缀；支持 JSON 字符串数组 |
 | `LOG_LEVEL` | 否 | `INFO` | Python 日志等级 |
 | `HEYSURE_CODEX_DASHBOARD_HOST` | 否 | `127.0.0.1` | 本地状态面板；只允许回环地址 |
@@ -92,7 +93,7 @@ $env:CODEX_COMMAND = '["C:\\Tools\\codex.exe","--profile","maintainer"]'
 
 | 事件 | 关键字段 |
 | --- | --- |
-| `codex:run_start` | `commandId`, `runId`, `prompt`; 可选 `cwd` 不会覆盖已配置工作区；可选 `model`, `approvalPolicy`, `sandboxPolicy`, `effort`, `summary` |
+| `codex:run_start` | `commandId`, `runId`, `prompt`; 可选 `workspaceMode=current` 使用配置工作区；可选 `trustedMcpServers`, `model`, `approvalPolicy`, `sandboxPolicy`, `effort`, `summary` |
 | `codex:steer` | `commandId`, `runId`, `text` |
 | `codex:interrupt` | `commandId`, `runId` |
 | `codex:approval_decision` | `commandId`, `runId`, `approvalId`，命令/文件使用 `decision`，其他审批使用协议原生 `result` 对象 |
@@ -106,7 +107,7 @@ $env:CODEX_COMMAND = '["C:\\Tools\\codex.exe","--profile","maintainer"]'
 | --- | --- |
 | `codex:run_started` | App Server 已返回 thread/turn ID |
 | `codex:event` | 经过白名单和脱敏的 App Server 进度事件 |
-| `codex:approval_requested` | 审批保持挂起，直到服务器回复；设备不会自行接受 |
+| `codex:approval_requested` | 审批保持挂起，直到服务器回复；控制器任务仅可自动接受服务端明确下发的可信 MCP 空表单门禁，并保留审计事件 |
 | `codex:run_completed` | HeySure 状态 `succeeded` / `cancelled` / `failed`，同时保留 App Server `rawStatus` |
 | `codex:command_ack` | 控制命令接收与执行结果 |
 
@@ -114,7 +115,7 @@ $env:CODEX_COMMAND = '["C:\\Tools\\codex.exe","--profile","maintainer"]'
 `sequence`、唯一 `eventId` 和 `payload`；为了兼容 Web 直读，`payload` 字段也保留在事件顶层。
 ACK 携带稳定 `commandId`，但不占用设备事件序号。
 `run_completed` 会把 App Server 标记为 `final_answer` 的最终公开回复放入 `summary`，供
-服务器把德克萨斯普通会话的结果写回原聊天；过程中的 commentary 仍只进入审计事件流。
+服务器把远程控制器会话的结果写回原聊天；过程中的 commentary 仍只进入审计事件流。
 App Server 进程崩溃时运行进入 `recovering`，设备上报退出事件并重启 App Server；服务器
 随后可以重发相同 `runId`，设备将恢复原 thread。旧进程上的审批请求不能跨进程回答，
 迟到的服务器审批决定会被幂等消费，并上报 `approval/staleAfterRestart`，不会永久重放。
@@ -137,9 +138,9 @@ App Server 进程崩溃时运行进入 `recovering`，设备上报退出事件�
   本地对象时不会联网拉取，也不会碰原
   子模块工作区；设备会把警告前置到 prompt 并上报 `worktree/submoduleWarning`。
 - 沙箱和审批策略由工单下发或本地 Codex 托管策略决定；设备不会默认批准。
-- `workspaceWrite` 的 writable roots 会强制收窄为配置 workspace；`dangerFullAccess` 被拒绝，
-  网络默认关闭。`thread/start` 只接收它支持的 `sandbox` 模式名，完整 `sandboxPolicy`
-  仅传给 `turn/start`。
+- `workspaceWrite` 的 writable roots 会强制收窄为配置 workspace，网络默认关闭。普通维护
+  工单不接受主目录回退；只有服务端标记的远程 Codex 控制器任务可显式请求当前工作目录和
+  `dangerFullAccess`，用于复现本机 Codex 的项目维护/MCP 部署能力，并记录完整审计事件。
 - `item/reasoning/summaryTextDelta` 是面向用户的公开摘要；
   `item/reasoning/textDelta` 会被直接丢弃。
 - 命令输出与 diff 最大保留 64 KiB/字段，超出部分标记为截断。

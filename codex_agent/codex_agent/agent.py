@@ -124,7 +124,7 @@ class CodexAgent:
             "platform": "codex-maintainer",
             "capabilities": ["codex.app-server", "codex.steer", "codex.approvals"],
             "toolDefs": [],
-            "aiDescription": "Codex project maintenance device with auditable progress and approvals",
+            "aiDescription": "Independent Codex project controller with auditable progress and approvals",
             "catalogProtocolVersion": 2,
             "version": __version__,
             "lifecycle": "registered",
@@ -214,10 +214,22 @@ class CodexAgent:
         try:
             with self._command_lock:
                 run = self.store.get_run(run_id)
-                worktree = self.worktrees.prepare(
-                    run_id, str(data.get("taskId") or run_id), existing=run
+                workspace_mode = str(data.get("workspaceMode") or "worktree")
+                if workspace_mode not in {"worktree", "current"}:
+                    raise ValueError(f"unsupported workspace mode: {workspace_mode}")
+                worktree = (
+                    WorktreeInfo(self.config.workspace, None, None)
+                    if workspace_mode == "current"
+                    else self.worktrees.prepare(
+                        run_id, str(data.get("taskId") or run_id), existing=run
+                    )
                 )
                 self._store_worktree(run_id, worktree)
+                self.store.update_run(
+                    run_id,
+                    workspaceMode=workspace_mode,
+                    trustedMcpServers=_trusted_mcp_servers(data.get("trustedMcpServers")),
+                )
                 run = self.store.get_run(run_id)
                 thread = self._start_or_resume_thread(run, data, worktree.workspace)
                 self.store.update_run(run_id, threadId=thread, status="starting")
@@ -310,7 +322,7 @@ class CodexAgent:
                     )
                 return
             raise RuntimeError(f"unknown approval: {approval_id}")
-        result = _approval_result(pending["method"], data)
+        result = _approval_result(pending["method"], data, pending.get("params"))
         self.app.respond(pending["rpcId"], result)
 
     def _on_app_message(self, message: dict[str, Any]) -> None:
@@ -346,8 +358,22 @@ class CodexAgent:
         if not run_id:
             self.app.respond(rpc_id, {"decision": "cancel"})
             return
+        run = self.store.get_run(run_id) or {}
+        if _auto_accept_mcp_elicitation(method, params, run):
+            self.app.respond(rpc_id, {"action": "accept", "content": {}})
+            self.diagnostics.record(
+                "approval.auto_accepted", method=method, run_id=run_id,
+                server_name=params.get("serverName"),
+            )
+            self._emit_run(
+                "codex:event", run_id,
+                {"type": "approval/autoAccepted", "data": {
+                    "method": method, "serverName": params.get("serverName"),
+                }},
+            )
+            return
         approval_id = str(uuid.uuid4())
-        pending = {"rpcId": rpc_id, "method": method, "runId": run_id}
+        pending = {"rpcId": rpc_id, "method": method, "runId": run_id, "params": params}
         self._approvals[approval_id] = pending
         self.store.put_approval(approval_id, {"method": method, "runId": run_id})
         detail = sanitize(params)
@@ -458,6 +484,8 @@ class CodexAgent:
                     "readableRoots": [safe_workspace],
                 },
             }
+        if kind == "dangerFullAccess":
+            return {"type": "dangerFullAccess"}
         raise ValueError(f"unsupported sandboxPolicy.type: {kind}")
 
     def _store_worktree(self, run_id: str, worktree: WorktreeInfo) -> None:
@@ -608,14 +636,20 @@ def _approval_policy(value: object) -> str:
 
 
 def _thread_sandbox_mode(value: object) -> str:
-    aliases = {"workspaceWrite": "workspace-write", "readOnly": "read-only"}
+    aliases = {
+        "workspaceWrite": "workspace-write",
+        "readOnly": "read-only",
+        "dangerFullAccess": "danger-full-access",
+    }
     normalized = aliases.get(str(value), str(value))
-    if normalized not in {"workspace-write", "read-only"}:
+    if normalized not in {"workspace-write", "read-only", "danger-full-access"}:
         raise ValueError(f"unsupported thread sandbox mode: {value}")
     return normalized
 
 
-def _approval_result(method: str, data: dict[str, Any]) -> dict[str, Any]:
+def _approval_result(
+    method: str, data: dict[str, Any], params: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     explicit = data.get("result")
     if isinstance(explicit, dict):
         return explicit
@@ -626,7 +660,36 @@ def _approval_result(method: str, data: dict[str, Any]) -> dict[str, Any]:
         if decision not in allowed:
             raise ValueError(f"invalid approval decision: {decision}")
         return {"decision": decision}
+    if method == "mcpServer/elicitation/request":
+        if decision in {"approved", "accept", "acceptForSession"}:
+            content = data.get("content")
+            return {"action": "accept", "content": content if isinstance(content, dict) else {}}
+        if decision in {"denied", "decline"}:
+            return {"action": "decline", "content": None}
+        return {"action": "cancel", "content": None}
     raise ValueError(f"{method} requires an explicit result object")
+
+
+def _trusted_mcp_servers(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return sorted({str(item).strip() for item in value if str(item).strip()})[:20]
+
+
+def _auto_accept_mcp_elicitation(
+    method: str, params: dict[str, Any], run: dict[str, Any],
+) -> bool:
+    if method != "mcpServer/elicitation/request":
+        return False
+    if str(params.get("mode") or "") not in {"form", "openai/form"}:
+        return False
+    server = str(params.get("serverName") or "")
+    if server not in set(_trusted_mcp_servers(run.get("trustedMcpServers"))):
+        return False
+    schema = params.get("requestedSchema")
+    if not isinstance(schema, dict):
+        return False
+    return not schema.get("required")
 
 
 def _prompt_with_warning(prompt: str, warning: str | None) -> str:

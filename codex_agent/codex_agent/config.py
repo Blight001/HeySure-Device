@@ -39,7 +39,7 @@ class Config:
     codex_command: tuple[str, ...]
     worktree_root: Path | None = None
     worktree_mode: str = "on"
-    device_name: str = "Codex Project Maintainer"
+    device_name: str = "Codex Project Controller"
     device_id: str | None = None
     log_level: str = "INFO"
     dashboard_host: str = "127.0.0.1"
@@ -60,7 +60,7 @@ class Config:
             codex_command=_argv(os.getenv("CODEX_COMMAND", "codex")),
             worktree_root=_optional_path(os.getenv("HEYSURE_CODEX_WORKTREE_ROOT")),
             worktree_mode=os.getenv("HEYSURE_CODEX_WORKTREE_MODE", "on").lower(),
-            device_name=os.getenv("HEYSURE_CODEX_DEVICE_NAME", "Codex Project Maintainer"),
+            device_name=os.getenv("HEYSURE_CODEX_DEVICE_NAME", "Codex Project Controller"),
             device_id=os.getenv("HEYSURE_CODEX_DEVICE_ID") or None,
             log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
             dashboard_host=os.getenv("HEYSURE_CODEX_DASHBOARD_HOST", "127.0.0.1"),

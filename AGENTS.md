@@ -2,7 +2,7 @@
 
 端侧客户端（**只是运行在不同端的壳，本身不具备 agent 能力**），连接后端、注册为 endpoint，接收并执行服务端下发的 MCP 任务。
 
-**本目录是独立仓库** `HeySure-Device`。各端代码与资产完全独立，不再共享 `shared/`。
+**本目录是聚合仓库** `HeySure-Device`。各设备产品以 Git submodule 形式维护独立仓库，代码与资产互不共享；首次检出或更新后运行 `git submodule update --init --recursive`。
 同内容的 Claude 版见 [`CLAUDE.md`](CLAUDE.md)。
 
 **桌面/服务端壳已退化为受控运行器**：能力主要来自服务器下发的动态 MCP（`device:tool-config`，含 runtime 工具；Windows 以 powershell/shell 为主），由服务端编排/推理。接入协议与远程连接标准见 [`read.md`](read.md)。
@@ -17,14 +17,16 @@
 | --- | --- | --- |
 | `windows/` | **Tauri 2** 桌面（Windows） | 正式 Windows 壳：登录/连接 + 动态 MCP + runtime 执行（powershell / shell）+ 远程连接两条通道——画面（`remote-control.ts` + `src-tauri/src/rc.rs`，xcap 抓屏→canvas→WebRTC + enigo 键鼠）与命令行（`remote-terminal.ts` + `src-tauri/src/pty.rs`，ConPTY + `rt:*`）。见 `windows/README.md` |
 | `linux/` | **Python** 服务器 Agent | 无 GUI 常驻进程，把 Linux 服务器接入为 `deviceType: custom`（systemd 部署）。运维类 MCP + 命令行远程 `rt:*`。**不是**旧版 Electron 桌面端。见 `linux/README.md` |
-| `browser_MCP/` | Chrome MV3 扩展（主源码） | 浏览器自动化 Agent + 轻量客户端；TypeScript 源在 `src/`，构建产物 `dist/` |
-| `browser_MCP_win/` | Chrome 扩展 + Windows 原生输入构建 | 与 `browser_MCP/` 共用感知逻辑；点击/输入等经本机回环桥交给 `windows/` 的 Rust/enigo 执行 |
-| `browser_automation/` | 另一套浏览器自动化扩展（JS 分包） | 历史/并行实现，background 按序号分包；联调前先确认目标目录 |
+| `browser/browser_MCP/` | Chrome MV3 扩展（主源码） | 浏览器自动化 Agent + 轻量客户端；TypeScript 源在 `src/`，构建产物 `dist/` |
+| `browser/browser_MCP_win/` | Chrome 扩展 + Windows 原生输入构建 | 与 `browser_MCP/` 共用感知逻辑；点击/输入等经本机回环桥交给 `windows/` 的 Rust/enigo 执行 |
+| `browser/browser_automation/` | 另一套浏览器自动化扩展（JS 分包） | 历史/并行实现，background 按序号分包；联调前先确认目标目录 |
 | `android/` | 原生 Kotlin App（方案 A） | 手机本机执行：点击/滑动/截屏（无障碍 + MediaProjection） |
 | `android/android-adb/` | 宿主电脑 Node.js（方案 B） | 经 ADB 控制手机；息屏/锁屏下也能注入 |
 | `cli_to_api/grok_cli_api/` | 本地 OpenAI 兼容网关（**不是**端侧 agent 壳） | 包装本机 grok CLI 为 `POST /v1/chat/completions`（默认 `127.0.0.1:8100`），不注册设备 |
 | `cli_to_api/antigravity_cli_api/` | 本地 OpenAI 兼容网关（**不是**端侧 agent 壳） | Python 调用官方 `agy`，复用其本地用户登录数据并提供 `POST /v1/chat/completions`（默认 `127.0.0.1:8110`），不注册设备 |
 | `cli_to_api/codex_cli_api/` | 本地 OpenAI 兼容网关（**不是**端侧 agent 壳） | 包装本机 Codex CLI，使用 `codex exec/resume --json` 提供 `POST /v1/chat/completions`（默认 `127.0.0.1:8120`），不注册设备 |
+| `AI-FREE-app/` | Windows AI 浏览器工作台 | Electron + 内置 Chromium Fork，多环境隔离、网络管理和浏览器 AI 自动化 |
+| `AI-Control-Exam/` | AI 控制能力考试系统 | 浏览器与桌面控制 Agent 的交互式任务、遥测、安全检查和评分平台 |
 
 > 安卓两形态（A 本机 App / B 宿主 ADB）都以 Android 类 endpoint 注册，服务端统一调度。
 > **当前仓库无 `mac/`、`extension/` 目录**（旧文档里的路径已废弃；浏览器主线为 `browser_MCP*`）。
@@ -62,7 +64,7 @@ device/linux/
 ## 浏览器扩展（browser_MCP）
 
 ```
-device/browser_MCP/
+device/browser/browser_MCP/
   src/
     background.ts          ← service worker：socket / 任务派发
     content/               ← DOM 感知与动作
@@ -89,7 +91,7 @@ device/browser_MCP/
 - 各端目录**完全独立**，无 `device/shared/` 同步步骤。
 - 改 Windows → 只改 `device/windows/`
 - 改 Linux 服务器 Agent → 只改 `device/linux/`
-- 改浏览器主扩展 → 优先 `device/browser_MCP/`（Windows 原生输入构建再看 `browser_MCP_win/`）
+- 改浏览器主扩展 → 优先 `device/browser/browser_MCP/`（Windows 原生输入构建再看 `device/browser/browser_MCP_win/`）
 - 改 Android → `device/android/` 或 `device/android/android-adb/`
 
 ## "改 X 去哪里"
@@ -98,8 +100,8 @@ device/browser_MCP/
 | --- | --- |
 | Windows 桌面逻辑（Tauri） | `device/windows/src/`（TS）+ `device/windows/src-tauri/`（Rust） |
 | Linux 服务器 Agent | `device/linux/agent/` |
-| 浏览器自动化（主线） | `device/browser_MCP/src/` |
-| Windows 原生执行版浏览器自动化 | `device/browser_MCP_win/` + `device/windows/src-tauri/`（browser bridge） |
+| 浏览器自动化（主线） | `device/browser/browser_MCP/src/` |
+| Windows 原生执行版浏览器自动化 | `device/browser/browser_MCP_win/` + `device/windows/src-tauri/`（browser bridge） |
 | Android 本机执行 | `device/android/` |
 | Android ADB 控制 | `device/android/android-adb/` |
 | 工具执行底座（Windows） | `device/windows/src/runtime/` + `executor/` |
@@ -140,7 +142,7 @@ cd device/linux
 # 见 install.sh / run.sh / README.md（Python + systemd）
 
 # 浏览器扩展（主线）
-cd device/browser_MCP
+cd device/browser/browser_MCP
 npm install
 npm run build            # → dist/（Chrome 加载已解压扩展选 dist 或按 README）
 npm run dev              # watch
@@ -151,6 +153,7 @@ npm run dev              # watch
 
 ## 注意点
 
+- **提交顺序**：先在具体设备子仓库提交并推送，再在 `HeySure-Device` 提交子模块指针，最后在根仓库提交 `device` 指针。
 - **Windows Tauri 需本机验证**：Rust + WebView2 +（打包时）VS Build Tools；CI 通常只能做 `typecheck`。
 - **Linux Agent 是服务器管控壳**，不是带 UI 的桌面 Electron；定位见 `linux/README.md`。
 - **`dist/` `node_modules/` `.env` `src-tauri/target/`** 等已 gitignore，不要提交。

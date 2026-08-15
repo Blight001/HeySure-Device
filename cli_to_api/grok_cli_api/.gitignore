@@ -1,6 +1,0 @@
-runtime/
-__pycache__/
-.env
-.env.xai
-.env.proxy
-*.pyc

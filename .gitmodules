@@ -1,0 +1,28 @@
+[submodule "windows"]
+	path = windows
+	url = https://github.com/Blight001/HeySure-Device-Windows.git
+	branch = main
+[submodule "linux"]
+	path = linux
+	url = https://github.com/Blight001/HeySure-Device-Linux.git
+	branch = main
+[submodule "android"]
+	path = android
+	url = https://github.com/Blight001/HeySure-Device-Android.git
+	branch = main
+[submodule "browser"]
+	path = browser
+	url = https://github.com/Blight001/HeySure-Device-Browser.git
+	branch = main
+[submodule "cli_to_api"]
+	path = cli_to_api
+	url = https://github.com/Blight001/HeySure-CLI-Adapter.git
+	branch = main
+[submodule "AI-FREE-app"]
+	path = AI-FREE-app
+	url = https://github.com/Blight001/AI-FREE.git
+	branch = main
+[submodule "AI-Control-Exam"]
+	path = AI-Control-Exam
+	url = https://github.com/Blight001/HeySure-AI-Control-Exam.git
+	branch = main

@@ -459,6 +459,7 @@ class AgentTests(unittest.TestCase):
             ack = [payload for event, payload in socket.emitted if event == "codex:command_ack"][0]
             self.assertEqual(ack["runId"], "run-1")
             self.assertNotIn("sequence", ack)
+            self.assertNotIn("error", ack)
 
             agent._emit_run("codex:event", "run-1", {"type": "warning", "data": {}})
             event = [payload for name, payload in socket.emitted if name == "codex:event"][0]

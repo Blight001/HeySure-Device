@@ -459,9 +459,10 @@ class CodexAgent:
             "commandId": command_id,
             "command": command,
             "success": success,
-            "error": sanitize(error) if error else None,
             "eventId": str(uuid.uuid4()),
         }
+        if error:
+            payload["error"] = sanitize(error)
         if run_id:
             payload["runId"] = run_id
         self._emit_reliable("codex:command_ack", payload)
@@ -476,12 +477,17 @@ class CodexAgent:
             self._send_outbox_item(item["event"], item["payload"])
 
     def _send_outbox_item(self, event: str, payload: dict[str, Any]) -> None:
+        if event == "codex:command_ack" and payload.get("error") is None:
+            payload = {key: value for key, value in payload.items() if key != "error"}
         event_id = str(payload.get("eventId") or "")
 
         def acknowledged(*args: object) -> None:
             response = args[0] if args else None
             if event_id and isinstance(response, dict) and response.get("ok") is True:
                 self.store.acknowledge_outbox(event_id)
+                return
+            error_code = response.get("error_code") if isinstance(response, dict) else "NO_RESPONSE"
+            logger.warning("reliable event was not acknowledged: event=%s error_code=%s", event, error_code)
 
         self.socket.emit(event, payload, callback=acknowledged)
 

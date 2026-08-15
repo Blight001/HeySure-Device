@@ -307,6 +307,21 @@ class AgentTests(unittest.TestCase):
             agent._flush_outbox()
             self.assertEqual(socket.emitted[1][1]["eventId"], first["eventId"])
 
+    def test_run_start_reconciles_rejected_device_sequence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)
+            agent, socket, _ = self.build(path)
+            agent.store.update_run("run-1", sequence=7)
+            agent.store.append_outbox("codex:event", {
+                "runId": "run-1", "sequence": 7, "eventId": "stale",
+            })
+            agent.start_run({
+                "runId": "run-1", "prompt": "Retry", "lastDeviceSequence": 0,
+            })
+            started = [payload for event, payload in socket.emitted if event == "codex:run_started"]
+            self.assertEqual(started[0]["sequence"], 1)
+            self.assertNotIn("stale", str(agent.store.outbox()))
+
     def test_successful_socket_ack_removes_outbox_item(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             agent, socket, _ = self.build(Path(directory))

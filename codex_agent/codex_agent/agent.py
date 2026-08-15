@@ -213,6 +213,13 @@ class CodexAgent:
         prompt = _required(data, "prompt")
         try:
             with self._command_lock:
+                reconciliation = self.store.reconcile_run_sequence(
+                    run_id, int(data.get("lastDeviceSequence") or 0)
+                )
+                if reconciliation["previous"] != reconciliation["confirmed"] or reconciliation["dropped"]:
+                    self.diagnostics.record(
+                        "run.sequence_reconciled", run_id=run_id, **reconciliation,
+                    )
                 run = self.store.get_run(run_id)
                 workspace_mode = str(data.get("workspaceMode") or "worktree")
                 if workspace_mode not in {"worktree", "current"}:

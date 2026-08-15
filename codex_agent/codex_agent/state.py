@@ -68,6 +68,26 @@ class StateStore:
             self._save()
             return run["sequence"]
 
+    def reconcile_run_sequence(self, run_id: str, confirmed_sequence: int) -> dict[str, int]:
+        """Make the server-confirmed device sequence authoritative for a resumed run."""
+        confirmed = max(0, int(confirmed_sequence))
+        with self._lock:
+            run = self._data["runs"].setdefault(run_id, {"sequence": 0})
+            previous = int(run.get("sequence", 0))
+            run["sequence"] = confirmed
+            outbox = self._data.get("outbox", [])
+            kept = [
+                item for item in outbox
+                if not (
+                    str(item.get("payload", {}).get("runId") or "") == run_id
+                    and item.get("event") != "codex:command_ack"
+                )
+            ]
+            dropped = len(outbox) - len(kept)
+            self._data["outbox"] = kept
+            self._save()
+            return {"previous": previous, "confirmed": confirmed, "dropped": dropped}
+
     def put_approval(self, approval_id: str, value: dict[str, Any]) -> None:
         with self._lock:
             self._data["pendingApprovals"][approval_id] = value

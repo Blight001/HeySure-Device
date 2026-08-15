@@ -106,7 +106,7 @@ class WorktreeManager:
         if not modules.is_file():
             return None
         result = self._run(
-            worktree, "submodule", "update", "--init", "--recursive", "--no-fetch",
+            worktree, "submodule", "update", "--init", "--no-fetch",
             check=False, local_only=True,
         )
         if result.returncode == 0:

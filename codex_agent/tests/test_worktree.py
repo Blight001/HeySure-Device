@@ -88,6 +88,7 @@ class WorktreeTests(unittest.TestCase):
             self.assertIn("local Git data only", info.warning)
             submodule, kwargs = next(item for item in git.calls if "submodule" in item[0])
             self.assertIn("--no-fetch", submodule)
+            self.assertNotIn("--recursive", submodule)
             self.assertEqual(kwargs["env"]["GIT_ALLOW_PROTOCOL"], "file")
             self.assertEqual(kwargs["env"]["GIT_TERMINAL_PROMPT"], "0")
 

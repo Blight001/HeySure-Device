@@ -18,6 +18,7 @@ class FakeSocket:
         self.connected = True
         self.handlers = {}
         self.emitted: list[tuple[str, dict]] = []
+        self.callbacks = []
 
     def event(self, function):
         self.handlers[function.__name__] = function
@@ -29,8 +30,9 @@ class FakeSocket:
             return function
         return decorate
 
-    def emit(self, event, data):
+    def emit(self, event, data, callback=None):
         self.emitted.append((event, data))
+        self.callbacks.append(callback)
 
     def start_background_task(self, target, *args):
         return None
@@ -297,6 +299,14 @@ class AgentTests(unittest.TestCase):
             first = socket.emitted[0][1]
             agent._flush_outbox()
             self.assertEqual(socket.emitted[1][1]["eventId"], first["eventId"])
+
+    def test_successful_socket_ack_removes_outbox_item(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            agent, socket, _ = self.build(Path(directory))
+            agent._emit_run("codex:event", "run-1", {"type": "warning", "data": {}})
+            self.assertEqual(len(agent.store.outbox()), 1)
+            socket.callbacks[-1]({"ok": True})
+            self.assertEqual(agent.store.outbox(), [])
 
     def test_public_summary_is_forwarded_but_raw_reasoning_is_dropped(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

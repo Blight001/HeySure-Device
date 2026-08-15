@@ -90,6 +90,19 @@ class StateStore:
         with self._lock:
             return [dict(item) for item in self._data.get("outbox", [])]
 
+    def acknowledge_outbox(self, event_id: str) -> bool:
+        with self._lock:
+            outbox = self._data.get("outbox", [])
+            kept = [
+                item for item in outbox
+                if str(item.get("payload", {}).get("eventId") or "") != event_id
+            ]
+            if len(kept) == len(outbox):
+                return False
+            self._data["outbox"] = kept
+            self._save()
+            return True
+
 
 class InstanceLock(AbstractContextManager["InstanceLock"]):
     def __init__(self, directory: Path) -> None:

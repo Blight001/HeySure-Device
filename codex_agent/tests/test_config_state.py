@@ -40,6 +40,15 @@ class ConfigStateTests(unittest.TestCase):
             self.assertEqual(second.next_sequence("run-1"), 3)
             json.loads((path / "state.json").read_text(encoding="utf-8"))
 
+    def test_acknowledge_outbox_removes_only_matching_event(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            store = StateStore(Path(directory))
+            store.append_outbox("codex:event", {"eventId": "one"})
+            store.append_outbox("codex:event", {"eventId": "two"})
+            self.assertTrue(store.acknowledge_outbox("one"))
+            self.assertEqual(store.outbox(), [{"event": "codex:event", "payload": {"eventId": "two"}}])
+            self.assertFalse(store.acknowledge_outbox("missing"))
+
     def test_single_instance_lock_rejects_second_owner(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)

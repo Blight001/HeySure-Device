@@ -469,11 +469,21 @@ class CodexAgent:
     def _emit_reliable(self, event: str, payload: dict[str, Any]) -> None:
         self.store.append_outbox(event, payload)
         if self.registered:
-            self.socket.emit(event, payload)
+            self._send_outbox_item(event, payload)
 
     def _flush_outbox(self) -> None:
         for item in self.store.outbox():
-            self.socket.emit(item["event"], item["payload"])
+            self._send_outbox_item(item["event"], item["payload"])
+
+    def _send_outbox_item(self, event: str, payload: dict[str, Any]) -> None:
+        event_id = str(payload.get("eventId") or "")
+
+        def acknowledged(*args: object) -> None:
+            response = args[0] if args else None
+            if event_id and isinstance(response, dict) and response.get("ok") is True:
+                self.store.acknowledge_outbox(event_id)
+
+        self.socket.emit(event, payload, callback=acknowledged)
 
     def _registration_retry(self) -> None:
         while self.socket.connected and not self.registered and not self.stopping.is_set():

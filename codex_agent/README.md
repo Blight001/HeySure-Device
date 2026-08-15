@@ -24,7 +24,8 @@ App Server 的 stdio、thread、turn、steer、interrupt、流式 item 和审批
 - 主动丢弃 `item/reasoning/textDelta`，不采集或声称提供隐藏思维链；
 - 对 token、密码、Cookie、Authorization、API key 等内容递归脱敏；
 - 用本地锁阻止相同状态目录被重复启动；
-- 保留最近 1000 个带 `eventId` 的出站事件，重连后重放，由服务端按 `eventId` 去重。
+- 保留最多 1000 个尚未确认且带 `eventId` 的出站事件；服务端 ACK 后删除，重连时重放，
+  服务端同时按 `eventId` 去重。
 
 ## 安装
 

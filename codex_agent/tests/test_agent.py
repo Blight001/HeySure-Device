@@ -394,6 +394,31 @@ class AgentTests(unittest.TestCase):
             self.assertEqual(agent.store.get_run("run-1")["status"], "recovering")
             self.assertTrue(any(event == "codex:run_completed" for event, _ in socket.emitted))
 
+    def test_unscoped_current_app_server_notifications_use_only_active_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            agent, socket, _ = self.build(Path(directory))
+            agent.store.update_run("run-1", threadId="thread-1", status="starting")
+            agent._on_app_message(
+                {"method": "item/completed", "params": {"item": {"id": "item-1", "type": "agentMessage", "text": "Done"}}}
+            )
+            agent._on_app_message(
+                {"method": "turn/completed", "params": {"turn": {"id": "turn-1", "status": "completed"}}}
+            )
+            events = [event for event, _ in socket.emitted]
+            self.assertIn("codex:event", events)
+            self.assertIn("codex:run_completed", events)
+            self.assertEqual(agent.store.get_run("run-1")["status"], "succeeded")
+
+    def test_unscoped_notification_is_dropped_when_active_run_is_ambiguous(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            agent, socket, _ = self.build(Path(directory))
+            agent.store.update_run("run-1", status="running")
+            agent.store.update_run("run-2", status="running")
+            agent._on_app_message(
+                {"method": "item/completed", "params": {"item": {"id": "item-1", "type": "agentMessage", "text": "Done"}}}
+            )
+            self.assertEqual(socket.emitted, [])
+
     def test_worktree_failure_fails_run_without_starting_codex(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             agent, socket, app = self.build(Path(directory))

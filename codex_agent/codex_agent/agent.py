@@ -341,11 +341,24 @@ class CodexAgent:
 
     def _find_run(self, params: dict[str, Any]) -> str | None:
         message_thread, message_turn = thread_id(params), turn_id(params)
-        for run_id, run in self.store.runs().items():
+        runs = self.store.runs()
+        for run_id, run in runs.items():
             if message_thread and run.get("threadId") == message_thread:
                 return run_id
             if message_turn and run.get("turnId") == message_turn:
                 return run_id
+        # Current App Server item notifications, and even turn/completed, do
+        # not always carry threadId. A turn notification can also race the
+        # turn/start response that persists turnId. Attribute it only when
+        # there is exactly one possible active maintenance run; never guess
+        # across concurrent work orders.
+        active = [
+            run_id
+            for run_id, run in runs.items()
+            if run.get("status") in {"starting", "running", "recovering"}
+        ]
+        if len(active) == 1:
+            return active[0]
         return None
 
     def _active_run(self, run_id: str) -> dict[str, Any]:

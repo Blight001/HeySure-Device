@@ -14,6 +14,7 @@ import socketio
 from . import __version__
 from .app_server import AppServer
 from .config import Config
+from .diagnostics import AgentDiagnostics
 from .events import APPROVAL_METHODS, public_event, thread_id, turn_id
 from .redaction import sanitize
 from .state import StateStore
@@ -67,7 +68,12 @@ class CodexAgent:
         self.socket_url = config.server
         self.registered = False
         self.stopping = threading.Event()
+        self.diagnostics = AgentDiagnostics(
+            device_id=self.device_id, server=config.server, workspace=config.workspace
+        )
+        self.diagnostics.runtime_provider(self._runtime_status)
         self._approvals: dict[str, dict[str, Any]] = {}
+        self._final_messages: dict[str, str] = {}
         self._command_lock = threading.Lock()
         self._commands: queue.Queue[tuple[str, dict[str, Any], Any]] = queue.Queue()
         self._install_handlers()
@@ -84,6 +90,8 @@ class CodexAgent:
             raise RuntimeError("login response is missing access_token")
         self.token = str(data["access_token"])
         self.socket_url = str(data.get("agent_socket_url") or self.config.server).rstrip("/")
+        self.diagnostics.update(authenticated=True, socket_url=self.socket_url)
+        self.diagnostics.record("server.login_succeeded", socket_url=self.socket_url)
 
     def register(self) -> None:
         self.socket.emit("device:register", self._register_payload())
@@ -91,6 +99,8 @@ class CodexAgent:
     def run(self) -> None:
         self.config.validate()
         self.app.start()
+        self.diagnostics.update(app_server="running")
+        self.diagnostics.record("app_server.started")
         self._login_with_retry()
         self.socket.start_background_task(self._command_loop)
         self.socket.connect(self.socket_url, wait_timeout=15)
@@ -99,7 +109,9 @@ class CodexAgent:
 
     def shutdown(self) -> None:
         self.stopping.set()
+        self.diagnostics.record("agent.stopping")
         self.app.close()
+        self.diagnostics.update(app_server="stopped")
         if self.socket.connected:
             self.socket.disconnect()
 
@@ -127,21 +139,28 @@ class CodexAgent:
         @self.socket.event
         def connect() -> None:
             self.registered = False
+            self.diagnostics.update(socket_connected=True, registered=False)
+            self.diagnostics.record("socket.connected")
             self.register()
             self.socket.start_background_task(self._registration_retry)
 
         @self.socket.event
         def disconnect() -> None:
             self.registered = False
+            self.diagnostics.update(socket_connected=False, registered=False)
+            self.diagnostics.record("socket.disconnected", level="warning")
 
         @self.socket.on("device:registered")
         def registered(_: dict[str, Any]) -> None:
             self.registered = True
+            self.diagnostics.update(registered=True)
+            self.diagnostics.record("device.registered")
             self._flush_outbox()
 
         @self.socket.on("device:register_rejected")
         def rejected(data: dict[str, Any]) -> None:
             logger.warning("device registration rejected: %s", sanitize(data))
+            self.diagnostics.record("device.registration_rejected", level="error")
             self._login_with_retry(attempts=3)
             self.register()
 
@@ -154,6 +173,12 @@ class CodexAgent:
         @self.socket.on(event)
         def handler(data: dict[str, Any]) -> None:
             payload = data if isinstance(data, dict) else {}
+            self.diagnostics.update(last_command={
+                "event": event, "run_id": payload.get("runId"), "received_at": time.time()
+            })
+            self.diagnostics.record(
+                "command.received", event=event, run_id=payload.get("runId")
+            )
             self._commands.put((event, payload, callback))
 
     def _command_loop(self) -> None:
@@ -171,10 +196,15 @@ class CodexAgent:
         command_id = str(data.get("commandId") or uuid.uuid4())
         run_id = str(data.get("runId")) if data.get("runId") else None
         try:
+            self.diagnostics.record("command.started", event=event, run_id=run_id)
             callback(data)
             self._emit_ack(command_id, event, True, run_id=run_id)
+            self.diagnostics.record("command.accepted", event=event, run_id=run_id)
         except Exception as exc:
             logger.exception("command failed: %s", event)
+            self.diagnostics.record(
+                "command.failed", level="error", event=event, run_id=run_id, error=str(exc)
+            )
             self._emit_ack(command_id, event, False, str(exc), run_id=run_id)
 
     def start_run(self, data: dict[str, Any]) -> None:
@@ -306,6 +336,8 @@ class CodexAgent:
             return
         event = public_event(method, params)
         if event:
+            self._capture_final_message(run_id, method, params)
+            self.diagnostics.record("app_server.event", method=method, run_id=run_id)
             self._emit_run("codex:event", run_id, event)
 
     def _request_approval(self, rpc_id: int | str, method: str, params: dict[str, Any]) -> None:
@@ -336,6 +368,10 @@ class CodexAgent:
         )
         self.store.update_run(run_id, status=status)
         payload = {"status": status, "rawStatus": raw_status, "turn": sanitize(turn)}
+        summary = self._final_messages.pop(run_id, "").strip()
+        if summary:
+            payload["summary"] = summary[:100_000]
+        self.diagnostics.record("run.completed", run_id=run_id, status=status)
         self._emit_run("codex:run_completed", run_id, payload)
 
     def _handle_app_exit(self, params: dict[str, Any]) -> None:
@@ -503,9 +539,15 @@ class CodexAgent:
             if not self.app.is_alive():
                 try:
                     self.app.start()
+                    self.diagnostics.update(app_server="running")
+                    self.diagnostics.record("app_server.restarted")
                     delay = 1
                 except Exception as exc:
                     logger.error("Codex app-server restart failed: %s", exc)
+                    self.diagnostics.update(app_server="error")
+                    self.diagnostics.record(
+                        "app_server.restart_failed", level="error", error=str(exc)
+                    )
                     delay = min(delay * 2, 30)
             self.stopping.wait(delay)
 
@@ -521,6 +563,26 @@ class CodexAgent:
                     time.sleep(delay)
                     delay = min(delay * 2, 30)
         raise RuntimeError("HeySure login failed; check server URL, account and network")
+
+    def _capture_final_message(
+        self, run_id: str, method: str, params: dict[str, Any]
+    ) -> None:
+        if method != "item/completed":
+            return
+        item = params.get("item") if isinstance(params.get("item"), dict) else {}
+        if item.get("type") != "agentMessage" or item.get("phase") != "final_answer":
+            return
+        text = str(item.get("text") or "").strip()
+        if text:
+            self._final_messages[run_id] = text[:100_000]
+
+    def _runtime_status(self) -> dict[str, Any]:
+        return {
+            "runs": self.store.runs(),
+            "outbox_count": len(self.store.outbox()),
+            "command_queue": self._commands.qsize(),
+            "pending_approvals": len(self._approvals),
+        }
 
 
 def _required(data: dict[str, Any], key: str) -> str:

@@ -26,6 +26,9 @@ App Server 的 stdio、thread、turn、steer、interrupt、流式 item 和审批
 - 用本地锁阻止相同状态目录被重复启动；
 - 保留最多 1000 个尚未确认且带 `eventId` 的出站事件；服务端 ACK 后删除，重连时重放，
   服务端同时按 `eventId` 去重。
+- 提供只监听本机回环地址的状态面板，展示服务器连接、设备注册、消息接收、Codex
+  App Server、运行工单、审批与可靠队列；默认地址为 `http://127.0.0.1:8765/`。
+- 在状态目录的 `logs/codex-agent.jsonl` 写入脱敏 JSONL 轮转日志（单文件 5 MiB，保留 5 份）。
 
 ## 安装
 
@@ -75,6 +78,8 @@ $env:CODEX_COMMAND = '["C:\\Tools\\codex.exe","--profile","maintainer"]'
 | `HEYSURE_CODEX_DEVICE_NAME` | 否 | `Codex Project Maintainer` | Web 展示名称 |
 | `CODEX_COMMAND` | 否 | `codex` | Codex 可执行 argv 前缀；支持 JSON 字符串数组 |
 | `LOG_LEVEL` | 否 | `INFO` | Python 日志等级 |
+| `HEYSURE_CODEX_DASHBOARD_HOST` | 否 | `127.0.0.1` | 本地状态面板；只允许回环地址 |
+| `HEYSURE_CODEX_DASHBOARD_PORT` | 否 | `8765` | 本地状态面板端口；设为 `0` 可禁用 |
 
 状态目录不保存 HeySure 密码或登录 token。应将密码放在操作系统服务凭据管理机制中，
 不要写进仓库、启动参数或日志。如果 workspace 是仓库根目录，必须确认根仓库的
@@ -108,6 +113,8 @@ $env:CODEX_COMMAND = '["C:\\Tools\\codex.exe","--profile","maintainer"]'
 除独立确认合同 `codex:command_ack` 外，所有 run 输出包含 `deviceId`、`runId`、单调递增的
 `sequence`、唯一 `eventId` 和 `payload`；为了兼容 Web 直读，`payload` 字段也保留在事件顶层。
 ACK 携带稳定 `commandId`，但不占用设备事件序号。
+`run_completed` 会把 App Server 标记为 `final_answer` 的最终公开回复放入 `summary`，供
+服务器把德克萨斯普通会话的结果写回原聊天；过程中的 commentary 仍只进入审计事件流。
 App Server 进程崩溃时运行进入 `recovering`，设备上报退出事件并重启 App Server；服务器
 随后可以重发相同 `runId`，设备将恢复原 thread。旧进程上的审批请求不能跨进程回答，
 迟到的服务器审批决定会被幂等消费，并上报 `approval/staleAfterRestart`，不会永久重放。

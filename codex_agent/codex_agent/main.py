@@ -1,21 +1,24 @@
 from __future__ import annotations
 
-import logging
 import signal
 
 from .agent import CodexAgent
 from .config import Config
+from .dashboard import DashboardServer
+from .diagnostics import configure_logging
 from .state import InstanceLock
 
 
 def main() -> int:
     config = Config.from_env()
-    logging.basicConfig(
-        level=getattr(logging, config.log_level, logging.INFO),
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
+    log_path = configure_logging(config.state_dir, config.log_level)
     with InstanceLock(config.state_dir):
         agent = CodexAgent(config)
+        agent.diagnostics.update(log_path=str(log_path))
+        dashboard = DashboardServer(
+            config.dashboard_host, config.dashboard_port, agent.diagnostics, log_path
+        )
+        dashboard.start()
 
         def stop(*_: object) -> None:
             agent.shutdown()
@@ -27,9 +30,9 @@ def main() -> int:
             agent.run()
         finally:
             agent.shutdown()
+            dashboard.close()
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

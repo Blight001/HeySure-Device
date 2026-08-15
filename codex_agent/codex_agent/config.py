@@ -42,6 +42,8 @@ class Config:
     device_name: str = "Codex Project Maintainer"
     device_id: str | None = None
     log_level: str = "INFO"
+    dashboard_host: str = "127.0.0.1"
+    dashboard_port: int = 8765
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -61,6 +63,8 @@ class Config:
             device_name=os.getenv("HEYSURE_CODEX_DEVICE_NAME", "Codex Project Maintainer"),
             device_id=os.getenv("HEYSURE_CODEX_DEVICE_ID") or None,
             log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
+            dashboard_host=os.getenv("HEYSURE_CODEX_DASHBOARD_HOST", "127.0.0.1"),
+            dashboard_port=int(os.getenv("HEYSURE_CODEX_DASHBOARD_PORT", "8765")),
         )
 
     def validate(self) -> None:
@@ -70,6 +74,10 @@ class Config:
             raise ValueError(f"workspace does not exist: {self.workspace}")
         if self.worktree_mode not in {"on", "off"}:
             raise ValueError("HEYSURE_CODEX_WORKTREE_MODE must be 'on' or 'off'")
+        if self.dashboard_host not in {"127.0.0.1", "localhost"}:
+            raise ValueError("HEYSURE_CODEX_DASHBOARD_HOST must stay on the local loopback")
+        if self.dashboard_port != 0 and not 1024 <= self.dashboard_port <= 65535:
+            raise ValueError("HEYSURE_CODEX_DASHBOARD_PORT must be 0 or between 1024 and 65535")
 
     @property
     def hostname(self) -> str:

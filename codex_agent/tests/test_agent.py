@@ -465,6 +465,32 @@ class AgentTests(unittest.TestCase):
             event = [payload for name, payload in socket.emitted if name == "codex:event"][0]
             self.assertEqual(event["sequence"], 1)
 
+    def test_final_agent_message_is_returned_as_run_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            agent, socket, _ = self.build(Path(directory))
+            agent.store.update_run(
+                "run-1", threadId="thread-1", turnId="turn-1", status="running"
+            )
+            agent._on_app_message({
+                "method": "item/completed",
+                "params": {
+                    "threadId": "thread-1",
+                    "turnId": "turn-1",
+                    "item": {"type": "agentMessage", "phase": "final_answer", "text": "完成了"},
+                },
+            })
+            agent._on_app_message({
+                "method": "turn/completed",
+                "params": {
+                    "threadId": "thread-1",
+                    "turn": {"id": "turn-1", "status": "completed"},
+                },
+            })
+            completed = [
+                payload for event, payload in socket.emitted if event == "codex:run_completed"
+            ][0]
+            self.assertEqual(completed["summary"], "完成了")
+
 
 if __name__ == "__main__":
     unittest.main()

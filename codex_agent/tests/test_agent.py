@@ -160,7 +160,7 @@ class AgentTests(unittest.TestCase):
             thread_params = app.requests[0][1]
             turn_params = app.requests[1][1]
             self.assertNotIn("sandboxPolicy", thread_params)
-            self.assertEqual(thread_params["sandbox"], "workspaceWrite")
+            self.assertEqual(thread_params["sandbox"], "workspace-write")
             self.assertEqual(turn_params["sandboxPolicy"]["writableRoots"], [str(Path(directory))])
 
     def test_inbound_sandbox_cannot_expand_writable_roots(self) -> None:
@@ -197,6 +197,14 @@ class AgentTests(unittest.TestCase):
                 agent.start_run(
                     {"runId": "run-1", "prompt": "Inspect", "approvalPolicy": "alwaysAllow"}
                 )
+
+    def test_read_only_thread_sandbox_uses_current_wire_enum(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            agent, _, app = self.build(Path(directory))
+            agent.start_run(
+                {"runId": "run-1", "prompt": "Inspect", "sandboxPolicy": {"type": "readOnly"}}
+            )
+            self.assertEqual(app.requests[0][1]["sandbox"], "read-only")
 
     def test_danger_full_access_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

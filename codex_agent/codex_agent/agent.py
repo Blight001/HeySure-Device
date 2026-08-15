@@ -359,7 +359,7 @@ class CodexAgent:
         params: dict[str, Any] = {
             "cwd": str(workspace),
             "approvalPolicy": _approval_policy(data.get("approvalPolicy")),
-            "sandbox": policy["type"],
+            "sandbox": _thread_sandbox_mode(policy["type"]),
         }
         for key in ("model",):
             if key in data:
@@ -506,6 +506,14 @@ def _approval_policy(value: object) -> str:
     normalized = aliases.get(raw, raw)
     if normalized not in {"untrusted", "on-request", "granular", "never"}:
         raise ValueError(f"unsupported approval policy: {raw}")
+    return normalized
+
+
+def _thread_sandbox_mode(value: object) -> str:
+    aliases = {"workspaceWrite": "workspace-write", "readOnly": "read-only"}
+    normalized = aliases.get(str(value), str(value))
+    if normalized not in {"workspace-write", "read-only"}:
+        raise ValueError(f"unsupported thread sandbox mode: {value}")
     return normalized
 
 

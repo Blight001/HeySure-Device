@@ -465,6 +465,13 @@ class AgentTests(unittest.TestCase):
             event = [payload for name, payload in socket.emitted if name == "codex:event"][0]
             self.assertEqual(event["sequence"], 1)
 
+    def test_missing_command_id_uses_stable_run_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            agent, socket, _ = self.build(Path(directory))
+            agent._execute_command("codex:run_start", {"runId": "run-1"}, lambda _: None)
+            ack = [payload for event, payload in socket.emitted if event == "codex:command_ack"][0]
+            self.assertEqual(ack["commandId"], "run_start:run-1")
+
     def test_final_agent_message_is_returned_as_run_summary(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             agent, socket, _ = self.build(Path(directory))

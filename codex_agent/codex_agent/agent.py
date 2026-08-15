@@ -193,8 +193,9 @@ class CodexAgent:
                 self._commands.task_done()
 
     def _execute_command(self, event: str, data: dict[str, Any], callback) -> None:
-        command_id = str(data.get("commandId") or uuid.uuid4())
         run_id = str(data.get("runId")) if data.get("runId") else None
+        fallback_id = f"{event.removeprefix('codex:')}:{run_id}" if run_id else str(uuid.uuid4())
+        command_id = str(data.get("commandId") or fallback_id)
         try:
             self.diagnostics.record("command.started", event=event, run_id=run_id)
             callback(data)

@@ -288,6 +288,13 @@ class CodexAgent:
         if message.get("id") is not None and method in APPROVAL_METHODS:
             self._request_approval(message["id"], method, params)
             return
+        if message.get("id") is not None and method:
+            logger.warning(
+                "unsupported app-server request: method=%s param_keys=%s",
+                method,
+                sorted(params),
+            )
+            return
         if method == "app-server/exited":
             self._handle_app_exit(params)
             return
@@ -457,7 +464,6 @@ class CodexAgent:
         }
         if run_id:
             payload["runId"] = run_id
-            payload["sequence"] = self.store.next_sequence(run_id)
         self._emit_reliable("codex:command_ack", payload)
 
     def _emit_reliable(self, event: str, payload: dict[str, Any]) -> None:

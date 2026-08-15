@@ -104,8 +104,9 @@ $env:CODEX_COMMAND = '["C:\\Tools\\codex.exe","--profile","maintainer"]'
 | `codex:run_completed` | HeySure 状态 `succeeded` / `cancelled` / `failed`，同时保留 App Server `rawStatus` |
 | `codex:command_ack` | 控制命令接收与执行结果 |
 
-所有 run 输出包含 `deviceId`、`runId`、单调递增的 `sequence`、唯一 `eventId` 和
-`payload`；为了兼容 Web 直读，`payload` 字段也保留在事件顶层。
+除独立确认合同 `codex:command_ack` 外，所有 run 输出包含 `deviceId`、`runId`、单调递增的
+`sequence`、唯一 `eventId` 和 `payload`；为了兼容 Web 直读，`payload` 字段也保留在事件顶层。
+ACK 携带稳定 `commandId`，但不占用设备事件序号。
 App Server 进程崩溃时运行进入 `recovering`，设备上报退出事件并重启 App Server；服务器
 随后可以重发相同 `runId`，设备将恢复原 thread。旧进程上的审批请求不能跨进程回答，
 迟到的服务器审批决定会被幂等消费，并上报 `approval/staleAfterRestart`，不会永久重放。

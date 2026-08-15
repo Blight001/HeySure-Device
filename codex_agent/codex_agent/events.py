@@ -24,6 +24,7 @@ APPROVAL_METHODS = {
     "item/fileChange/requestApproval",
     "item/permissions/requestApproval",
     "mcpServer/elicitation/request",
+    "item/tool/requestUserInput",
     "tool/requestUserInput",
 }
 
@@ -66,4 +67,3 @@ def turn_id(params: dict[str, Any]) -> str | None:
         return str(direct)
     turn = params.get("turn")
     return str(turn.get("id")) if isinstance(turn, dict) and turn.get("id") else None
-

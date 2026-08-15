@@ -442,13 +442,17 @@ class AgentTests(unittest.TestCase):
             self.assertEqual(complete["rawStatus"], "interrupted")
             self.assertEqual(complete["payload"]["status"], "cancelled")
 
-    def test_command_ack_has_run_and_monotonic_sequence(self) -> None:
+    def test_command_ack_does_not_consume_device_event_sequence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             agent, socket, _ = self.build(Path(directory))
             agent._execute_command("codex:interrupt", {"commandId": "cmd-1", "runId": "run-1"}, lambda _: None)
             ack = [payload for event, payload in socket.emitted if event == "codex:command_ack"][0]
             self.assertEqual(ack["runId"], "run-1")
-            self.assertEqual(ack["sequence"], 1)
+            self.assertNotIn("sequence", ack)
+
+            agent._emit_run("codex:event", "run-1", {"type": "warning", "data": {}})
+            event = [payload for name, payload in socket.emitted if name == "codex:event"][0]
+            self.assertEqual(event["sequence"], 1)
 
 
 if __name__ == "__main__":

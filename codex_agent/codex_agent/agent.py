@@ -358,7 +358,7 @@ class CodexAgent:
         policy = self._sandbox_policy(data, workspace)
         params: dict[str, Any] = {
             "cwd": str(workspace),
-            "approvalPolicy": data.get("approvalPolicy", "onRequest"),
+            "approvalPolicy": _approval_policy(data.get("approvalPolicy")),
             "sandbox": policy["type"],
         }
         for key in ("model",):
@@ -373,7 +373,7 @@ class CodexAgent:
             "threadId": thread,
             "input": [{"type": "text", "text": prompt}],
             "cwd": str(workspace),
-            "approvalPolicy": data.get("approvalPolicy", "onRequest"),
+            "approvalPolicy": _approval_policy(data.get("approvalPolicy")),
             "sandboxPolicy": self._sandbox_policy(data, workspace),
         }
         for key in ("model", "effort", "summary"):
@@ -493,6 +493,20 @@ def _required(data: dict[str, Any], key: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{key} is required")
     return value
+
+
+def _approval_policy(value: object) -> str:
+    """Normalize legacy App Server policy spellings to the current wire enum."""
+    raw = str(value or "on-request").strip()
+    aliases = {
+        "unlessTrusted": "untrusted",
+        "onRequest": "on-request",
+        "onFailure": "on-request",
+    }
+    normalized = aliases.get(raw, raw)
+    if normalized not in {"untrusted", "on-request", "granular", "never"}:
+        raise ValueError(f"unsupported approval policy: {raw}")
+    return normalized
 
 
 def _approval_result(method: str, data: dict[str, Any]) -> dict[str, Any]:

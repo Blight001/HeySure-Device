@@ -181,6 +181,23 @@ class AgentTests(unittest.TestCase):
             self.assertEqual(policy["writableRoots"], [str(Path(directory))])
             self.assertTrue(policy["networkAccess"])
 
+    def test_legacy_approval_policy_is_normalized_for_current_app_server(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            agent, _, app = self.build(Path(directory))
+            agent.start_run(
+                {"runId": "run-1", "prompt": "Inspect", "approvalPolicy": "unlessTrusted"}
+            )
+            self.assertEqual(app.requests[0][1]["approvalPolicy"], "untrusted")
+            self.assertEqual(app.requests[1][1]["approvalPolicy"], "untrusted")
+
+    def test_unknown_approval_policy_is_rejected_locally(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            agent, _, _ = self.build(Path(directory))
+            with self.assertRaisesRegex(ValueError, "unsupported approval policy"):
+                agent.start_run(
+                    {"runId": "run-1", "prompt": "Inspect", "approvalPolicy": "alwaysAllow"}
+                )
+
     def test_danger_full_access_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             agent, _, _ = self.build(Path(directory))

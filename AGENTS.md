@@ -25,6 +25,7 @@
 | `cli_to_api/grok_cli_api/` | 本地 OpenAI 兼容网关（**不是**端侧 agent 壳） | 包装本机 grok CLI 为 `POST /v1/chat/completions`（默认 `127.0.0.1:8100`），不注册设备 |
 | `cli_to_api/antigravity_cli_api/` | 本地 OpenAI 兼容网关（**不是**端侧 agent 壳） | Python 调用官方 `agy`，复用其本地用户登录数据并提供 `POST /v1/chat/completions`（默认 `127.0.0.1:8110`），不注册设备 |
 | `cli_to_api/codex_cli_api/` | 本地 OpenAI 兼容网关（**不是**端侧 agent 壳） | 包装本机 Codex CLI，使用 `codex exec/resume --json` 提供 `POST /v1/chat/completions`（默认 `127.0.0.1:8120`），不注册设备 |
+| `usb_flasher/` | **Python USB 烧录设备** | 被控机常驻进程：从服务器拉固件、esptool 烧录 ESP、串口监视；本机回环面板 `127.0.0.1:8770`。`deviceType: custom`。见 `usb_flasher/README.md` |
 | `codex_agent/` | **正式 Codex 维护设备** | 连接 Connector Runtime，并通过本机 Codex App Server stdio 协议执行可审计的项目维护工单；不操作 Codex 桌面 UI。见 `codex_agent/README.md` |
 | `AI-FREE-app/` | Windows AI 浏览器工作台 | Electron + 内置 Chromium Fork，多环境隔离、网络管理和浏览器 AI 自动化 |
 | `AI-Control-Exam/` | AI 控制能力考试系统 | 浏览器与桌面控制 Agent 的交互式任务、遥测、安全检查和评分平台 |
@@ -110,6 +111,7 @@ device/browser/browser_MCP/
 | 本地 grok API 网关 | `device/cli_to_api/grok_cli_api/` |
 | 本地 Antigravity API 网关 | `device/cli_to_api/antigravity_cli_api/` |
 | 本地 Codex API 网关 | `device/cli_to_api/codex_cli_api/` |
+| USB 烧录 / 串口监视 | `device/usb_flasher/`（Python 自定义设备；本机面板 + `flash.*` / `serial.*`） |
 | Codex 项目维护设备 | `device/codex_agent/` |
 | 服务端工具路由 | `server/main/mcp_runtime/mcp/registry.py` + 设备权限策略 |
 
@@ -142,6 +144,13 @@ device\windows\build.bat
 # Linux 服务器 Agent
 cd device/linux
 # 见 install.sh / run.sh / README.md（Python + systemd）
+
+# USB 烧录设备（Python 3.10+；Windows 实验室机优先）
+cd device/usb_flasher
+# 复制 .env.example 为 .env 后：
+device\usb_flasher\run.bat
+# 单测：python -m unittest discover -s tests -v
+# 安装包：device\usb_flasher\build.bat  → dist\HeySureUsbFlasher-Setup.exe
 
 # Codex 项目维护设备（Python 3.10+；配置见 README）
 cd device/codex_agent

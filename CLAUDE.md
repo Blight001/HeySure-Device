@@ -24,7 +24,7 @@
 | `android/android-adb/` | 宿主电脑 Node.js（方案 B） | 经 ADB 控制手机；息屏/锁屏下也能注入 |
 | `cli_to_api/grok_cli_api/` | 本地 OpenAI 兼容网关（**不是**端侧 agent 壳） | 包装本机 grok CLI 为 `POST /v1/chat/completions`（默认 `127.0.0.1:8100`），不注册设备 |
 | `cli_to_api/antigravity_cli_api/` | 本地 OpenAI 兼容网关（**不是**端侧 agent 壳） | Python 调用官方 `agy`，复用其本地用户登录数据并提供 `POST /v1/chat/completions`（默认 `127.0.0.1:8110`），不注册设备 |
-| `AI-FREE-app/` | Windows AI 浏览器工作台 | Electron + 内置 Chromium Fork，多环境隔离、网络管理和浏览器 AI 自动化 |
+| `AI-FREE-app/` | Windows AI 浏览器工作台 | Electron + 内置 Chromium Fork，多环境隔离、网络管理和浏览器 AI 自动化；内置 OpenCut 本地端口 `127.0.0.1:5173` 与 `opencut.*` 工具 |
 | `usb_flasher/` | **Python USB 烧录设备** | 被控机常驻进程：从服务器拉固件、esptool 烧录 ESP、串口监视；本机回环面板 `127.0.0.1:8770`。见 `usb_flasher/README.md` |
 | `AI-Control-Exam/` | AI 控制能力考试系统 | 浏览器与桌面控制 Agent 的交互式任务、遥测、安全检查和评分平台 |
 
@@ -101,6 +101,7 @@ device/browser/browser_MCP/
 | Windows 桌面逻辑（Tauri） | `device/windows/src/`（TS）+ `device/windows/src-tauri/`（Rust） |
 | Linux 服务器 Agent | `device/linux/agent/` |
 | USB 烧录 / 串口监视 | `device/usb_flasher/` |
+| OpenCut 视频编辑器 | `device/AI-FREE-app/`（启动时拉起 `127.0.0.1:5173`，暴露 `opencut.*`） |
 | 浏览器自动化（主线） | `device/browser/browser_MCP/src/` |
 | Windows 原生执行版浏览器自动化 | `device/browser/browser_MCP_win/` + `device/windows/src-tauri/`（browser bridge） |
 | Android 本机执行 | `device/android/` |
@@ -144,6 +145,8 @@ cd device/linux
 # USB 烧录设备
 cd device/usb_flasher
 # 复制 .env.example 为 .env 后运行 run.bat / run.sh
+
+# OpenCut 已并入 AI-FREE：启动软件后访问 http://127.0.0.1:5173/ ，工具为 opencut.*
 
 # 浏览器扩展（主线）
 cd device/browser/browser_MCP

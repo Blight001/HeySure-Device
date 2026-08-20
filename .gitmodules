@@ -14,10 +14,6 @@
 	path = browser
 	url = https://github.com/Blight001/HeySure-Device-Browser.git
 	branch = main
-[submodule "cli_to_api"]
-	path = cli_to_api
-	url = https://github.com/Blight001/HeySure-CLI-Adapter.git
-	branch = main
 [submodule "AI-FREE-app"]
 	path = AI-FREE-app
 	url = https://github.com/Blight001/AI-FREE.git

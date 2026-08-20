@@ -22,8 +22,6 @@
 | `browser/browser_automation/` | 另一套浏览器自动化扩展（JS 分包） | 历史/并行实现，background 按序号分包；联调前先确认目标目录 |
 | `android/` | 原生 Kotlin App（方案 A） | 手机本机执行：点击/滑动/截屏（无障碍 + MediaProjection） |
 | `android/android-adb/` | 宿主电脑 Node.js（方案 B） | 经 ADB 控制手机；息屏/锁屏下也能注入 |
-| `cli_to_api/grok_cli_api/` | 本地 OpenAI 兼容网关（**不是**端侧 agent 壳） | 包装本机 grok CLI 为 `POST /v1/chat/completions`（默认 `127.0.0.1:8100`），不注册设备 |
-| `cli_to_api/antigravity_cli_api/` | 本地 OpenAI 兼容网关（**不是**端侧 agent 壳） | Python 调用官方 `agy`，复用其本地用户登录数据并提供 `POST /v1/chat/completions`（默认 `127.0.0.1:8110`），不注册设备 |
 | `usb_flasher/` | **Python USB 烧录设备** | 被控机常驻进程：从服务器拉固件、esptool 烧录 ESP、串口监视；本机回环面板 `127.0.0.1:8770`。`deviceType: custom`。见 `usb_flasher/README.md` |
 | `AI-FREE-app/` | Windows AI 浏览器工作台 | Electron + 内置 Chromium Fork，多环境隔离、网络管理和浏览器 AI 自动化；内置 OpenCut 本地端口 `127.0.0.1:5173` 与 `opencut.*` 工具 |
 | `AI-Control-Exam/` | AI 控制能力考试系统 | 浏览器与桌面控制 Agent 的交互式任务、遥测、安全检查和评分平台 |
@@ -106,8 +104,6 @@ device/browser/browser_MCP/
 | Android ADB 控制 | `device/android/android-adb/` |
 | 工具执行底座（Windows） | `device/windows/src/runtime/` + `executor/` |
 | 远程连接（画面 `rc:*` / 命令行 `rt:*`） | 设备端 Windows：`remote-control.ts` + `rc.rs` / `remote-terminal.ts` + `pty.rs`；Linux：`agent/remote_terminal.py`；服务端 `connector_runtime/dispatch/remote_control.py` / `remote_terminal.py`；web `useRemoteControl.ts` / `useRemoteTerminal.ts`；标准见 [`read.md`](read.md) |
-| 本地 grok API 网关 | `device/cli_to_api/grok_cli_api/` |
-| 本地 Antigravity API 网关 | `device/cli_to_api/antigravity_cli_api/` |
 | USB 烧录 / 串口监视 | `device/usb_flasher/`（Python 自定义设备；本机面板 + `flash.*` / `serial.*`） |
 | OpenCut 视频编辑器 | `device/AI-FREE-app/`（启动时拉起 `127.0.0.1:5173`，暴露 `opencut.*`） |
 | 服务端工具路由 | `server/main/mcp_runtime/mcp/registry.py` + 设备权限策略 |

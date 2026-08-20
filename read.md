@@ -1,5 +1,10 @@
 # HeySure 服务接入协议 —— AI 实施指南（read.md）
 
+> 设备产品、设备大厅、官方发行包、登录和更新的总体设计见
+> [`../doc/design/device-hall-release-and-connection.md`](../doc/design/device-hall-release-and-connection.md)。
+> 本文只定义第三方服务接入后的 Socket.IO、MCP、绑定与远程连接协议，不再同时承担
+> “如何分发官方设备客户端”的职责。
+
 > **本文档的读者是 AI 编码代理。** 你的任务：按本文档改造当前项目，让它成为
 > HeySure 平台上 AI 成员可调用的服务。交付两个模块：
 >

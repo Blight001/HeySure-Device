@@ -8,6 +8,38 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+PRODUCTION_SERVER_URL = "http://49.234.181.190:58150"
+LOCAL_TEST_SERVER_URL = "http://127.0.0.1:3000"
+
+
+def _is_enabled(value: str | None) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _device_server_defaults() -> tuple[str, str]:
+    """Read the aggregate device config when this checkout is embedded in it.
+
+    A standalone codex-agent checkout intentionally falls back to the production
+    endpoint, never localhost.
+    """
+    config_path = Path(__file__).resolve().parents[2] / "device.config.json"
+    try:
+        raw = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return PRODUCTION_SERVER_URL, LOCAL_TEST_SERVER_URL
+    production = str(raw.get("default_server_url") or PRODUCTION_SERVER_URL).rstrip("/")
+    local = str(raw.get("local_test_server_url") or LOCAL_TEST_SERVER_URL).rstrip("/")
+    return production, local
+
+
+def _server_from_env() -> str:
+    explicit = os.getenv("HEYSURE_SERVER", "").strip()
+    if explicit:
+        return explicit.rstrip("/")
+    production, local = _device_server_defaults()
+    return local if _is_enabled(os.getenv("HEYSURE_LOCAL_TEST")) else production
+
+
 def _argv(value: str) -> tuple[str, ...]:
     if value.lstrip().startswith("["):
         decoded = json.loads(value)
@@ -52,7 +84,7 @@ class Config:
             os.getenv("HEYSURE_CODEX_STATE_DIR", workspace / ".heysure-codex-agent")
         ).resolve()
         return cls(
-            server=os.getenv("HEYSURE_SERVER", "http://127.0.0.1:3000").rstrip("/"),
+            server=_server_from_env(),
             account=os.getenv("HEYSURE_ACCOUNT", ""),
             password=os.getenv("HEYSURE_PASSWORD", ""),
             workspace=workspace,

@@ -44,7 +44,6 @@ python -m venv .venv
 配置通过进程环境传入；程序不会读取或生成 `.env`：
 
 ```powershell
-$env:HEYSURE_SERVER = 'http://49.234.181.190:3000'
 $env:HEYSURE_ACCOUNT = 'heysure'
 $env:HEYSURE_PASSWORD = '<password>'
 $env:HEYSURE_CODEX_WORKSPACE = 'D:\path\to\HeySure_AI_2.0'
@@ -68,7 +67,8 @@ $env:CODEX_COMMAND = '["C:\\Tools\\codex.exe","--profile","maintainer"]'
 
 | 环境变量 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `HEYSURE_SERVER` | 否 | `http://127.0.0.1:3000` | API 登录入口；Socket 地址始终采用登录响应中的 `agent_socket_url` |
+| `HEYSURE_SERVER` | 否 | 聚合仓库 `device.config.json`（当前为 `http://49.234.181.190:58150`） | 显式 API 登录入口，优先级最高；Socket 地址始终采用登录响应中的 `agent_socket_url` |
+| `HEYSURE_LOCAL_TEST` | 否 | `false` | 仅显式设为 `true/1/yes/on` 时使用 `device.config.json` 的本地测试地址 `http://127.0.0.1:3000` |
 | `HEYSURE_ACCOUNT` | 是 | - | HeySure 账号 |
 | `HEYSURE_PASSWORD` | 是 | - | HeySure 密码，只在登录请求中使用 |
 | `HEYSURE_CODEX_WORKSPACE` | 否 | 当前目录 | Codex thread/turn 的工作目录 |
@@ -86,6 +86,10 @@ $env:CODEX_COMMAND = '["C:\\Tools\\codex.exe","--profile","maintainer"]'
 不要写进仓库、启动参数或日志。如果 workspace 是仓库根目录，必须确认根仓库的
 `.gitignore` 包含 `/.heysure-codex-agent/`；本目录自带的 `.gitignore` 只覆盖在本目录
 启动并把本目录作为 workspace 的情况。
+
+聚合仓库运行时会自动读取 `device/device.config.json`。单独检出本设备仓库时若该文件
+不存在，也会安全回退到生产服务器，而不会默认连接本机；自定义部署请显式设置
+`HEYSURE_SERVER`。
 
 ## Socket 协议
 

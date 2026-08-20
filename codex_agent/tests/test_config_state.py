@@ -11,6 +11,25 @@ from codex_agent.state import InstanceLock, StateStore
 
 
 class ConfigStateTests(unittest.TestCase):
+    def test_server_defaults_to_aggregate_production_endpoint(self) -> None:
+        with patch.dict("os.environ", {}, clear=True):
+            config = Config.from_env()
+        self.assertEqual(config.server, "http://49.234.181.190:58150")
+
+    def test_local_server_requires_explicit_test_mode(self) -> None:
+        with patch.dict("os.environ", {"HEYSURE_LOCAL_TEST": "true"}, clear=True):
+            config = Config.from_env()
+        self.assertEqual(config.server, "http://127.0.0.1:3000")
+
+    def test_explicit_server_wins_over_local_test_mode(self) -> None:
+        with patch.dict(
+            "os.environ",
+            {"HEYSURE_SERVER": "https://custom.example/", "HEYSURE_LOCAL_TEST": "true"},
+            clear=True,
+        ):
+            config = Config.from_env()
+        self.assertEqual(config.server, "https://custom.example")
+
     def test_command_is_parsed_as_argv_and_app_server_suffix_is_owned(self) -> None:
         with patch.dict(
             "os.environ",

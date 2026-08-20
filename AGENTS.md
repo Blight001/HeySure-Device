@@ -24,9 +24,7 @@
 | `android/android-adb/` | 宿主电脑 Node.js（方案 B） | 经 ADB 控制手机；息屏/锁屏下也能注入 |
 | `cli_to_api/grok_cli_api/` | 本地 OpenAI 兼容网关（**不是**端侧 agent 壳） | 包装本机 grok CLI 为 `POST /v1/chat/completions`（默认 `127.0.0.1:8100`），不注册设备 |
 | `cli_to_api/antigravity_cli_api/` | 本地 OpenAI 兼容网关（**不是**端侧 agent 壳） | Python 调用官方 `agy`，复用其本地用户登录数据并提供 `POST /v1/chat/completions`（默认 `127.0.0.1:8110`），不注册设备 |
-| `cli_to_api/codex_cli_api/` | 本地 OpenAI 兼容网关（**不是**端侧 agent 壳） | 包装本机 Codex CLI，使用 `codex exec/resume --json` 提供 `POST /v1/chat/completions`（默认 `127.0.0.1:8120`），不注册设备 |
 | `usb_flasher/` | **Python USB 烧录设备** | 被控机常驻进程：从服务器拉固件、esptool 烧录 ESP、串口监视；本机回环面板 `127.0.0.1:8770`。`deviceType: custom`。见 `usb_flasher/README.md` |
-| `codex_agent/` | **正式 Codex 维护设备** | 连接 Connector Runtime，并通过本机 Codex App Server stdio 协议执行可审计的项目维护工单；不操作 Codex 桌面 UI。见 `codex_agent/README.md` |
 | `AI-FREE-app/` | Windows AI 浏览器工作台 | Electron + 内置 Chromium Fork，多环境隔离、网络管理和浏览器 AI 自动化；内置 OpenCut 本地端口 `127.0.0.1:5173` 与 `opencut.*` 工具 |
 | `AI-Control-Exam/` | AI 控制能力考试系统 | 浏览器与桌面控制 Agent 的交互式任务、遥测、安全检查和评分平台 |
 
@@ -110,9 +108,7 @@ device/browser/browser_MCP/
 | 远程连接（画面 `rc:*` / 命令行 `rt:*`） | 设备端 Windows：`remote-control.ts` + `rc.rs` / `remote-terminal.ts` + `pty.rs`；Linux：`agent/remote_terminal.py`；服务端 `connector_runtime/dispatch/remote_control.py` / `remote_terminal.py`；web `useRemoteControl.ts` / `useRemoteTerminal.ts`；标准见 [`read.md`](read.md) |
 | 本地 grok API 网关 | `device/cli_to_api/grok_cli_api/` |
 | 本地 Antigravity API 网关 | `device/cli_to_api/antigravity_cli_api/` |
-| 本地 Codex API 网关 | `device/cli_to_api/codex_cli_api/` |
 | USB 烧录 / 串口监视 | `device/usb_flasher/`（Python 自定义设备；本机面板 + `flash.*` / `serial.*`） |
-| Codex 项目维护设备 | `device/codex_agent/` |
 | OpenCut 视频编辑器 | `device/AI-FREE-app/`（启动时拉起 `127.0.0.1:5173`，暴露 `opencut.*`） |
 | 服务端工具路由 | `server/main/mcp_runtime/mcp/registry.py` + 设备权限策略 |
 
@@ -152,11 +148,6 @@ cd device/usb_flasher
 device\usb_flasher\run.bat
 # 单测：python -m unittest discover -s tests -v
 # 安装包：device\usb_flasher\build.bat  → dist\HeySureUsbFlasher-Setup.exe
-
-# Codex 项目维护设备（Python 3.10+；配置见 README）
-cd device/codex_agent
-python -m pip install -r requirements.txt
-python -m codex_agent
 
 # OpenCut 已并入 AI-FREE：启动软件后访问 http://127.0.0.1:5173/ ，工具为 opencut.*
 

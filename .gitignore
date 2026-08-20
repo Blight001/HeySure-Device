@@ -33,6 +33,8 @@ android-adb/dist/
 # Device Python venvs (dev)
 **/device_runtime/python/.venv/
 **/__pycache__/
+**/.venv/
+*.egg-info/
 
 # Bundled self-contained Python runtime (generated during `npm run package`, very large)
 # Shipped inside the installer via extraResources. Do NOT commit.
@@ -60,7 +62,6 @@ mac/src/asset-path.ts
 *.log
 dist/
 *.tsbuildinfo
-.heysure-codex-agent/
 
 # Local standalone experiment; it has no configured remote and is not a
 # reproducible HeySure-Device submodule.

@@ -93,7 +93,7 @@ import os
 import requests
 import socketio
 
-SERVER       = os.getenv("HEYSURE_SERVER", "http://127.0.0.1:3000")
+SERVER       = os.getenv("HEYSURE_SERVER", "http://49.234.181.190:58150")
 ACCOUNT      = os.environ["HEYSURE_ACCOUNT"]
 PASSWORD     = os.environ["HEYSURE_PASSWORD"]
 SERVICE_ID   = os.getenv("HEYSURE_SERVICE_ID", "myproject-01")
@@ -536,7 +536,7 @@ ConPTY，Linux/macOS openpty）→ 持续读输出发 `rt:data`，退出发 `rt:
 const { io } = require('socket.io-client')
 const axios = require('axios')
 
-const SERVER = process.env.HEYSURE_SERVER || 'http://127.0.0.1:3000'
+const SERVER = process.env.HEYSURE_SERVER || 'http://49.234.181.190:58150'
 const SERVICE_ID = process.env.HEYSURE_SERVICE_ID || 'myproject-01'
 
 const TOOLS = [{

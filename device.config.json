@@ -1,0 +1,5 @@
+{
+  "schema_version": 1,
+  "default_server_url": "http://49.234.181.190:58150",
+  "local_test_server_url": "http://127.0.0.1:3000"
+}

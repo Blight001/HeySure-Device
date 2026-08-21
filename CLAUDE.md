@@ -1,11 +1,11 @@
 # CLAUDE.md — device/ 端侧执行器（壳） (HeySure-Device)
 
-端侧客户端（**只是运行在不同端的壳，本身不具备 agent 能力**），连接后端、注册为 endpoint，接收并执行服务端下发的 MCP 任务。
+端侧客户端在 HeySure 服务端任务链路中是**受控执行端**：连接后端、注册为 endpoint，接收并执行服务端下发的 MCP 任务；个别产品可有独立的本地 agentic loop，但不得把它混入服务器调度合同。
 
 **本目录是聚合仓库** `HeySure-Device`。各设备产品以 Git submodule 形式维护独立仓库，代码与资产互不共享；首次检出或更新后运行 `git submodule update --init --recursive`。
 同内容的 Agent 版见 [`AGENTS.md`](AGENTS.md)。
 
-**桌面/服务端壳已退化为受控运行器**：能力主要来自服务器下发的动态 MCP（`device:tool-config`，含 runtime 工具；Windows 以 powershell/shell 为主），由服务端编排/推理。接入协议与远程连接标准见 [`read.md`](read.md)。
+**所有端点都是受控运行器，不在本机做服务端编排/推理**。MCP 来源按端型区分：Windows/Browser 以服务器动态目录为主，Android 是固定工具 + program 动态扩展，Linux/ADB/AI-FREE 使用端侧自报固定目录。固定 MCP、动态 MCP 与远控统一标准见 [`read.md`](read.md)。
 
 **远程连接是另一条独立于 AI 任务循环的、由真人操作者驱动的实时数据面**，有两种形态——
 画面远程（`rc:*`，WebRTC P2P）与命令行远程（`rt:*`，PTY 走 Socket.IO relay，无需 TURN）——
@@ -17,13 +17,12 @@
 | --- | --- | --- |
 | `windows/` | **Tauri 2** 桌面（Windows） | 正式 Windows 壳：登录/连接 + 动态 MCP + runtime 执行（powershell / shell）+ 远程连接两条通道——画面（`remote-control.ts` + `src-tauri/src/rc.rs`，xcap 抓屏→canvas→WebRTC + enigo 键鼠）与命令行（`remote-terminal.ts` + `src-tauri/src/pty.rs`，ConPTY + `rt:*`）。见 `windows/README.md` |
 | `linux/` | **Python** 服务器 Agent | 无 GUI 常驻进程，把 Linux 服务器接入为 `deviceType: custom`（systemd 部署）。运维类 MCP + 命令行远程 `rt:*`。**不是**旧版 Electron 桌面端。见 `linux/README.md` |
-| `browser/browser_MCP/` | Chrome MV3 扩展（主源码） | 浏览器自动化 Agent + 轻量客户端；TypeScript 源在 `src/`，构建产物 `dist/` |
+| `browser/browser_MCP/` | Chrome MV3 扩展（主源码） | 私有浏览器执行原语 + 服务器 `program` 动态目录 + 标签页 `remote_control`；TypeScript 源在 `src/`，构建产物 `dist/` |
 | `browser/browser_MCP_win/` | Chrome 扩展 + Windows 原生输入构建 | 与 `browser_MCP/` 共用感知逻辑；点击/输入等经本机回环桥交给 `windows/` 的 Rust/enigo 执行 |
 | `browser/browser_automation/` | 另一套浏览器自动化扩展（JS 分包） | 历史/并行实现，background 按序号分包；联调前先确认目标目录 |
-| `android/` | 原生 Kotlin App（方案 A） | 手机本机执行：点击/滑动/截屏（无障碍 + MediaProjection） |
-| `android/android-adb/` | 宿主电脑 Node.js（方案 B） | 经 ADB 控制手机；息屏/锁屏下也能注入 |
-| `AI-FREE-app/` | Windows AI 浏览器工作台 | Electron + 内置 Chromium Fork，多环境隔离、网络管理和浏览器 AI 自动化；内置 OpenCut 本地端口 `127.0.0.1:5173` 与 `opencut.*` 工具 |
-| `usb_flasher/` | **Python USB 烧录设备** | 被控机常驻进程：从服务器拉固件、esptool 烧录 ESP、串口监视；本机回环面板 `127.0.0.1:8770`。见 `usb_flasher/README.md` |
+| `android/` | 原生 Kotlin App（方案 A） | 固定触控/屏幕 MCP + 服务器 `program` 动态扩展 + 整机 `remote_control`（无障碍 + MediaProjection） |
+| `android/android-adb/` | 宿主电脑 Node.js（方案 B） | 经 ADB 控制手机；固定 MCP，不接动态目录/远控 |
+| `AI-FREE-app/` | Windows AI 浏览器工作台 | 自报 `aifree` / `opencut` 目录 + 托管浏览器 `remote_control`；内置 OpenCut 本地端口 `127.0.0.1:5173` |
 | `AI-Control-Exam/` | AI 控制能力考试系统 | 浏览器与桌面控制 Agent 的交互式任务、遥测、安全检查和评分平台 |
 
 > 安卓两形态（A 本机 App / B 宿主 ADB）都以 Android 类 endpoint 注册，服务端统一调度。
@@ -98,15 +97,14 @@ device/browser/browser_MCP/
 | --- | --- |
 | Windows 桌面逻辑（Tauri） | `device/windows/src/`（TS）+ `device/windows/src-tauri/`（Rust） |
 | Linux 服务器 Agent | `device/linux/agent/` |
-| USB 烧录 / 串口监视 | `device/usb_flasher/` |
-| OpenCut 视频编辑器 | `device/AI-FREE-app/`（启动时拉起 `127.0.0.1:5173`，暴露 `opencut.*`） |
 | 浏览器自动化（主线） | `device/browser/browser_MCP/src/` |
 | Windows 原生执行版浏览器自动化 | `device/browser/browser_MCP_win/` + `device/windows/src-tauri/`（browser bridge） |
 | Android 本机执行 | `device/android/` |
 | Android ADB 控制 | `device/android/android-adb/` |
 | 工具执行底座（Windows） | `device/windows/src/runtime/` + `executor/` |
-| 远程连接（画面 `rc:*` / 命令行 `rt:*`） | 设备端 Windows：`remote-control.ts` + `rc.rs` / `remote-terminal.ts` + `pty.rs`；Linux：`agent/remote_terminal.py`；服务端 `connector_runtime/dispatch/remote_control.py` / `remote_terminal.py`；web `useRemoteControl.ts` / `useRemoteTerminal.ts`；标准见 [`read.md`](read.md) |
-| 服务端工具路由 | `server/main/mcp_runtime/mcp/registry.py` + 设备权限策略 |
+| 远程连接（画面 `rc:*` / 命令行 `rt:*`） | Windows：`remote-control.ts` / `remote-terminal.ts`；Linux：`agent/remote_terminal.py`；Browser：`lib/remote-control.ts`；Android：`remote/`；AI-FREE：托管浏览器远控；服务端与 Web 路径及 surface 标准见 [`read.md`](read.md) |
+| OpenCut 视频编辑器 | `device/AI-FREE-app/`（启动时拉起 `127.0.0.1:5173`，暴露 `opencut.*`） |
+| 服务端工具路由 | `deploy/server/main/mcp_runtime/mcp/registry.py` + 设备权限策略 |
 
 ## 常见问题排查
 
@@ -132,15 +130,13 @@ npm run tauri:build     # NSIS 安装包
 npm run typecheck       # 仅前端 TS 检查
 
 device\windows\run.bat
+device\windows\run-local.bat
 device\windows\build.bat
+device\windows\build-local.bat
 
 # Linux 服务器 Agent
 cd device/linux
 # 见 install.sh / run.sh / README.md（Python + systemd）
-
-# USB 烧录设备
-cd device/usb_flasher
-# 复制 .env.example 为 .env 后运行 run.bat / run.sh
 
 # OpenCut 已并入 AI-FREE：启动软件后访问 http://127.0.0.1:5173/ ，工具为 opencut.*
 
@@ -161,4 +157,5 @@ npm run dev              # watch
 - **Linux Agent 是服务器管控壳**，不是带 UI 的桌面 Electron；定位见 `linux/README.md`。
 - **`dist/` `node_modules/` `.env` `src-tauri/target/`** 等已 gitignore，不要提交。
 - **Android 两形态独立**：`android/` 与 `android/android-adb/` 不共享代码。
+- **默认服务器只有一个真源**：正式运行/构建读取 `device.config.json.default_server_url`；本地 Gateway 只能通过带 `-local` 的入口或显式 `HEYSURE_SERVER` 使用。普通 build 不得继承 local flag。
 - **接入协议以 [`read.md`](read.md) 为准**：自定义服务接入、事件名、回包契约均在此文档。

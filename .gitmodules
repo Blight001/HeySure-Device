@@ -22,3 +22,7 @@
 	path = AI-Control-Exam
 	url = https://github.com/Blight001/HeySure-AI-Control-Exam.git
 	branch = main
+[submodule "AI-FREE-Infinite-Canvas"]
+	path = AI-FREE-Infinite-Canvas
+	url = https://gitee.com/Blight001/AI-FREE-Infinite-Canvas.git
+	branch = master

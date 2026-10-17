@@ -7,9 +7,10 @@
 
 **所有端点都是受控运行器，不在本机做服务端编排/推理**。MCP 来源按端型区分：Windows/Browser 以服务器动态目录为主，Android 是固定工具 + program 动态扩展，Linux/ADB/AI-FREE 使用端侧自报固定目录。固定 MCP、动态 MCP 与远控统一标准见 [`read.md`](read.md)。
 
-**远程连接是另一条独立于 AI 任务循环的、由真人操作者驱动的实时数据面**，有两种形态——
-画面远程（`rc:*`，WebRTC P2P）与命令行远程（`rt:*`，PTY 走 Socket.IO relay，无需 TURN）——
-统一标准见 [`read.md`](read.md) 第 9 节。
+**远程连接是另一条独立于 AI 任务循环的、由真人操作者驱动的实时数据面**，按 capability
+组合四类表面：视频画面（`rc:*` + WebRTC）、命令行（`rt:*` + PTY relay）、Browser 网页原生
+镜像 RWM，以及声明式遥控器模板 RCT。RWM/RCT 的实时内容只走 P2P DataChannel，当前原生端侧
+实现仅在 `browser_MCP` 共享源码及其 `browser_MCP_win` 新构建中；统一标准见 [`read.md`](read.md) 第 9 节。
 
 ## 当前形态（仓库内实际目录）
 
@@ -17,8 +18,8 @@
 | --- | --- | --- |
 | `windows/` | **Tauri 2** 桌面（Windows） | 正式 Windows 壳：登录/连接 + 动态 MCP + runtime 执行（powershell / shell）+ 远程连接两条通道——画面（`remote-control.ts` + `src-tauri/src/rc.rs`，xcap 抓屏→canvas→WebRTC + enigo 键鼠）与命令行（`remote-terminal.ts` + `src-tauri/src/pty.rs`，ConPTY + `rt:*`）。见 `windows/README.md` |
 | `linux/` | **Python** 服务器 Agent | 无 GUI 常驻进程，把 Linux 服务器接入为 `deviceType: custom`（systemd 部署）。运维类 MCP + 命令行远程 `rt:*`。**不是**旧版 Electron 桌面端。见 `linux/README.md` |
-| `browser/browser_MCP/` | Chrome MV3 扩展（主源码） | 私有浏览器执行原语 + 服务器 `program` 动态目录 + 标签页 `remote_control`；TypeScript 源在 `src/`，构建产物 `dist/` |
-| `browser/browser_MCP_win/` | Chrome 扩展 + Windows 原生输入构建 | 与 `browser_MCP/` 共用感知逻辑；点击/输入等经本机回环桥交给 `windows/` 的 Rust/enigo 执行 |
+| `browser/browser_MCP/` | Chrome MV3 扩展（主源码） | 私有浏览器执行原语 + 服务器 `program` 动态目录 + 标签页视频远控 + RWM snapshot/Patch/resource/action + RCT native emit/`controller-fast`；TypeScript 源在 `src/`，构建产物 `dist/` |
+| `browser/browser_MCP_win/` | Chrome 扩展 + Windows 原生输入构建 | 由 `build.js` 直接共享 `browser_MCP` 源码，因此新构建同时获得 RWM/RCT；OS 级点击/输入仍经本机回环桥交给 `windows/` 的 Rust/enigo 执行 |
 | `browser/browser_automation/` | 另一套浏览器自动化扩展（JS 分包） | 历史/并行实现，background 按序号分包；联调前先确认目标目录 |
 | `android/` | 原生 Kotlin App（方案 A） | 固定触控/屏幕 MCP + 服务器 `program` 动态扩展 + 整机 `remote_control`（无障碍 + MediaProjection） |
 | `android/android-adb/` | 宿主电脑 Node.js（方案 B） | 经 ADB 控制手机；固定 MCP，不接动态目录/远控 |
@@ -102,7 +103,7 @@ device/browser/browser_MCP/
 | Android 本机执行 | `device/android/` |
 | Android ADB 控制 | `device/android/android-adb/` |
 | 工具执行底座（Windows） | `device/windows/src/runtime/` + `executor/` |
-| 远程连接（画面 `rc:*` / 命令行 `rt:*`） | Windows：`remote-control.ts` / `remote-terminal.ts`；Linux：`agent/remote_terminal.py`；Browser：`lib/remote-control.ts`；Android：`remote/`；AI-FREE：托管浏览器远控；服务端与 Web 路径及 surface 标准见 [`read.md`](read.md) |
+| 远程连接（视频 / 命令行 / RWM / RCT） | Windows：`remote-control.ts` / `remote-terminal.ts`；Linux：`agent/remote_terminal.py`；Browser：`lib/remote-control.ts` + `content/remote-web-*` + `content/remote-controller.ts`；Android：`remote/`；AI-FREE：托管浏览器远控；服务端与 Web 路径及 surface 标准见 [`read.md`](read.md) |
 | OpenCut 视频编辑器 | `device/AI-FREE-app/`（启动时拉起 `127.0.0.1:5173`，暴露 `opencut.*`） |
 | 服务端工具路由 | `deploy/server/main/mcp_runtime/mcp/registry.py` + 设备权限策略 |
 

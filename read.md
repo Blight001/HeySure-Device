@@ -20,6 +20,18 @@
 > 命名约定：协议事件与字段沿用历史命名 `device`（`device:register`、`deviceId`），
 > 指的就是你注册的这个服务实例；网页控制台把它显示为一台"自定义设备"。
 
+## AI 必读：端侧 MCP 的最小工作原则
+
+只记住下面这套最小合同；其它实现细节不能改变它：
+
+1. **设备和服务器工作区是两个边界。** 端侧路径、服务器绝对路径和同名相对路径不能互换；MCP 参数只传工具需要的相对路径或不透明引用。
+2. **服务器给设备文件：服务器先生成临时下载链接。** AI 调用 `workspace.transfer(action="prepare_download", file_ref=...)`，设备使用返回的 `transport.url` 按 `GET` 流式下载并保存到自己的目录。
+3. **设备给服务器文件：设备主动上传。** AI 调用 `workspace.transfer(action="prepare_upload", file_name=..., mime_type=..., folder=...)`，设备使用返回的 `transport.url` 按 `PUT` 流式上传；上传成功后 AI 调用 `commit(transfer_id, bytes, sha256)`，服务器返回服务器侧 `file_ref`。
+4. **传输只走字节流，不走对话。** 不把文件内容编码成 base64，不把端侧路径、公网素材 URL 或服务器绝对路径放进 MCP 结果；只回传 `transfer_id`、`file_ref`、文件名、大小和 SHA-256。
+5. **链接是短时能力。** 过期或失败就重新 `prepare_*`；不要复用旧链接，也不要假设下载完成后两端路径相同。需要取消时调用 `status` 或 `abort`。
+
+完整字段和错误语义见 [`../deploy/doc/member-transfer-protocol.md`](../deploy/doc/member-transfer-protocol.md)。设备端只负责执行流式 GET/PUT 和回报校验值，服务器负责生成临时链接、校验归属与登记文件。
+
 ---
 
 ## U. 统一端点实现标准（所有设备必读）
